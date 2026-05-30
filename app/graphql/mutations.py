@@ -59,44 +59,6 @@ class Mutation:
             print("GraphQL googleLogin error:", e)
             raise Exception(f"Google login failed: {str(e)}")
 
-    @strawberry.mutation
-    async def firebase_login(self, info, token: str, full_name: Annotated[str, strawberry.argument(name="fullName")] ) -> types.AuthResponse:
-        db = info.context["db"]
-        auth_service = AuthService(db)
-        try:
-            result = await auth_service.validate_firebase_token(token, full_name)
-            
-            # Map user
-            u = result["user"]
-            settings_dict = u.get("settings")
-            u_settings = None
-            if isinstance(settings_dict, dict):
-                u_settings = types.UserSettings(
-                    focus_duration_pref=settings_dict.get("focusDurationPref"),
-                    break_duration_pref=settings_dict.get("breakDurationPref"),
-                    notifications_enabled=settings_dict.get("notificationsEnabled")
-                )
-
-            user_obj = types.User(
-                id=strawberry.ID(u["id"]),
-                email=u["email"],
-                name=u.get("name"),
-                picture=u.get("picture"),
-                role=u.get("role"),
-                auth_provider=u.get("authProvider"),
-                google_refresh_token=u.get("googleRefreshToken"),
-                subscription_status=u.get("subscriptionStatus", "free"),
-                settings=u_settings,
-                bio=u.get("bio")
-            )
-            return types.AuthResponse(
-                access_token=result["access_token"],
-                user=user_obj
-            )
-        except Exception as e:
-            print("GraphQL firebaseLogin error:", e)
-            raise Exception(f"Firebase login failed: {str(e)}")
-
     # Task Mutations
     @strawberry.mutation
     async def create_task(self, info, create_task_input: types.CreateTaskInput) -> types.Task:

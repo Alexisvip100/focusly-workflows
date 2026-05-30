@@ -9,10 +9,6 @@ from app.services.auth.auth_service import AuthService
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
-class LoginBody(BaseModel):
-    token: str
-    fullName: str
-
 class GoogleLoginBody(BaseModel):
     code: str
 
@@ -68,22 +64,6 @@ async def google_login(
         raise HTTPException(status_code=401, detail=str(e))
     except Exception as e:
         print("Google login error:", e)
-        raise HTTPException(status_code=500, detail="Internal server error")
-
-@router.post("/login")
-async def firebase_login(
-    body: LoginBody,
-    response: Response,
-    auth_service: AuthService = Depends(get_auth_service)
-):
-    try:
-        result = await auth_service.validate_firebase_token(body.token, body.fullName)
-        set_auth_cookies(response, result)
-        return {"user": result["user"]}
-    except ValueError as e:
-        raise HTTPException(status_code=401, detail=str(e))
-    except Exception as e:
-        print("Firebase login error:", e)
         raise HTTPException(status_code=500, detail="Internal server error")
 
 @router.post("/refresh")

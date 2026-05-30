@@ -27,7 +27,6 @@ Antes de comenzar, asegúrate de tener instalado lo siguiente en tu sistema:
    - **`GOOGLE_CLIENT_ID`** y **`GOOGLE_CLIENT_SECRET`**: Credenciales de Google OAuth para la sincronización con Google Calendar e inicio de sesión.
    - **`GOOGLE_GENERATIVE_AI_API_KEY`**: API Key para las sugerencias e integraciones de IA (Gemini).
    - **`RESEND_API_KEY`**: Token de Resend para el envío de correos electrónicos.
-   - **`FIREBASE_PROJECT_ID`**: ID de tu proyecto Firebase (utilizado para notificaciones push u otros servicios).
 
 ---
 

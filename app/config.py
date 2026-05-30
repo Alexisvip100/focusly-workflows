@@ -12,7 +12,6 @@ class Settings:
     GOOGLE_REDIRECT_URI: str = os.getenv("GOOGLE_REDIRECT_URI", "postmessage")
     GOOGLE_GENERATIVE_AI_API_KEY: str = os.getenv("GOOGLE_GENERATIVE_AI_API_KEY", "")
     WEBHOOK_URL: str = os.getenv("WEBHOOK_URL", "http://localhost:3000")
-    FIREBASE_PROJECT_ID: str = os.getenv("FIREBASE_PROJECT_ID", "focusly-a2132")
     RESEND_API_KEY: str = os.getenv("RESEND_API_KEY", "")
     IS_PRODUCTION: bool = os.getenv("ENV", "development") == "production"
 

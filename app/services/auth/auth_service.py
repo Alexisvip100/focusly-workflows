@@ -11,81 +11,9 @@ from app.models.models import User
 from app.database import async_session_local
 
 
-GOOGLE_CERTS_URL = "https://www.googleapis.com/robot/v1/metadata/x509/securetoken-system%40system.gserviceaccount.com"
-
-class FirebaseTokenVerifier:
-    _certs: Dict[str, str] = {}
-    _certs_fetched_at: float = 0.0
-
-    @classmethod
-    async def get_public_keys(cls) -> Dict[str, str]:
-        now = time.time()
-        if not cls._certs or now - cls._certs_fetched_at > 3600:
-            async with httpx.AsyncClient() as client:
-                res = await client.get(GOOGLE_CERTS_URL)
-                if res.status_code == 200:
-                    cls._certs = res.json()
-                    cls._certs_fetched_at = now
-        return cls._certs
-
-    @classmethod
-    async def verify_token(cls, token: str, project_id: str) -> Dict[str, Any]:
-        certs = await cls.get_public_keys()
-        try:
-            unverified_header = jwt.get_unverified_header(token)
-        except Exception:
-            raise ValueError("Invalid token header format")
-
-        kid = unverified_header.get("kid")
-        if not kid or kid not in certs:
-            raise ValueError("Invalid kid: certificate not found")
-
-        cert_pem = certs[kid]
-        cert_obj = load_pem_x509_certificate(cert_pem.encode())
-        public_key = cert_obj.public_key()
-
-        decoded = jwt.decode(
-            token,
-            public_key,
-            algorithms=["RS256"],
-            audience=project_id,
-            issuer=f"https://securetoken.google.com/{project_id}"
-        )
-        return decoded
-
 class AuthService:
     def __init__(self, db: AsyncSession):
         self.db = db
-
-    async def validate_firebase_token(self, id_token: str, full_name: str) -> Dict[str, Any]:
-        try:
-            decoded = await FirebaseTokenVerifier.verify_token(id_token, settings.FIREBASE_PROJECT_ID)
-            email = decoded.get("email")
-            if not email:
-                raise ValueError("Email not found in token")
-            
-            # Find user in Postgres
-            result = await self.db.execute(select(User).where(User.email == email))
-            user = result.scalars().first()
-
-            if not user:
-                import uuid
-                user = User(
-                    id=str(uuid.uuid4()),
-                    email=email,
-                    name=full_name,
-                    authProvider="firebase",
-                    role="user",
-                    subscriptionStatus="free"
-                )
-                self.db.add(user)
-                await self.db.commit()
-                await self.db.refresh(user)
-
-            return self.generate_jwt(user)
-        except Exception as e:
-            print("Firebase token validation failed:", e)
-            raise ValueError("Invalid Firebase Token")
 
     async def validate_google_token(self, code: str, redirect_uri: Optional[str] = None) -> Dict[str, Any]:
         try:
