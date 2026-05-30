@@ -1,0 +1,13 @@
+version: '3.8'
+
+services:
+  web:
+    build: .
+    ports:
+      - "3000:3000"
+    volumes:
+      - .:/app
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://alexis@host.docker.internal:5432/focusly
+    extra_hosts:
+      - "host.docker.internal:host-gateway"

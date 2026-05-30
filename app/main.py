@@ -1,0 +1,84 @@
+import strawberry
+import jwt
+from fastapi import FastAPI, Request, Response
+from fastapi.middleware.cors import CORSMiddleware
+from strawberry.fastapi import GraphQLRouter
+import socketio
+from typing import Any
+
+from app.config import settings
+from app.database import async_session_local
+from app.sockets.realtime import sio
+from app.routes.auth.auth import router as auth_router
+from app.routes.users.users import router as users_router
+from app.routes.google_calendar.google_calendar import router as google_calendar_router
+from app.routes.time_blocks.time_blocks import router as time_blocks_router
+
+# 1. Initialize FastAPI
+fastapi_app = FastAPI(title="Focusly Backend", version="1.0.0")
+
+# 2. CORS Middleware
+fastapi_app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "https://focusly-front-psi.vercel.app",
+        "http://localhost:5173",
+        "http://localhost:3000",
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# 3. Mount REST Routers
+fastapi_app.include_router(auth_router)
+fastapi_app.include_router(users_router)
+fastapi_app.include_router(google_calendar_router)
+fastapi_app.include_router(time_blocks_router)
+
+# 4. GraphQL Setup with session management and auth context
+@fastapi_app.middleware("http")
+async def db_session_middleware(request: Request, call_next):
+    if request.url.path.startswith("/graphql"):
+        async with async_session_local() as db:
+            request.state.db = db
+            response = await call_next(request)
+            return response
+    else:
+        return await call_next(request)
+
+async def get_context(request: Request):
+    db = getattr(request.state, "db", None)
+    
+    # Extract user ID from cookies or Authorization header
+    token = request.cookies.get("access_token")
+    if not token:
+        auth_header = request.headers.get("Authorization")
+        if auth_header and auth_header.startswith("Bearer "):
+            token = auth_header.split(" ")[1]
+            
+    user_id = None
+    if token:
+        try:
+            payload = jwt.decode(token, settings.JWT_SECRET, algorithms=["HS256"])
+            user_id = payload.get("sub")
+        except Exception:
+            pass # Invalid token, keep user_id = None
+
+    return {
+        "db": db,
+        "user_id": user_id,
+        "request": request
+    }
+
+from app.graphql import schema
+graphql_router = GraphQLRouter(schema, context_getter=get_context)
+fastapi_app.include_router(graphql_router, prefix="/graphql")
+
+# Root / health check endpoint
+@fastapi_app.get("/")
+async def root():
+    return {"status": "ok", "service": "focusly-back-python"}
+
+# 5. Combined ASGI App with Socket.io wrapper
+app = socketio.ASGIApp(sio, other_asgi_app=fastapi_app, socketio_path='socket.io')
