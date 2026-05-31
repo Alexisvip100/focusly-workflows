@@ -32,7 +32,7 @@ Antes de comenzar, asegúrate de tener instalado lo siguiente en tu sistema:
 
 ## 🚀 Cómo Ejecutar el Proyecto
 
-Tienes dos opciones principales para ejecutar el backend de Focusly:
+Tienes dos opciones principales para ejecutar el backend de Focusly y su base de datos:
 
 ### Opción 1: Ejecución Local (Recomendado para desarrollo activo)
 
@@ -56,7 +56,20 @@ Tienes dos opciones principales para ejecutar el backend de Focusly:
    pip install -r requirements.txt
    ```
 
-4. **Ejecutar el servidor de desarrollo**:
+4. **Iniciar la base de datos PostgreSQL local**:
+   Si usas Homebrew en macOS:
+   ```bash
+   brew services start postgresql@17
+   ```
+   *(Asegúrate de que la base de datos `focusly` exista en tu servidor local de Postgres).*
+
+5. **Inicializar las tablas de la base de datos**:
+   Corre el script de inicialización para crear la estructura de tablas:
+   ```bash
+   python init_db.py
+   ```
+
+6. **Ejecutar el servidor de desarrollo**:
    ```bash
    uvicorn app.main:app --reload --port 3000
    ```
@@ -66,15 +79,23 @@ Tienes dos opciones principales para ejecutar el backend de Focusly:
 
 ### Opción 2: Ejecución con Docker (Recomendado para un entorno aislado)
 
-El proyecto incluye un `Dockerfile` y un archivo `docker-compose.yml` que configuran la aplicación.
+El proyecto incluye un `Dockerfile` y un archivo `docker-compose.yml` que empaquetan tanto la aplicación FastAPI como la base de datos PostgreSQL.
 
-1. **Compilar y levantar el contenedor**:
+1. **Asegúrate de tener Docker Desktop abierto y ejecutándose** en tu máquina.
+
+2. **Compilar y levantar los contenedores**:
    ```bash
    docker-compose up --build
    ```
-   *Nota: Por defecto, la configuración de Docker Compose asume que tu base de datos PostgreSQL está corriendo en el host local y accede mediante `host.docker.internal`.*
+   *(Esto iniciará el servicio de base de datos `focusly-db` y el backend `focusly-web` en paralelo).*
 
-2. **Detener los contenedores**:
+3. **Inicializar las tablas dentro de Docker (Solo la primera vez)**:
+   Con los contenedores corriendo en segundo plano o en otra terminal, inicializa la estructura de tablas en la base de datos de Docker ejecutando:
+   ```bash
+   docker exec -it focusly-web python init_db.py
+   ```
+
+4. **Detener los contenedores**:
    ```bash
    docker-compose down
    ```
