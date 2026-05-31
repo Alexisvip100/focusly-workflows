@@ -1,13 +1,28 @@
-version: '3.8'
-
 services:
-  web:
+  db:
+    image: postgres:15-alpine
+    container_name: focusly-db
+    restart: always
+    environment:
+      - POSTGRES_USER=alexis
+      - POSTGRES_DB=focusly
+      - POSTGRES_PASSWORD=password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  focusly-workflows:
     build: .
+    container_name: focusly-web
     ports:
       - "3000:3000"
     volumes:
       - .:/app
     environment:
-      - DATABASE_URL=postgresql+asyncpg://alexis@host.docker.internal:5432/focusly
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
+      - DATABASE_URL=postgresql+asyncpg://alexis:password@db:5432/focusly
+    depends_on:
+      - db
+
+volumes:
+  postgres_data:

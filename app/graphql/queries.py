@@ -112,7 +112,7 @@ class Query:
 
         return types.PaginatedTasks(
             tasks=[types.map_dict_to_strawberry_task(t) for t in paginated_res],
-            total_count=total
+            totalCount=total
         )
 
     @strawberry.field
@@ -190,7 +190,7 @@ class Query:
         self,
         info,
         search: Optional[str] = None,
-        folder_id: Optional[str] = strawberry.field(name="folderId", default=None)
+        folder_id: Optional[str] = None
     ) -> List[types.Workspace]:
         user_id = get_user_id(info)
         db = info.context["db"]
@@ -199,17 +199,17 @@ class Query:
         return [
             types.Workspace(
                 id=strawberry.ID(w.id),
-                user_id=w.userId,
-                task_id=w.taskId,
+                userId=w.userId,
+                taskId=w.taskId,
                 title=w.title,
                 emoji=w.emoji,
                 background_color=w.background_color,
                 card_show_background=w.card_show_background,
-                folder_id=w.folderId,
+                folderId=w.folderId,
                 content=w.content,
-                save_status=w.saveStatus,
-                created_at=w.createdAt,
-                updated_at=w.updatedAt
+                saveStatus=w.saveStatus,
+                createdAt=w.createdAt,
+                updatedAt=w.updatedAt
             ) for w in res
         ]
 
@@ -221,17 +221,17 @@ class Query:
         res = await ws_serv.find_one(str(id), user_id)
         return types.Workspace(
             id=strawberry.ID(res.id),
-            user_id=res.userId,
-            task_id=res.taskId,
+            userId=res.userId,
+            taskId=res.taskId,
             title=res.title,
             emoji=res.emoji,
             background_color=res.background_color,
             card_show_background=res.card_show_background,
-            folder_id=res.folderId,
+            folderId=res.folderId,
             content=res.content,
-            save_status=res.saveStatus,
-            created_at=res.createdAt,
-            updated_at=res.updatedAt
+            saveStatus=res.saveStatus,
+            createdAt=res.createdAt,
+            updatedAt=res.updatedAt
         )
 
     @strawberry.field

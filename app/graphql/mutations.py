@@ -288,6 +288,7 @@ class Mutation:
         ws_serv = WorkspacesService(db)
         
         create_data = {
+            "userId": user_id,
             "title": create_workspace_input.title,
             "emoji": create_workspace_input.emoji,
             "background_color": create_workspace_input.background_color,
@@ -300,17 +301,17 @@ class Mutation:
         res = await ws_serv.create(create_data, user_id)
         return types.Workspace(
             id=strawberry.ID(res.id),
-            user_id=res.userId,
-            task_id=res.taskId,
+            userId=res.userId,
+            taskId=res.taskId,
             title=res.title,
             emoji=res.emoji,
             background_color=res.background_color,
             card_show_background=res.card_show_background,
-            folder_id=res.folderId,
+            folderId=res.folderId,
             content=res.content,
-            save_status=res.saveStatus,
-            created_at=res.createdAt,
-            updated_at=res.updatedAt
+            saveStatus=res.saveStatus,
+            createdAt=res.createdAt,
+            updatedAt=res.updatedAt
         )
 
     @strawberry.mutation
@@ -340,17 +341,17 @@ class Mutation:
         res = await ws_serv.update(str(update_workspace_input.id), update_data, user_id)
         return types.Workspace(
             id=strawberry.ID(res.id),
-            user_id=res.userId,
-            task_id=res.taskId,
+            userId=res.userId,
+            taskId=res.taskId,
             title=res.title,
             emoji=res.emoji,
             background_color=res.background_color,
             card_show_background=res.card_show_background,
-            folder_id=res.folderId,
+            folderId=res.folderId,
             content=res.content,
-            save_status=res.saveStatus,
-            created_at=res.createdAt,
-            updated_at=res.updatedAt
+            saveStatus=res.saveStatus,
+            createdAt=res.createdAt,
+            updatedAt=res.updatedAt
         )
 
     @strawberry.mutation

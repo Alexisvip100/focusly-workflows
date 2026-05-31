@@ -209,7 +209,8 @@ class MigrationService:
     def _map_urgency(self, deadline: Optional[datetime]) -> str:
         if not deadline:
             return "flexible"
-        diff = deadline - datetime.now(timezone.utc)
+        # Always compare naive datetimes (deadline is stored without tzinfo)
+        diff = deadline - datetime.utcnow()
         diff_hours = diff.total_seconds() / 3600.0
         diff_days = diff_hours / 24.0
 
@@ -248,12 +249,13 @@ class MigrationService:
         if not val:
             return None
         if isinstance(val, datetime):
-            return val
+            # Always return naive datetime (strip timezone info)
+            return val.replace(tzinfo=None)
         if isinstance(val, str):
             try:
-                # Handle standard isoformats (Z or offset)
+                # Handle standard isoformats (Z or offset), then strip tzinfo
                 val = val.replace("Z", "+00:00")
-                return datetime.fromisoformat(val)
+                return datetime.fromisoformat(val).replace(tzinfo=None)
             except Exception:
                 return None
         return None

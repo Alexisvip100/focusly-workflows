@@ -54,41 +54,41 @@ class AuthResponse:
 @strawberry.type
 class Workspace:
     id: strawberry.ID
-    user_id: str = strawberry.field(name="userId")
-    task_id: Optional[str] = strawberry.field(name="taskId", default=None)
+    userId: str
+    taskId: Optional[str] = None
     title: str
     emoji: Optional[str] = None
     background_color: Optional[str] = strawberry.field(name="background_color", default=None)
     card_show_background: Optional[bool] = strawberry.field(name="card_show_background", default=None)
-    folder_id: Optional[str] = strawberry.field(name="folderId", default=None)
+    folderId: Optional[str] = None
     content: str
-    save_status: Optional[bool] = strawberry.field(name="saveStatus", default=None)
-    created_at: datetime = strawberry.field(name="createdAt")
-    updated_at: datetime = strawberry.field(name="updatedAt")
+    saveStatus: Optional[bool] = None
+    createdAt: datetime
+    updatedAt: datetime
 
     # Resolved fields will be in the resolver/queries
     @strawberry.field
     async def task(self, info) -> Optional["Task"]:
-        if not self.task_id:
+        if not self.taskId:
             return None
         db = info.context["db"]
         from app.services.tasks.tasks_service import TasksService
         tasks_serv = TasksService(db)
         try:
-            res = await tasks_serv.find_one(self.task_id)
+            res = await tasks_serv.find_one(self.taskId)
             return map_dict_to_strawberry_task(res)
         except:
             return None
 
     @strawberry.field
     async def folder(self, info) -> Optional["Folder"]:
-        if not self.folder_id:
+        if not self.folderId:
             return None
         db = info.context["db"]
         from app.services.folders.folders_service import FoldersService
         folders_serv = FoldersService(db)
         try:
-            res = await folders_serv.find_one(self.folder_id, self.user_id)
+            res = await folders_serv.find_one(self.folderId, self.userId)
             if res:
                 return Folder(
                     id=strawberry.ID(res.id),
@@ -119,17 +119,17 @@ class Folder:
         return [
             Workspace(
                 id=strawberry.ID(w.id),
-                user_id=w.userId,
-                task_id=w.taskId,
+                userId=w.userId,
+                taskId=w.taskId,
                 title=w.title,
                 emoji=w.emoji,
                 background_color=w.background_color,
                 card_show_background=w.card_show_background,
-                folder_id=w.folderId,
+                folderId=w.folderId,
                 content=w.content,
-                save_status=w.saveStatus,
-                created_at=w.createdAt,
-                updated_at=w.updatedAt
+                saveStatus=w.saveStatus,
+                createdAt=w.createdAt,
+                updatedAt=w.updatedAt
             ) for w in res
         ]
 
@@ -175,24 +175,24 @@ class Task:
         if res:
             return Workspace(
                 id=strawberry.ID(res.id),
-                user_id=res.userId,
-                task_id=res.taskId,
+                userId=res.userId,
+                taskId=res.taskId,
                 title=res.title,
                 emoji=res.emoji,
                 background_color=res.background_color,
                 card_show_background=res.card_show_background,
-                folder_id=res.folderId,
+                folderId=res.folderId,
                 content=res.content,
-                save_status=res.saveStatus,
-                created_at=res.createdAt,
-                updated_at=res.updatedAt
+                saveStatus=res.saveStatus,
+                createdAt=res.createdAt,
+                updatedAt=res.updatedAt
             )
         return None
 
 @strawberry.type
 class PaginatedTasks:
     tasks: List[Task]
-    total_count: int = strawberry.field(name="totalCount")
+    totalCount: int
 
 # Insights Types
 
@@ -242,52 +242,52 @@ class LinkInput:
 
 @strawberry.input
 class CreateTaskInput:
-    user_id: str
+    user_id: str = strawberry.field(name="user_id")
     title: str
-    notes_encrypted: str
-    estimate_timer: Optional[int] = None
-    real_timer: Optional[int] = None
-    duration: Optional[str] = None
-    priority_level: int
+    notes_encrypted: str = strawberry.field(name="notes_encrypted")
+    estimate_timer: Optional[int] = strawberry.field(name="estimate_timer", default=None)
+    real_timer: Optional[int] = strawberry.field(name="real_timer", default=None)
+    duration: Optional[str] = strawberry.field(name="duration", default=None)
+    priority_level: int = strawberry.field(name="priority_level")
     deadline: str
-    category: Optional[str] = None
-    color: Optional[str] = None
-    status: Optional[str] = None
-    tags: List[str]
-    links: Optional[List[LinkInput]] = None
-    task_type: Optional[str] = None
-    google_event_id: Optional[str] = None
-    estimated_start_date: Optional[str] = None
-    estimated_end_date: Optional[str] = None
-    source: Optional[str] = None
-    sync_status: Optional[str] = None
-    collaborators: Optional[List[CollaboratorInput]] = None
-    use_ai: Optional[bool] = None
+    category: Optional[str] = strawberry.field(name="category", default=None)
+    color: Optional[str] = strawberry.field(name="color", default=None)
+    status: Optional[str] = strawberry.field(name="status", default=None)
+    tags: List[str] = strawberry.field(name="tags")
+    links: Optional[List[LinkInput]] = strawberry.field(name="links", default=None)
+    task_type: Optional[str] = strawberry.field(name="task_type", default=None)
+    google_event_id: Optional[str] = strawberry.field(name="google_event_id", default=None)
+    estimated_start_date: Optional[str] = strawberry.field(name="estimated_start_date", default=None)
+    estimated_end_date: Optional[str] = strawberry.field(name="estimated_end_date", default=None)
+    source: Optional[str] = strawberry.field(name="source", default=None)
+    sync_status: Optional[str] = strawberry.field(name="sync_status", default=None)
+    collaborators: Optional[List[CollaboratorInput]] = strawberry.field(name="collaborators", default=None)
+    use_ai: Optional[bool] = strawberry.field(name="use_ai", default=None)
 
 @strawberry.input
 class UpdateTaskInput:
     id: strawberry.ID
-    user_id: Optional[str] = None
-    title: Optional[str] = None
-    notes_encrypted: Optional[str] = None
-    estimate_timer: Optional[int] = None
-    real_timer: Optional[int] = None
-    duration: Optional[str] = None
-    priority_level: Optional[int] = None
-    deadline: Optional[str] = None
-    category: Optional[str] = None
-    color: Optional[str] = None
-    status: Optional[str] = None
-    tags: Optional[List[str]] = None
-    links: Optional[List[LinkInput]] = None
-    task_type: Optional[str] = None
-    google_event_id: Optional[str] = None
-    estimated_start_date: Optional[str] = None
-    estimated_end_date: Optional[str] = None
-    source: Optional[str] = None
-    sync_status: Optional[str] = None
-    collaborators: Optional[List[CollaboratorInput]] = None
-    use_ai: Optional[bool] = None
+    user_id: Optional[str] = strawberry.field(name="user_id", default=None)
+    title: Optional[str] = strawberry.field(name="title", default=None)
+    notes_encrypted: Optional[str] = strawberry.field(name="notes_encrypted", default=None)
+    estimate_timer: Optional[int] = strawberry.field(name="estimate_timer", default=None)
+    real_timer: Optional[int] = strawberry.field(name="real_timer", default=None)
+    duration: Optional[str] = strawberry.field(name="duration", default=None)
+    priority_level: Optional[int] = strawberry.field(name="priority_level", default=None)
+    deadline: Optional[str] = strawberry.field(name="deadline", default=None)
+    category: Optional[str] = strawberry.field(name="category", default=None)
+    color: Optional[str] = strawberry.field(name="color", default=None)
+    status: Optional[str] = strawberry.field(name="status", default=None)
+    tags: Optional[List[str]] = strawberry.field(name="tags", default=None)
+    links: Optional[List[LinkInput]] = strawberry.field(name="links", default=None)
+    task_type: Optional[str] = strawberry.field(name="task_type", default=None)
+    google_event_id: Optional[str] = strawberry.field(name="google_event_id", default=None)
+    estimated_start_date: Optional[str] = strawberry.field(name="estimated_start_date", default=None)
+    estimated_end_date: Optional[str] = strawberry.field(name="estimated_end_date", default=None)
+    source: Optional[str] = strawberry.field(name="source", default=None)
+    sync_status: Optional[str] = strawberry.field(name="sync_status", default=None)
+    collaborators: Optional[List[CollaboratorInput]] = strawberry.field(name="collaborators", default=None)
+    use_ai: Optional[bool] = strawberry.field(name="use_ai", default=None)
 
 @strawberry.input
 class TaskFilterInput:
@@ -306,25 +306,25 @@ class TaskSortInput:
 @strawberry.input
 class CreateWorkspaceInput:
     title: str
+    content: str
     emoji: Optional[str] = None
     background_color: Optional[str] = strawberry.field(name="background_color", default=None)
     card_show_background: Optional[bool] = strawberry.field(name="card_show_background", default=None)
-    folderId: Optional[str] = strawberry.field(name="folderId", default=None)
-    content: str
-    taskId: Optional[str] = strawberry.field(name="taskId", default=None)
-    saveStatus: Optional[bool] = strawberry.field(name="saveStatus", default=None)
+    folderId: Optional[str] = None
+    taskId: Optional[str] = None
+    saveStatus: Optional[bool] = None
 
 @strawberry.input
 class UpdateWorkspaceInput:
     id: strawberry.ID
     title: Optional[str] = None
+    content: Optional[str] = None
     emoji: Optional[str] = None
     background_color: Optional[str] = strawberry.field(name="background_color", default=None)
     card_show_background: Optional[bool] = strawberry.field(name="card_show_background", default=None)
-    folderId: Optional[str] = strawberry.field(name="folderId", default=None)
-    content: Optional[str] = None
-    taskId: Optional[str] = strawberry.field(name="taskId", default=None)
-    saveStatus: Optional[bool] = strawberry.field(name="saveStatus", default=None)
+    folderId: Optional[str] = None
+    taskId: Optional[str] = None
+    saveStatus: Optional[bool] = None
 
 @strawberry.input
 class CreateFolderInput:

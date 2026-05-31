@@ -67,7 +67,7 @@ class TasksService:
             existing = result.scalars().first()
             if existing:
                 print(f"[UPSERT] Task with google_event_id {google_event_id} already exists. Updating instead.")
-                return await self.update(existing.id, task_data, skip_scheduling=skip_scheduling)
+                return await self.update(existing.id, task_data, skip_scheduling=skip_scheduling, skip_google_sync=skip_google_sync)
 
         # 2. Sync to Google Calendar
         if user_id and not skip_google_sync and not google_event_id:
@@ -92,11 +92,11 @@ class TasksService:
             if not val:
                 return None
             if isinstance(val, datetime):
-                return val
+                return val.replace(tzinfo=None)
             if isinstance(val, str):
                 try:
                     val = val.replace("Z", "+00:00")
-                    return datetime.fromisoformat(val)
+                    return datetime.fromisoformat(val).replace(tzinfo=None)
                 except:
                     return None
             return None
@@ -237,13 +237,14 @@ class TasksService:
         self,
         id: str,
         update_data: Dict[str, Any],
-        skip_scheduling: bool = False
+        skip_scheduling: bool = False,
+        skip_google_sync: bool = False
     ) -> Dict[str, Any]:
         result = await self.db.execute(select(Task).where(Task.id == id))
         task = result.scalars().first()
         if not task:
             # If update on non-existent task, we create it
-            return await self.create(update_data, skip_scheduling=skip_scheduling)
+            return await self.create(update_data, skip_scheduling=skip_scheduling, skip_google_sync=skip_google_sync)
 
         has_changes = False
         def parse_dt(val):
@@ -289,6 +290,19 @@ class TasksService:
 
         if has_changes:
             task.updatedAt = datetime.utcnow()
+
+            # Sync update back to Google Calendar if requested and task is a GoogleTask
+            if not skip_google_sync and task.google_event_id and task.task_type == "GoogleTask" and self.google_calendar_service:
+                try:
+                    updated_task_dict = self._map_to_dict(task)
+                    google_event_body = self._map_task_to_google_event(updated_task_dict)
+                    print(f"[GOOGLE CAL] Syncing update of GoogleTask {task.id} (Event: {task.google_event_id}) to Google Calendar...")
+                    await self.google_calendar_service.patch_event(
+                        task.userId, task.google_event_id, google_event_body
+                    )
+                except Exception as e:
+                    print(f"Error syncing task update to Google Calendar for task {task.id}: {e}")
+
             await self.db.commit()
             await self.db.refresh(task)
 
@@ -441,21 +455,26 @@ class TasksService:
         return mapped
 
     def _map_task_to_google_event(self, task: Dict[str, Any]) -> Dict[str, Any]:
+        def parse_naive(val):
+            """Parse a datetime string or object and always return a naive (offset-free) datetime."""
+            if not val:
+                return None
+            if isinstance(val, datetime):
+                return val.replace(tzinfo=None)
+            if isinstance(val, str):
+                try:
+                    return datetime.fromisoformat(val.replace("Z", "+00:00")).replace(tzinfo=None)
+                except:
+                    return None
+            return None
+
         deadline_str = task.get("deadline")
-        deadline = datetime.fromisoformat(deadline_str.replace("Z", "+00:00")) if isinstance(deadline_str, str) else (deadline_str or datetime.utcnow())
+        deadline = parse_naive(deadline_str) or datetime.utcnow()
 
-        start = task.get("estimated_start_date")
-        if start:
-            if isinstance(start, str):
-                start = datetime.fromisoformat(start.replace("Z", "+00:00"))
-        else:
-            start = deadline
+        start = parse_naive(task.get("estimated_start_date")) or deadline
 
-        end = task.get("estimated_end_date")
-        if end:
-            if isinstance(end, str):
-                end = datetime.fromisoformat(end.replace("Z", "+00:00"))
-        else:
+        end = parse_naive(task.get("estimated_end_date"))
+        if not end:
             end = start + timedelta(minutes=(task.get("estimateTimer") or 30))
 
         clean_desc = (task.get("notesEncrypted") or "")
