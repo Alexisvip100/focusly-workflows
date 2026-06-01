@@ -6,6 +6,7 @@ from sqlalchemy.future import select
 from sqlalchemy import delete
 
 from app.models.models import TimeBlock
+from app.schemas.time_blocks import TimeBlockCreateSchema
 
 class TimeBlocksService:
     def __init__(self, db: AsyncSession):
@@ -43,19 +44,11 @@ class TimeBlocksService:
 
     async def create(self, block_data: Dict[str, Any]) -> str:
         block_id = block_data.get("id") or str(uuid.uuid4())
+        tb_input = TimeBlockCreateSchema(**block_data)
         
         time_block = TimeBlock(
             id=block_id,
-            userId=block_data.get("userId"),
-            taskId=block_data.get("taskId"),
-            startTime=self._parse_dt(block_data.get("startTime")) or datetime.utcnow(),
-            endTime=self._parse_dt(block_data.get("endTime")) or datetime.utcnow(),
-            blockType=block_data.get("blockType"),
-            externalEventId=block_data.get("externalEventId"),
-            source=block_data.get("source"),
-            title=block_data.get("title", ""),
-            meetingUrl=block_data.get("meetingUrl"),
-            attendees=block_data.get("attendees", [])
+            **tb_input.model_dump()
         )
         
         self.db.add(time_block)
@@ -69,18 +62,10 @@ class TimeBlocksService:
         new_blocks = []
         for b in blocks_data:
             block_id = b.get("id") or str(uuid.uuid4())
+            tb_input = TimeBlockCreateSchema(**b)
             new_blocks.append(TimeBlock(
                 id=block_id,
-                userId=b.get("userId"),
-                taskId=b.get("taskId"),
-                startTime=self._parse_dt(b.get("startTime")) or datetime.utcnow(),
-                endTime=self._parse_dt(b.get("endTime")) or datetime.utcnow(),
-                blockType=b.get("blockType"),
-                externalEventId=b.get("externalEventId"),
-                source=b.get("source"),
-                title=b.get("title", ""),
-                meetingUrl=b.get("meetingUrl"),
-                attendees=b.get("attendees", [])
+                **tb_input.model_dump()
             ))
             
         self.db.add_all(new_blocks)

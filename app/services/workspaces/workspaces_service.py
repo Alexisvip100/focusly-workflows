@@ -6,6 +6,7 @@ from sqlalchemy.future import select
 from sqlalchemy import update
 
 from app.models.models import Workspace
+from app.schemas.workspaces import WorkspaceCreateSchema
 
 class WorkspacesService:
     def __init__(self, db: AsyncSession):
@@ -13,18 +14,12 @@ class WorkspacesService:
 
     async def create(self, create_input: Dict[str, Any], user_id: str) -> Workspace:
         workspace_id = str(uuid.uuid4())
+        workspace_data = WorkspaceCreateSchema(**create_input)
         
         workspace = Workspace(
             id=workspace_id,
             userId=user_id,
-            title=create_input.get("title"),
-            emoji=create_input.get("emoji"),
-            background_color=create_input.get("background_color"),
-            card_show_background=create_input.get("card_show_background"),
-            content=create_input.get("content", ""),
-            taskId=create_input.get("taskId"),
-            folderId=create_input.get("folderId"),
-            saveStatus=create_input.get("saveStatus", False)
+            **workspace_data.model_dump()
         )
         
         self.db.add(workspace)

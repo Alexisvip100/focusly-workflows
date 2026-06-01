@@ -88,6 +88,8 @@ class SchedulerService:
     ) -> List[Dict[str, Any]]:
         constraints = []
         for event in external_events:
+            if not event.get("start") or not event.get("end"):
+                continue
             constraints.append({
                 "start": event["start"],
                 "end": event["end"],
@@ -95,6 +97,8 @@ class SchedulerService:
                 "id": event["id"]
             })
         for meeting in meetings:
+            if not meeting.get("start") or not meeting.get("end"):
+                continue
             constraints.append({
                 "start": meeting["start"],
                 "end": meeting["end"],
@@ -215,7 +219,7 @@ class SchedulerService:
         start = start.replace(second=0, microsecond=0)
 
         end = task.get("hardDeadline") or task.get("deadline")
-        if not end:
+        if not end or end > start + timedelta(days=14):
             end = start + timedelta(days=14)
         
         return start, end

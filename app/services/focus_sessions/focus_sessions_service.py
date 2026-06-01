@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 
 from app.models.models import FocusSession
+from app.schemas.focus_sessions import FocusSessionCreateSchema
 
 class FocusSessionsService:
     def __init__(self, db: AsyncSession):
@@ -12,29 +13,11 @@ class FocusSessionsService:
 
     async def create(self, session_data: Dict[str, Any]) -> FocusSession:
         session_id = session_data.get("id") or str(uuid.uuid4())
+        parsed_session = FocusSessionCreateSchema(**session_data)
         
-        def parse_dt(val):
-            if not val:
-                return datetime.utcnow()
-            if isinstance(val, datetime):
-                return val
-            if isinstance(val, str):
-                try:
-                    val = val.replace("Z", "+00:00")
-                    return datetime.fromisoformat(val)
-                except:
-                    return datetime.utcnow()
-            return datetime.utcnow()
-
         new_session = FocusSession(
             id=session_id,
-            userId=session_data.get("userId"),
-            taskId=session_data.get("taskId"),
-            startedAt=parse_dt(session_data.get("startedAt")),
-            endedAt=parse_dt(session_data.get("endedAt")),
-            durationMinutes=int(session_data.get("durationMinutes") or 0),
-            distractionCount=int(session_data.get("distractionCount") or 0),
-            wasSuccessful=bool(session_data.get("wasSuccessful", True))
+            **parsed_session.model_dump()
         )
         self.db.add(new_session)
         await self.db.commit()

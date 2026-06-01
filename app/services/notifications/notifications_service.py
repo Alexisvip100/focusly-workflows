@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 
 from app.models.models import Notification
+from app.schemas.notifications import NotificationCreateSchema
 
 class NotificationsService:
     def __init__(self, db: AsyncSession):
@@ -12,29 +13,11 @@ class NotificationsService:
 
     async def create(self, notification_data: Dict[str, Any]) -> Notification:
         notif_id = notification_data.get("id") or str(uuid.uuid4())
+        parsed_notif = NotificationCreateSchema(**notification_data)
         
-        def parse_dt(val):
-            if not val:
-                return datetime.utcnow()
-            if isinstance(val, datetime):
-                return val
-            if isinstance(val, str):
-                try:
-                    val = val.replace("Z", "+00:00")
-                    return datetime.fromisoformat(val)
-                except:
-                    return datetime.utcnow()
-            return datetime.utcnow()
-
         new_notif = Notification(
             id=notif_id,
-            userId=notification_data.get("userId"),
-            relatedTaskId=notification_data.get("relatedTaskId"),
-            type=notification_data.get("type", "task_reminder"),
-            scheduledAt=parse_dt(notification_data.get("scheduledAt")),
-            status=notification_data.get("status", "pending"),
-            title=notification_data.get("title", ""),
-            body=notification_data.get("body", "")
+            **parsed_notif.model_dump()
         )
         self.db.add(new_notif)
         await self.db.commit()

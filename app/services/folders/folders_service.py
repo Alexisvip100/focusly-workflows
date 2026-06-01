@@ -7,6 +7,7 @@ from sqlalchemy.future import select
 from sqlalchemy import update
 
 from app.models.models import Folder, Workspace
+from app.schemas.folders import FolderCreateSchema
 
 class FoldersService:
     def __init__(self, db: AsyncSession):
@@ -14,12 +15,12 @@ class FoldersService:
 
     async def create(self, create_input: Dict[str, Any], user_id: str) -> Folder:
         folder_id = str(uuid.uuid4())
+        folder_data = FolderCreateSchema(**create_input)
         
         folder = Folder(
             id=folder_id,
-            name=create_input.get("name"),
             userId=user_id,
-            color=create_input.get("color")
+            **folder_data.model_dump()
         )
         
         self.db.add(folder)

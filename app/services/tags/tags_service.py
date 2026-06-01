@@ -4,6 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 
 from app.models.models import Tag
+from app.schemas.tags import TagCreateSchema
 
 class TagsService:
     def __init__(self, db: AsyncSession):
@@ -11,11 +12,11 @@ class TagsService:
 
     async def create(self, tag_data: Dict[str, Any]) -> str:
         tag_id = str(uuid.uuid4())
+        parsed_tag = TagCreateSchema(**tag_data)
         
         tag = Tag(
             id=tag_id,
-            name=tag_data.get("name", ""),
-            userId=tag_data.get("userId")
+            **parsed_tag.model_dump()
         )
         
         self.db.add(tag)

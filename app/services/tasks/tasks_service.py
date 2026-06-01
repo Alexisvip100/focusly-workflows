@@ -7,6 +7,7 @@ from sqlalchemy import delete, and_
 
 from app.models.models import Task, User, Workspace
 from app.services.scheduler.scheduler_service import SchedulerService
+from app.schemas.tasks import TaskCreateSchema
 
 class TasksService:
     def __init__(self, db: AsyncSession, google_calendar_service=None, socket_server=None):
@@ -101,37 +102,14 @@ class TasksService:
                     return None
             return None
 
+        task_input = TaskCreateSchema(**task_data)
+
         new_task = Task(
             id=task_id,
             userId=user_id,
-            title=task_data.get("title", "Untitled Task"),
-            notesEncrypted=task_data.get("notesEncrypted", ""),
-            estimateTimer=task_data.get("estimateTimer"),
-            realTimer=task_data.get("realTimer"),
-            duration=parse_dt(task_data.get("duration")),
-            priorityLevel=task_data.get("priorityLevel", 2),
-            category=task_data.get("category"),
-            color=task_data.get("color"),
-            estimated_start_date=parse_dt(task_data.get("estimated_start_date")),
-            estimated_end_date=parse_dt(task_data.get("estimated_end_date")),
-            deadline=parse_dt(task_data.get("deadline")) or now,
-            status=task_data.get("status", "Todo"),
-            completedAt=parse_dt(task_data.get("completedAt")),
-            deletedAt=None,
-            tags=task_data.get("tags", []),
-            filters=task_data.get("filters", {}),
-            links=task_data.get("links", []),
-            task_type=task_data.get("task_type", "PlatformTask"),
-            google_event_id=task_data.get("google_event_id"),
-            source=task_data.get("source", "platform"),
-            sync_status=task_data.get("sync_status", "synced"),
-            collaborators=task_data.get("collaborators", []),
-            notified=task_data.get("notified", False),
-            lastMinuteNotified=task_data.get("lastMinuteNotified", False),
-            use_ai=task_data.get("use_ai", False),
-            workspaceId=task_data.get("workspaceId")
+            deadline=task_input.deadline or now,
+            **task_input.model_dump(exclude={"deadline"})  # Desempaqueta el resto de campos ya procesados
         )
-
         self.db.add(new_task)
         await self.db.commit()
         await self.db.refresh(new_task)
@@ -323,7 +301,7 @@ class TasksService:
         task_type = task.task_type or "PlatformTask"
         
         # Sync deletion to Google Calendar
-        if task_type == "PlatformTask" and task.google_event_id and task.userId and not skip_google_sync:
+        if task.google_event_id and task.userId and not skip_google_sync:
             if self.google_calendar_service:
                 try:
                     await self.google_calendar_service.delete_event(task.userId, task.google_event_id)
@@ -336,9 +314,8 @@ class TasksService:
             w.taskId = None
             w.updatedAt = datetime.utcnow()
 
-        # Soft delete
-        task.deletedAt = datetime.utcnow()
-        task.updatedAt = datetime.utcnow()
+        # Hard delete (Físico)
+        await self.db.delete(task)
         await self.db.commit()
 
         if task.userId and not skip_scheduling:
@@ -488,10 +465,10 @@ class TasksService:
             "summary": task.get("title", "Untitled Focusly Task"),
             "description": clean_desc,
             "start": {
-                "dateTime": start.isoformat()
+                "dateTime": start.isoformat() + "Z"
             },
             "end": {
-                "dateTime": end.isoformat()
+                "dateTime": end.isoformat() + "Z"
             },
             "attendees": [
                 {"email": c["email"], "displayName": c.get("name", "")}
