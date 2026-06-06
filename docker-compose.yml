@@ -1,28 +1,32 @@
+version: '3.8'
+
 services:
   db:
     image: postgres:15-alpine
-    container_name: focusly-db
+    container_name: focusly-postgres
     restart: always
     environment:
-      - POSTGRES_USER=alexis
-      - POSTGRES_DB=focusly
-      - POSTGRES_PASSWORD=password
+      POSTGRES_DB: focusly
+      POSTGRES_USER: focusly_user
+      POSTGRES_PASSWORD: focusly_password
     ports:
-      - "5432:5432"
+      - '5432:5432'
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - pgdata:/var/lib/postgresql/data
 
-  focusly-workflows:
+  web:
     build: .
     container_name: focusly-web
+    restart: always
     ports:
-      - "3000:3000"
-    volumes:
-      - .:/app
+      - '3000:3000'
+    env_file:
+      - .env
     environment:
-      - DATABASE_URL=postgresql+asyncpg://alexis:password@db:5432/focusly
+      - DATABASE_URL=postgresql+asyncpg://focusly_user:focusly_password@db:5432/focusly
     depends_on:
       - db
 
 volumes:
-  postgres_data:
+  pgdata:
+    driver: local

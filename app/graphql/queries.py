@@ -263,10 +263,10 @@ class Query:
         
         # Instantiate services needed by insights_service
         # Cyclic imports or direct
-        from app.services.auth.auth_service import AuthService
+        from app.services.users.users_service import UsersService
         from app.services.focus_sessions.focus_sessions_service import FocusSessionsService
         
-        auth_serv = AuthService(db)
+        users_serv = UsersService(db)
         tasks_serv = TasksService(db)
         fs_serv = FocusSessionsService(db)
         
@@ -274,7 +274,7 @@ class Query:
             db=db,
             tasks_service=tasks_serv,
             focus_sessions_service=fs_serv,
-            users_service=auth_serv
+            users_service=users_serv
         )
         
         res = await insights_serv.getInsights(user_id, filter or "Weekly")

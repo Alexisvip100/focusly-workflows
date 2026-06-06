@@ -340,10 +340,16 @@ class UpdateFolderInput:
 # Helper functions to convert DB/dict data to strawberry types
 
 def map_dict_to_strawberry_task(t: Dict[str, Any]) -> Task:
+    from datetime import timezone as _tz
+
     def parse_iso(dt_str: Optional[str]) -> Optional[datetime]:
         if not dt_str:
             return None
-        return datetime.fromisoformat(dt_str.replace("Z", "+00:00"))
+        # Parse the string; if it has no timezone info (naive), treat it as UTC.
+        dt = datetime.fromisoformat(dt_str.replace("Z", "+00:00"))
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=_tz.utc)
+        return dt
 
     # Tags list
     tags = []

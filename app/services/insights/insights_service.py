@@ -443,10 +443,12 @@ class InsightsService:
             return data, ["12 AM", "6 AM", "12 PM", "6 PM", "11 PM"]
 
         if filter_type == "Weekly":
+            day_of_week = now.weekday()
+            monday = (now - timedelta(days=day_of_week)).date()
             days = []
-            for i in range(6, -1, -1):
-                d = now - timedelta(days=i)
-                days.append(d.date().isoformat())
+            for i in range(7):
+                d = monday + timedelta(days=i)
+                days.append(d.isoformat())
 
             for s in sessions:
                 s_dt = s.startedAt
@@ -490,4 +492,4 @@ class InsightsService:
             elif mins < 180: data.append(2)
             else: data.append(3)
 
-        return data, ["Inicio", "Mitad", "Fin"]
+        return data, ["Start", "Middle", "End"]
