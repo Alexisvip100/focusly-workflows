@@ -8,6 +8,7 @@ from app.services.folders.folders_service import FoldersService
 from app.services.workspaces.workspaces_service import WorkspacesService
 from app.services.tags.tags_service import TagsService
 from app.services.insights.insights_service import InsightsService
+from app.services.project_groups.project_groups_service import ProjectGroupsService
 
 # Helper to enforce auth
 def get_user_id(info) -> str:
@@ -144,41 +145,43 @@ class Query:
         res = await tasks_serv.filter_by_status(filters_dict)
         return [types.map_dict_to_strawberry_task(t) for t in res]
 
-    # Folders Resolvers
+    # Projects Resolvers
     @strawberry.field
-    async def folders(self, info) -> List[types.Folder]:
+    async def projects(self, info, group_id: Optional[str] = None) -> List[types.Project]:
         user_id = get_user_id(info)
         db = info.context["db"]
         folders_serv = FoldersService(db)
-        res = await folders_serv.find_all(user_id)
+        res = await folders_serv.find_all(user_id, group_id=group_id)
         return [
-            types.Folder(
+            types.Project(
                 id=strawberry.ID(f.id),
                 name=f.name,
                 user_id=f.userId,
                 color=f.color,
+                group_id=f.groupId,
                 created_at=f.createdAt,
                 updated_at=f.updatedAt
             ) for f in res
         ]
 
     @strawberry.field
-    async def folder(self, info, id: strawberry.ID) -> types.Folder:
+    async def project(self, info, id: strawberry.ID) -> types.Project:
         user_id = get_user_id(info)
         db = info.context["db"]
         folders_serv = FoldersService(db)
         res = await folders_serv.find_one(str(id), user_id)
-        return types.Folder(
+        return types.Project(
             id=strawberry.ID(res.id),
             name=res.name,
             user_id=res.userId,
             color=res.color,
+            group_id=res.groupId,
             created_at=res.createdAt,
             updated_at=res.updatedAt
         )
 
     @strawberry.field
-    async def total_folders(self, info) -> int:
+    async def total_projects(self, info) -> int:
         user_id = get_user_id(info)
         db = info.context["db"]
         folders_serv = FoldersService(db)
@@ -190,12 +193,13 @@ class Query:
         self,
         info,
         search: Optional[str] = None,
-        folder_id: Optional[str] = None
+        project_id: Optional[str] = None,
+        group_id: Optional[str] = None
     ) -> List[types.Workspace]:
         user_id = get_user_id(info)
         db = info.context["db"]
         ws_serv = WorkspacesService(db)
-        res = await ws_serv.find_all(user_id, search, folder_id)
+        res = await ws_serv.find_all(user_id, search, project_id, group_id=group_id)
         return [
             types.Workspace(
                 id=strawberry.ID(w.id),
@@ -205,7 +209,8 @@ class Query:
                 emoji=w.emoji,
                 background_color=w.background_color,
                 card_show_background=w.card_show_background,
-                folderId=w.folderId,
+                projectId=w.folderId,
+                groupId=w.groupId,
                 content=w.content,
                 saveStatus=w.saveStatus,
                 createdAt=w.createdAt,
@@ -227,7 +232,8 @@ class Query:
             emoji=res.emoji,
             background_color=res.background_color,
             card_show_background=res.card_show_background,
-            folderId=res.folderId,
+            projectId=res.folderId,
+            groupId=res.groupId,
             content=res.content,
             saveStatus=res.saveStatus,
             createdAt=res.createdAt,
@@ -240,6 +246,41 @@ class Query:
         db = info.context["db"]
         ws_serv = WorkspacesService(db)
         return await ws_serv.get_total_workspaces(user_id)
+
+    # ProjectGroup Resolvers
+    @strawberry.field
+    async def project_groups(self, info) -> List[types.ProjectGroup]:
+        user_id = get_user_id(info)
+        db = info.context["db"]
+        pg_serv = ProjectGroupsService(db)
+        res = await pg_serv.find_all(user_id)
+        return [
+            types.ProjectGroup(
+                id=strawberry.ID(g.id),
+                name=g.name,
+                user_id=g.userId,
+                color=g.color,
+                emoji=g.emoji,
+                created_at=g.createdAt,
+                updated_at=g.updatedAt
+            ) for g in res
+        ]
+
+    @strawberry.field
+    async def project_group(self, info, id: strawberry.ID) -> types.ProjectGroup:
+        user_id = get_user_id(info)
+        db = info.context["db"]
+        pg_serv = ProjectGroupsService(db)
+        res = await pg_serv.find_one(str(id), user_id)
+        return types.ProjectGroup(
+            id=strawberry.ID(res.id),
+            name=res.name,
+            user_id=res.userId,
+            color=res.color,
+            emoji=res.emoji,
+            created_at=res.createdAt,
+            updated_at=res.updatedAt
+        )
 
     # Tags Resolver
     @strawberry.field

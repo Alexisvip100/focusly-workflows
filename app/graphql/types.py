@@ -60,7 +60,8 @@ class Workspace:
     emoji: Optional[str] = None
     background_color: Optional[str] = strawberry.field(name="background_color", default=None)
     card_show_background: Optional[bool] = strawberry.field(name="card_show_background", default=None)
-    folderId: Optional[str] = None
+    projectId: Optional[str] = None
+    groupId: Optional[str] = None
     content: str
     saveStatus: Optional[bool] = None
     createdAt: datetime
@@ -81,16 +82,16 @@ class Workspace:
             return None
 
     @strawberry.field
-    async def folder(self, info) -> Optional["Folder"]:
-        if not self.folderId:
+    async def project(self, info) -> Optional["Project"]:
+        if not self.projectId:
             return None
         db = info.context["db"]
         from app.services.folders.folders_service import FoldersService
         folders_serv = FoldersService(db)
         try:
-            res = await folders_serv.find_one(self.folderId, self.userId)
+            res = await folders_serv.find_one(self.projectId, self.userId)
             if res:
-                return Folder(
+                return Project(
                     id=strawberry.ID(res.id),
                     name=res.name,
                     user_id=res.userId,
@@ -102,11 +103,12 @@ class Workspace:
             return None
 
 @strawberry.type
-class Folder:
+class Project:
     id: strawberry.ID
     name: str
     user_id: str = strawberry.field(name="userId")
     color: Optional[str] = None
+    group_id: Optional[str] = strawberry.field(name="groupId", default=None)
     created_at: datetime = strawberry.field(name="createdAt")
     updated_at: datetime = strawberry.field(name="updatedAt")
 
@@ -125,7 +127,7 @@ class Folder:
                 emoji=w.emoji,
                 background_color=w.background_color,
                 card_show_background=w.card_show_background,
-                folderId=w.folderId,
+                projectId=w.folderId,
                 content=w.content,
                 saveStatus=w.saveStatus,
                 createdAt=w.createdAt,
@@ -137,6 +139,64 @@ class Folder:
     async def workspace_count(self, info) -> int:
         workspaces = await self.workspaces(info)
         return len(workspaces)
+
+@strawberry.type
+class ProjectGroup:
+    id: strawberry.ID
+    name: str
+    user_id: str = strawberry.field(name="userId")
+    color: Optional[str] = None
+    emoji: Optional[str] = None
+    created_at: datetime = strawberry.field(name="createdAt")
+    updated_at: datetime = strawberry.field(name="updatedAt")
+
+    @strawberry.field
+    async def folders(self, info) -> List[Project]:
+        db = info.context["db"]
+        from app.services.folders.folders_service import FoldersService
+        folders_serv = FoldersService(db)
+        res = await folders_serv.find_all(self.user_id, group_id=str(self.id))
+        return [
+            Project(
+                id=strawberry.ID(f.id),
+                name=f.name,
+                user_id=f.userId,
+                color=f.color,
+                group_id=f.groupId,
+                created_at=f.createdAt,
+                updated_at=f.updatedAt
+            ) for f in res
+        ]
+
+    @strawberry.field
+    async def general_workspaces(self, info) -> List[Workspace]:
+        """Workspaces that belong to this group but not to any specific folder."""
+        db = info.context["db"]
+        from app.services.workspaces.workspaces_service import WorkspacesService
+        ws_serv = WorkspacesService(db)
+        all_ws = await ws_serv.find_all(self.user_id, group_id=str(self.id))
+        return [
+            Workspace(
+                id=strawberry.ID(w.id),
+                userId=w.userId,
+                taskId=w.taskId,
+                title=w.title,
+                emoji=w.emoji,
+                background_color=w.background_color,
+                card_show_background=w.card_show_background,
+                projectId=w.folderId,
+                groupId=w.groupId,
+                content=w.content,
+                saveStatus=w.saveStatus,
+                createdAt=w.createdAt,
+                updatedAt=w.updatedAt
+            ) for w in all_ws if not w.folderId
+        ]
+
+    @strawberry.field
+    async def folder_count(self, info) -> int:
+        folders = await self.folders(info)
+        return len(folders)
 
 @strawberry.type
 class Task:
@@ -165,6 +225,8 @@ class Task:
     estimated_end_date: Optional[datetime] = strawberry.field(name="estimated_end_date", default=None)
     collaborators: Optional[List[Collaborator]] = strawberry.field(default_factory=list)
     use_ai: Optional[bool] = strawberry.field(name="use_ai", default=False)
+    is_owner: Optional[bool] = strawberry.field(name="is_owner", default=True)
+    source: Optional[str] = strawberry.field(name="source", default="platform")
 
     @strawberry.field
     async def workspace(self, info) -> Optional[Workspace]:
@@ -181,7 +243,7 @@ class Task:
                 emoji=res.emoji,
                 background_color=res.background_color,
                 card_show_background=res.card_show_background,
-                folderId=res.folderId,
+                projectId=res.folderId,
                 content=res.content,
                 saveStatus=res.saveStatus,
                 createdAt=res.createdAt,
@@ -263,6 +325,7 @@ class CreateTaskInput:
     sync_status: Optional[str] = strawberry.field(name="sync_status", default=None)
     collaborators: Optional[List[CollaboratorInput]] = strawberry.field(name="collaborators", default=None)
     use_ai: Optional[bool] = strawberry.field(name="use_ai", default=None)
+    is_owner: Optional[bool] = strawberry.field(name="is_owner", default=True)
 
 @strawberry.input
 class UpdateTaskInput:
@@ -288,6 +351,7 @@ class UpdateTaskInput:
     sync_status: Optional[str] = strawberry.field(name="sync_status", default=None)
     collaborators: Optional[List[CollaboratorInput]] = strawberry.field(name="collaborators", default=None)
     use_ai: Optional[bool] = strawberry.field(name="use_ai", default=None)
+    is_owner: Optional[bool] = strawberry.field(name="is_owner", default=None)
 
 @strawberry.input
 class TaskFilterInput:
@@ -310,7 +374,8 @@ class CreateWorkspaceInput:
     emoji: Optional[str] = None
     background_color: Optional[str] = strawberry.field(name="background_color", default=None)
     card_show_background: Optional[bool] = strawberry.field(name="card_show_background", default=None)
-    folderId: Optional[str] = None
+    projectId: Optional[str] = None
+    groupId: Optional[str] = None
     taskId: Optional[str] = None
     saveStatus: Optional[bool] = None
 
@@ -322,20 +387,36 @@ class UpdateWorkspaceInput:
     emoji: Optional[str] = None
     background_color: Optional[str] = strawberry.field(name="background_color", default=None)
     card_show_background: Optional[bool] = strawberry.field(name="card_show_background", default=None)
-    folderId: Optional[str] = None
+    projectId: Optional[str] = None
+    groupId: Optional[str] = None
     taskId: Optional[str] = None
     saveStatus: Optional[bool] = None
 
 @strawberry.input
-class CreateFolderInput:
+class CreateProjectInput:
     name: str
     color: Optional[str] = None
+    groupId: Optional[str] = None
 
 @strawberry.input
-class UpdateFolderInput:
+class UpdateProjectInput:
     id: strawberry.ID
     name: Optional[str] = None
     color: Optional[str] = None
+    groupId: Optional[str] = None
+
+@strawberry.input
+class CreateProjectGroupInput:
+    name: str
+    color: Optional[str] = None
+    emoji: Optional[str] = None
+
+@strawberry.input
+class UpdateProjectGroupInput:
+    id: strawberry.ID
+    name: Optional[str] = None
+    color: Optional[str] = None
+    emoji: Optional[str] = None
 
 # Helper functions to convert DB/dict data to strawberry types
 
@@ -414,5 +495,7 @@ def map_dict_to_strawberry_task(t: Dict[str, Any]) -> Task:
         estimated_start_date=parse_iso(t.get("estimated_start_date")),
         estimated_end_date=parse_iso(t.get("estimated_end_date")),
         collaborators=collaborators,
-        use_ai=t.get("use_ai")
+        use_ai=t.get("use_ai"),
+        is_owner=t.get("is_owner", True),
+        source=t.get("source", "platform")
     )

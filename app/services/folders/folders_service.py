@@ -8,6 +8,7 @@ from sqlalchemy import update
 
 from app.models.models import Folder, Workspace
 from app.schemas.folders import FolderCreateSchema
+from typing import Optional as Opt
 
 class FoldersService:
     def __init__(self, db: AsyncSession):
@@ -15,11 +16,13 @@ class FoldersService:
 
     async def create(self, create_input: Dict[str, Any], user_id: str) -> Folder:
         folder_id = str(uuid.uuid4())
+        group_id = create_input.pop("groupId", None)
         folder_data = FolderCreateSchema(**create_input)
         
         folder = Folder(
             id=folder_id,
             userId=user_id,
+            groupId=group_id,
             **folder_data.model_dump()
         )
         
@@ -28,8 +31,11 @@ class FoldersService:
         await self.db.refresh(folder)
         return folder
 
-    async def find_all(self, user_id: str) -> List[Folder]:
-        result = await self.db.execute(select(Folder).where(Folder.userId == user_id))
+    async def find_all(self, user_id: str, group_id: Opt[str] = None) -> List[Folder]:
+        query = select(Folder).where(Folder.userId == user_id)
+        if group_id is not None:
+            query = query.where(Folder.groupId == group_id)
+        result = await self.db.execute(query)
         return list(result.scalars().all())
 
     async def find_one(self, id: str, user_id: str) -> Folder:
@@ -49,6 +55,8 @@ class FoldersService:
             folder.name = update_input["name"]
         if "color" in update_input:
             folder.color = update_input["color"]
+        if "groupId" in update_input:
+            folder.groupId = update_input["groupId"]
 
         folder.updatedAt = datetime.utcnow()
         await self.db.commit()

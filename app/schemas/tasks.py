@@ -28,7 +28,7 @@ class TaskCreateSchema(BaseModel):
     lastMinuteNotified: Optional[bool] = False
     use_ai: Optional[bool] = False
     workspaceId: Optional[str] = None
-
+    is_owner: Optional[bool] = True
     @model_validator(mode="before")
     @classmethod
     def set_defaults(cls, data: Any) -> Any:
@@ -46,7 +46,8 @@ class TaskCreateSchema(BaseModel):
                 "use_ai": False,
                 "tags": [],
                 "links": [],
-                "collaborators": []
+                "collaborators": [],
+                "is_owner": True
             }
             for key, default_val in defaults.items():
                 if data.get(key) is None:

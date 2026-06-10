@@ -7,6 +7,7 @@ from app.services.tasks.tasks_service import TasksService
 from app.services.folders.folders_service import FoldersService
 from app.services.workspaces.workspaces_service import WorkspacesService
 from app.services.auth.auth_service import AuthService
+from app.services.project_groups.project_groups_service import ProjectGroupsService
 
 def get_user_id(info) -> str:
     user_id = info.context.get("user_id")
@@ -231,50 +232,55 @@ class Mutation:
         await tasks_serv.delete_workspace_tasks(workspace_id)
         return True
 
-    # Folder Mutations
+    # Project Mutations
     @strawberry.mutation
-    async def create_folder(self, info, create_folder_input: types.CreateFolderInput) -> types.Folder:
+    async def create_project(self, info, create_project_input: types.CreateProjectInput) -> types.Project:
         user_id = get_user_id(info)
         db = info.context["db"]
         folders_serv = FoldersService(db)
         create_data = {
-            "name": create_folder_input.name,
-            "color": create_folder_input.color
+            "name": create_project_input.name,
+            "color": create_project_input.color,
+            "groupId": create_project_input.groupId
         }
         res = await folders_serv.create(create_data, user_id)
-        return types.Folder(
+        return types.Project(
             id=strawberry.ID(res.id),
             name=res.name,
             user_id=res.userId,
             color=res.color,
+            group_id=res.groupId,
             created_at=res.createdAt,
             updated_at=res.updatedAt
         )
 
     @strawberry.mutation
-    async def update_folder(self, info, update_folder_input: types.UpdateFolderInput) -> types.Folder:
+    async def update_project(self, info, update_project_input: types.UpdateProjectInput) -> types.Project:
         user_id = get_user_id(info)
         db = info.context["db"]
         folders_serv = FoldersService(db)
         
         update_data = {}
-        if update_folder_input.name is not None:
-            update_data["name"] = update_folder_input.name
-        if update_folder_input.color is not None:
-            update_data["color"] = update_folder_input.color
+        if update_project_input.name is not None:
+            update_data["name"] = update_project_input.name
+        if update_project_input.color is not None:
+            update_data["color"] = update_project_input.color
+        if update_project_input.groupId is not None:
+            update_data["groupId"] = update_project_input.groupId
 
-        res = await folders_serv.update(str(update_folder_input.id), update_data, user_id)
-        return types.Folder(
+        res = await folders_serv.update(str(update_project_input.id), update_data, user_id)
+        return types.Project(
             id=strawberry.ID(res.id),
             name=res.name,
             user_id=res.userId,
             color=res.color,
+            group_id=res.groupId,
             created_at=res.createdAt,
             updated_at=res.updatedAt
         )
 
     @strawberry.mutation
-    async def remove_folder(self, info, id: strawberry.ID) -> bool:
+    async def remove_project(self, info, id: strawberry.ID) -> bool:
         user_id = get_user_id(info)
         db = info.context["db"]
         folders_serv = FoldersService(db)
@@ -295,7 +301,8 @@ class Mutation:
             "card_show_background": create_workspace_input.card_show_background,
             "content": create_workspace_input.content,
             "taskId": create_workspace_input.taskId,
-            "folderId": create_workspace_input.folderId,
+            "folderId": create_workspace_input.projectId,
+            "groupId": create_workspace_input.groupId,
             "saveStatus": create_workspace_input.saveStatus if create_workspace_input.saveStatus is not None else False
         }
         res = await ws_serv.create(create_data, user_id)
@@ -307,7 +314,8 @@ class Mutation:
             emoji=res.emoji,
             background_color=res.background_color,
             card_show_background=res.card_show_background,
-            folderId=res.folderId,
+            projectId=res.folderId,
+            groupId=res.groupId,
             content=res.content,
             saveStatus=res.saveStatus,
             createdAt=res.createdAt,
@@ -329,15 +337,17 @@ class Mutation:
             update_data["background_color"] = update_workspace_input.background_color
         if update_workspace_input.card_show_background is not None:
             update_data["card_show_background"] = update_workspace_input.card_show_background
-        if update_workspace_input.folderId is not None:
-            update_data["folderId"] = update_workspace_input.folderId
+        if update_workspace_input.projectId is not None:
+            update_data["folderId"] = update_workspace_input.projectId
+        if update_workspace_input.groupId is not None:
+            update_data["groupId"] = update_workspace_input.groupId
         if update_workspace_input.content is not None:
             update_data["content"] = update_workspace_input.content
         if update_workspace_input.taskId is not None:
             update_data["taskId"] = update_workspace_input.taskId
         if update_workspace_input.saveStatus is not None:
             update_data["saveStatus"] = update_workspace_input.saveStatus
-
+ 
         res = await ws_serv.update(str(update_workspace_input.id), update_data, user_id)
         return types.Workspace(
             id=strawberry.ID(res.id),
@@ -347,7 +357,8 @@ class Mutation:
             emoji=res.emoji,
             background_color=res.background_color,
             card_show_background=res.card_show_background,
-            folderId=res.folderId,
+            projectId=res.folderId,
+            groupId=res.groupId,
             content=res.content,
             saveStatus=res.saveStatus,
             createdAt=res.createdAt,
@@ -360,3 +371,57 @@ class Mutation:
         db = info.context["db"]
         ws_serv = WorkspacesService(db)
         return await ws_serv.remove(str(id), user_id)
+
+    # ProjectGroup Mutations
+    @strawberry.mutation
+    async def create_project_group(self, info, input: types.CreateProjectGroupInput) -> types.ProjectGroup:
+        user_id = get_user_id(info)
+        db = info.context["db"]
+        pg_serv = ProjectGroupsService(db)
+        create_data = {
+            "name": input.name,
+            "color": input.color,
+            "emoji": input.emoji
+        }
+        res = await pg_serv.create(create_data, user_id)
+        return types.ProjectGroup(
+            id=strawberry.ID(res.id),
+            name=res.name,
+            user_id=res.userId,
+            color=res.color,
+            emoji=res.emoji,
+            created_at=res.createdAt,
+            updated_at=res.updatedAt
+        )
+
+    @strawberry.mutation
+    async def update_project_group(self, info, input: types.UpdateProjectGroupInput) -> types.ProjectGroup:
+        user_id = get_user_id(info)
+        db = info.context["db"]
+        pg_serv = ProjectGroupsService(db)
+        
+        update_data = {}
+        if input.name is not None:
+            update_data["name"] = input.name
+        if input.color is not None:
+            update_data["color"] = input.color
+        if input.emoji is not None:
+            update_data["emoji"] = input.emoji
+
+        res = await pg_serv.update(str(input.id), update_data, user_id)
+        return types.ProjectGroup(
+            id=strawberry.ID(res.id),
+            name=res.name,
+            user_id=res.userId,
+            color=res.color,
+            emoji=res.emoji,
+            created_at=res.createdAt,
+            updated_at=res.updatedAt
+        )
+
+    @strawberry.mutation
+    async def remove_project_group(self, info, id: strawberry.ID) -> bool:
+        user_id = get_user_id(info)
+        db = info.context["db"]
+        pg_serv = ProjectGroupsService(db)
+        return await pg_serv.remove(str(id), user_id)

@@ -61,7 +61,8 @@ async def get_events(
                 "task_type": t["task_type"],
                 "is_all_day": False,
                 "created_at": t["createdAt"] or "",
-                "updated_at": t["updatedAt"] or ""
+                "updated_at": t["updatedAt"] or "",
+                "is_owner": t.get("is_owner", True)
             })
 
         return mapped_events

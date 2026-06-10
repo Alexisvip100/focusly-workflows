@@ -30,7 +30,7 @@ class Task(Base):
     __tablename__ = "Task"
 
     id = Column(String, primary_key=True, index=True)
-    userId = Column(String, nullable=False)
+    userId = Column(String, nullable=False, index=True)
     title = Column(String, nullable=False)
     notesEncrypted = Column(String, nullable=False)
     estimateTimer = Column(Integer, nullable=True)
@@ -51,7 +51,7 @@ class Task(Base):
     filters = Column(JSON, nullable=True)
     links = Column(JSON, nullable=True)
     task_type = Column(String, nullable=True)
-    google_event_id = Column(String, nullable=True)
+    google_event_id = Column(String, nullable=True, index=True)
     source = Column(String, nullable=True)
     sync_status = Column(String, nullable=True)
     collaborators = Column(JSON, nullable=True)
@@ -59,18 +59,20 @@ class Task(Base):
     lastMinuteNotified = Column(Boolean, nullable=True, default=False)
     use_ai = Column(Boolean, nullable=True, default=False)
     workspaceId = Column(String, nullable=True)
-
+    is_owner = Column(Boolean, nullable=True, default=False)
+    
 class Workspace(Base):
     __tablename__ = "Workspace"
 
     id = Column(String, primary_key=True, index=True)
-    userId = Column(String, nullable=False)
+    userId = Column(String, nullable=False, index=True)
     taskId = Column(String, nullable=True)
     title = Column(String, nullable=False)
     emoji = Column(String, nullable=True)
     background_color = Column(String, nullable=True)
     card_show_background = Column(Boolean, nullable=True)
     folderId = Column(String, nullable=True)
+    groupId = Column(String, nullable=True)
     content = Column(String, nullable=False)
     saveStatus = Column(Boolean, nullable=True, default=False)
     createdAt = Column(DateTime, default=func.now(), nullable=False)
@@ -81,8 +83,20 @@ class Folder(Base):
 
     id = Column(String, primary_key=True, index=True)
     name = Column(String, nullable=False)
-    userId = Column(String, nullable=False)
+    userId = Column(String, nullable=False, index=True)
     color = Column(String, nullable=True)
+    groupId = Column(String, nullable=True)
+    createdAt = Column(DateTime, default=func.now(), nullable=False)
+    updatedAt = Column(DateTime, default=func.now(), onupdate=func.now(), nullable=False)
+
+class ProjectGroup(Base):
+    __tablename__ = "ProjectGroup"
+
+    id = Column(String, primary_key=True, index=True)
+    name = Column(String, nullable=False)
+    userId = Column(String, nullable=False, index=True)
+    color = Column(String, nullable=True)
+    emoji = Column(String, nullable=True)
     createdAt = Column(DateTime, default=func.now(), nullable=False)
     updatedAt = Column(DateTime, default=func.now(), onupdate=func.now(), nullable=False)
 
@@ -97,7 +111,7 @@ class Notification(Base):
     __tablename__ = "Notification"
 
     id = Column(String, primary_key=True, index=True)
-    userId = Column(String, nullable=False)
+    userId = Column(String, nullable=False, index=True)
     relatedTaskId = Column(String, nullable=True)
     type = Column(String, nullable=False)
     scheduledAt = Column(DateTime, nullable=False)
@@ -111,7 +125,7 @@ class FocusSession(Base):
     __tablename__ = "FocusSession"
 
     id = Column(String, primary_key=True, index=True)
-    userId = Column(String, nullable=False)
+    userId = Column(String, nullable=False, index=True)
     taskId = Column(String, nullable=False)
     startedAt = Column(DateTime, nullable=False)
     endedAt = Column(DateTime, nullable=False)
@@ -125,7 +139,7 @@ class TimeBlock(Base):
     __tablename__ = "TimeBlock"
 
     id = Column(String, primary_key=True, index=True)
-    userId = Column(String, nullable=False)
+    userId = Column(String, nullable=False, index=True)
     taskId = Column(String, nullable=True)
     startTime = Column(DateTime, nullable=False)
     endTime = Column(DateTime, nullable=False)

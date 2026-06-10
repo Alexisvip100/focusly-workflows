@@ -14,11 +14,13 @@ class WorkspacesService:
 
     async def create(self, create_input: Dict[str, Any], user_id: str) -> Workspace:
         workspace_id = str(uuid.uuid4())
+        group_id = create_input.pop("groupId", None)
         workspace_data = WorkspaceCreateSchema(**create_input)
         
         workspace = Workspace(
             id=workspace_id,
             userId=user_id,
+            groupId=group_id,
             **workspace_data.model_dump()
         )
         
@@ -27,10 +29,17 @@ class WorkspacesService:
         await self.db.refresh(workspace)
         return workspace
 
-    async def find_all(self, user_id: str, search: Optional[str] = None, folder_id: Optional[str] = None) -> List[Workspace]:
+    async def find_all(self, user_id: str, search: Optional[str] = None, folder_id: Optional[str] = None, group_id: Optional[str] = None) -> List[Workspace]:
         query = select(Workspace).where(Workspace.userId == user_id)
         if folder_id:
             query = query.where(Workspace.folderId == folder_id)
+        if group_id is not None:
+            from app.models.models import Folder
+            query = query.outerjoin(Folder, Workspace.folderId == Folder.id)
+            query = query.where(
+                (Workspace.groupId == group_id) |
+                ((Workspace.folderId != None) & (Folder.groupId == group_id))
+            )
             
         result = await self.db.execute(query)
         workspaces = list(result.scalars().all())
@@ -102,6 +111,8 @@ class WorkspacesService:
             workspace.taskId = update_input["taskId"]
         if "folderId" in update_input:
             workspace.folderId = update_input["folderId"]
+        if "groupId" in update_input:
+            workspace.groupId = update_input["groupId"]
 
         workspace.updatedAt = now
         await self.db.commit()

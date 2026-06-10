@@ -190,7 +190,7 @@ class GoogleCalendarService:
                         summary = item.get("summary") or "Sin título"
                         print(f"Sync Active/Updated Event: {event_id} - \"{summary}\"")
                         
-                        processed = self._process_google_event(item)
+                        processed = self._process_google_event(item, user_email=user.email)
 
                         # Check if this event already exists in DB and if so, whether
                         # our local version is newer than the Google event's updated timestamp.
@@ -244,6 +244,7 @@ class GoogleCalendarService:
                             "tags": processed["tags"] or [],
                             "links": processed["links"] or [],
                             "collaborators": processed["collaborators"] or [],
+                            "is_owner": processed.get("is_owner", True),
                         }
 
                         # Only include dates from Google if we are NOT preserving local values
@@ -384,13 +385,15 @@ class GoogleCalendarService:
         except Exception as error:
             print(f"Error stopping watch channel: {error}")
 
-    def _process_google_event(self, event: Dict[str, Any]) -> Dict[str, Any]:
+    def _process_google_event(self, event: Dict[str, Any], user_email: Optional[str] = None) -> Dict[str, Any]:
         # Stage 1: Basic Mapping
         start_obj = event.get("start") or {}
         end_obj = event.get("end") or {}
         
         is_all_day = bool(start_obj.get("date"))
-        
+        creator_email = event.get("creator", {}).get("email")
+        is_creator_self = bool(event.get("creator", {}).get("self", False))
+        is_owner = is_creator_self or (user_email is not None and creator_email == user_email)
         start_val = start_obj.get("dateTime") or start_obj.get("date")
         if start_val:
             dt = datetime.fromisoformat(start_val.replace("Z", "+00:00"))
@@ -439,7 +442,8 @@ class GoogleCalendarService:
             "is_all_day": is_all_day,
             "location": event.get("location"),
             "collaborators": [],
-            "organizer_email": event.get("organizer", {}).get("email")
+            "organizer_email": event.get("organizer", {}).get("email"),
+            "is_owner": is_owner
         }
 
         # Stage 2: Clean Description
