@@ -118,6 +118,25 @@ class GoogleCalendarService:
             raise ValueError(f"User {user_id} not found")
 
         sync_token = user.googleCalendarSyncToken
+
+        # Check if we have any existing google tasks in the local DB
+        tasks_result = await self.db.execute(
+            select(Task).where(
+                Task.userId == user_id,
+                Task.task_type == "GoogleTask",
+                Task.deletedAt == None
+            )
+        )
+        existing_google_tasks = tasks_result.scalars().all()
+
+        # If we have a sync token but no local tasks, it indicates a database reset
+        # or out-of-sync state. Force a full sync by clearing the sync token.
+        if sync_token and not existing_google_tasks:
+            print(f"Sync token exists but 0 GoogleTasks found in DB for user {user_id}. Clearing sync token to force a full sync.")
+            sync_token = None
+            user.googleCalendarSyncToken = None
+            await self.db.commit()
+
         next_page_token = None
         new_sync_token = None
         items_to_process = []
