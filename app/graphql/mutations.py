@@ -113,7 +113,7 @@ class Mutation:
 
     @strawberry.mutation
     async def update_task(self, info, update_task_input: types.UpdateTaskInput) -> types.Task:
-        get_user_id(info)
+        user_id = get_user_id(info)
         db = info.context["db"]
         
         from app.services.google_calendar.google_calendar_service import GoogleCalendarService
@@ -126,7 +126,9 @@ class Mutation:
         gc_service = GoogleCalendarService(db, auth_serv, tasks_serv, sched_serv)
         tasks_serv.google_calendar_service = gc_service
 
-        update_data = {}
+        update_data = {
+            "userId": update_task_input.user_id if update_task_input.user_id is not None else user_id
+        }
         if update_task_input.title is not None:
             update_data["title"] = update_task_input.title
         if update_task_input.notes_encrypted is not None:

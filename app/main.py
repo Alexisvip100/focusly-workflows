@@ -1,5 +1,7 @@
+import asyncio
 import strawberry
 import jwt
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from strawberry.fastapi import GraphQLRouter
@@ -13,9 +15,22 @@ from app.routes.auth.auth import router as auth_router
 from app.routes.users.users import router as users_router
 from app.routes.google_calendar.google_calendar import router as google_calendar_router
 from app.routes.time_blocks.time_blocks import router as time_blocks_router
+from app.services.notifications.task_notifier_service import run_task_notifier_loop
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Start background tasks on startup, clean up on shutdown."""
+    notifier_task = asyncio.create_task(run_task_notifier_loop())
+    yield
+    notifier_task.cancel()
+    try:
+        await notifier_task
+    except asyncio.CancelledError:
+        pass
 
 # 1. Initialize FastAPI
-fastapi_app = FastAPI(title="Focusly Backend", version="1.0.0")
+fastapi_app = FastAPI(title="Focusly Backend", version="1.0.0", lifespan=lifespan)
 
 # 2. CORS Middleware
 fastapi_app.add_middleware(
