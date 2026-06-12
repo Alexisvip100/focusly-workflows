@@ -15,6 +15,14 @@ class WorkspacesService:
     async def create(self, create_input: Dict[str, Any], user_id: str) -> Workspace:
         workspace_id = str(uuid.uuid4())
         group_id = create_input.pop("groupId", None)
+        folder_id = create_input.get("folderId")
+        if folder_id:
+            from app.models.models import Folder
+            res = await self.db.execute(select(Folder.groupId).where(Folder.id == folder_id))
+            inherited_group_id = res.scalar()
+            if inherited_group_id:
+                group_id = inherited_group_id
+
         workspace_data = WorkspaceCreateSchema(**create_input)
         
         workspace = Workspace(
@@ -111,6 +119,12 @@ class WorkspacesService:
             workspace.taskId = update_input["taskId"]
         if "folderId" in update_input:
             workspace.folderId = update_input["folderId"]
+            if workspace.folderId:
+                from app.models.models import Folder
+                res = await self.db.execute(select(Folder.groupId).where(Folder.id == workspace.folderId))
+                inherited_group_id = res.scalar()
+                if inherited_group_id:
+                    workspace.groupId = inherited_group_id
         if "groupId" in update_input:
             workspace.groupId = update_input["groupId"]
 

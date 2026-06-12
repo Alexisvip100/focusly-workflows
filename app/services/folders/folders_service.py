@@ -69,9 +69,10 @@ class FoldersService:
         if not folder or folder.userId != user_id:
             raise ValueError(f"Folder with ID {id} not found")
 
-        # Disassociate workspaces
+        # Delete workspaces associated with this folder
+        from sqlalchemy import delete
         await self.db.execute(
-            update(Workspace).where(Workspace.folderId == id).values(folderId=None, updatedAt=datetime.utcnow())
+            delete(Workspace).where(Workspace.folderId == id)
         )
 
         await self.db.delete(folder)

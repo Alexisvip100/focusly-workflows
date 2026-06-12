@@ -67,6 +67,7 @@ async def get_context(request: Request):
     
     # Extract user ID from cookies or Authorization header
     token = request.cookies.get("access_token")
+    print(f"[AUTH DEBUG] Cookies: {dict(request.cookies)}")
     if not token:
         auth_header = request.headers.get("Authorization")
         if auth_header and auth_header.startswith("Bearer "):
@@ -77,7 +78,9 @@ async def get_context(request: Request):
         try:
             payload = jwt.decode(token, settings.JWT_SECRET, algorithms=["HS256"])
             user_id = payload.get("sub")
-        except Exception:
+            print(f"[AUTH DEBUG] JWT Decoded successfully. sub={user_id}")
+        except Exception as e:
+            print(f"[AUTH DEBUG] JWT decode error: {e}")
             pass # Invalid token, keep user_id = None
 
     return {
