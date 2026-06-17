@@ -5,7 +5,12 @@ from dotenv import load_dotenv
 load_dotenv()
 
 class Settings:
-    DATABASE_URL: str = os.getenv("DATABASE_URL", "postgresql+asyncpg://alexis@localhost:5432/focusly")
+    _raw_db_url = os.getenv("DATABASE_URL", "postgresql+asyncpg://alexis@localhost:5432/focusly").strip()
+    DATABASE_URL: str = (
+        _raw_db_url.replace("postgresql://", "postgresql+asyncpg://", 1)
+        if _raw_db_url.startswith("postgresql://")
+        else _raw_db_url
+    )
     JWT_SECRET: str = os.getenv("JWT_SECRET", "default_secret_key_change_me_in_production")
     GOOGLE_CLIENT_ID: str = os.getenv("GOOGLE_CLIENT_ID", "")
     GOOGLE_CLIENT_SECRET: str = os.getenv("GOOGLE_CLIENT_SECRET", "")
