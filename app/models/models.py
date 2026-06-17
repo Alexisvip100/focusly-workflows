@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Integer, Boolean, DateTime, JSON, BigInteger, ForeignKey
+from sqlalchemy import Column, String, Integer, Float, Boolean, DateTime, JSON, BigInteger, ForeignKey
 from sqlalchemy.sql import func
 from app.database import Base
 
@@ -34,7 +34,7 @@ class Task(Base):
     title = Column(String, nullable=False)
     notesEncrypted = Column(String, nullable=False)
     estimateTimer = Column(Integer, nullable=True)
-    realTimer = Column(Integer, nullable=True)
+    realTimer = Column(Float, nullable=True)
     duration = Column(DateTime, nullable=True)
     priorityLevel = Column(Integer, nullable=False, default=2)
     category = Column(String, nullable=True)

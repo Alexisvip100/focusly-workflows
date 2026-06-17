@@ -6,7 +6,7 @@ class TaskCreateSchema(BaseModel):
     title: Optional[str] = "Untitled Task"
     notesEncrypted: Optional[str] = ""
     estimateTimer: Optional[int] = None
-    realTimer: Optional[int] = None
+    realTimer: Optional[float] = None
     duration: Optional[datetime] = None
     priorityLevel: Optional[int] = 2
     category: Optional[str] = None

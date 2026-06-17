@@ -45,7 +45,7 @@ class NotificationsService:
         body: str,
         data: Optional[Dict[str, str]] = None
     ) -> None:
-        # Mock/Simulate push notification without Firebase Admin SDK
+        # Mock/Simulate push notification
         print(f"[PUSH NOTIFICATION] Sending to token: {token}")
         print(f"Title: {title}")
         print(f"Body: {body}")

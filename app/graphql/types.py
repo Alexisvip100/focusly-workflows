@@ -205,7 +205,7 @@ class Task:
     title: str
     notes_encrypted: str = strawberry.field(name="notes_encrypted")
     estimate_timer: Optional[int] = strawberry.field(name="estimate_timer", default=None)
-    real_timer: Optional[int] = strawberry.field(name="real_timer", default=None)
+    real_timer: Optional[float] = strawberry.field(name="real_timer", default=None)
     priority_level: int = strawberry.field(name="priority_level")
     category: Optional[str] = None
     color: Optional[str] = None
@@ -308,7 +308,7 @@ class CreateTaskInput:
     title: str
     notes_encrypted: str = strawberry.field(name="notes_encrypted")
     estimate_timer: Optional[int] = strawberry.field(name="estimate_timer", default=None)
-    real_timer: Optional[int] = strawberry.field(name="real_timer", default=None)
+    real_timer: Optional[float] = strawberry.field(name="real_timer", default=None)
     duration: Optional[str] = strawberry.field(name="duration", default=None)
     priority_level: int = strawberry.field(name="priority_level")
     deadline: str
@@ -334,7 +334,7 @@ class UpdateTaskInput:
     title: Optional[str] = strawberry.field(name="title", default=None)
     notes_encrypted: Optional[str] = strawberry.field(name="notes_encrypted", default=None)
     estimate_timer: Optional[int] = strawberry.field(name="estimate_timer", default=None)
-    real_timer: Optional[int] = strawberry.field(name="real_timer", default=None)
+    real_timer: Optional[float] = strawberry.field(name="real_timer", default=None)
     duration: Optional[str] = strawberry.field(name="duration", default=None)
     priority_level: Optional[int] = strawberry.field(name="priority_level", default=None)
     deadline: Optional[str] = strawberry.field(name="deadline", default=None)
