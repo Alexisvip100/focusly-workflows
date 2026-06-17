@@ -30,12 +30,13 @@ def get_auth_service(db: AsyncSession = Depends(get_db)) -> AuthService:
 
 def set_auth_cookies(response: Response, result: Dict[str, Any]):
     is_secure = settings.IS_PRODUCTION
+    samesite_val = "none" if settings.IS_PRODUCTION else "lax"
     response.set_cookie(
         key="access_token",
         value=result["access_token"],
         httponly=True,
         secure=is_secure,
-        samesite="lax",
+        samesite=samesite_val,
         max_age=15 * 60
     )
     response.set_cookie(
@@ -43,7 +44,7 @@ def set_auth_cookies(response: Response, result: Dict[str, Any]):
         value=result["refresh_token"],
         httponly=True,
         secure=is_secure,
-        samesite="lax",
+        samesite=samesite_val,
         max_age=7 * 24 * 60 * 60
     )
 
@@ -107,8 +108,9 @@ async def refresh_google_token(
 
 @router.post("/logout")
 async def logout(response: Response):
-    response.delete_cookie(key="access_token", secure=True, httponly=True, samesite="lax")
-    response.delete_cookie(key="refresh_token", secure=True, httponly=True, samesite="lax")
+    samesite_val = "none" if settings.IS_PRODUCTION else "lax"
+    response.delete_cookie(key="access_token", secure=True, httponly=True, samesite=samesite_val)
+    response.delete_cookie(key="refresh_token", secure=True, httponly=True, samesite=samesite_val)
     return {"message": "Logged out successfully"}
 
 @router.post("/magic-link")
