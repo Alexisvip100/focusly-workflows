@@ -3,7 +3,7 @@ from datetime import datetime, timedelta
 from typing import List, Dict, Any, Optional, Tuple
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
-from sqlalchemy import delete, and_
+from sqlalchemy import delete, and_, or_
 
 from app.models.models import Task, User, Workspace
 from app.services.scheduler.scheduler_service import SchedulerService
@@ -137,7 +137,7 @@ class TasksService:
         return self._map_to_dict(task)
 
     async def find_all(self) -> List[Dict[str, Any]]:
-        result = await self.db.execute(select(Task).where(Task.deletedAt == None))
+        result = await self.db.execute(select(Task).where(Task.deletedAt == None, or_(Task.source != "google", Task.source == None)))
         return [self._map_to_dict(t) for t in result.scalars().all()]
 
     async def find_all_by_user(
@@ -147,7 +147,7 @@ class TasksService:
         sort: Optional[Dict[str, Any]] = None
     ) -> List[Dict[str, Any]]:
         result = await self.db.execute(
-            select(Task).where(Task.userId == user_id, Task.deletedAt == None)
+            select(Task).where(Task.userId == user_id, Task.deletedAt == None, or_(Task.source != "google", Task.source == None))
         )
         tasks = [self._map_to_dict(t) for t in result.scalars().all()]
         return self._apply_filters_and_sorting(tasks, filters, sort)
@@ -171,7 +171,7 @@ class TasksService:
         filters: Dict[str, Any],
         sort: Optional[Dict[str, Any]] = None
     ) -> List[Dict[str, Any]]:
-        result = await self.db.execute(select(Task).where(Task.deletedAt == None))
+        result = await self.db.execute(select(Task).where(Task.deletedAt == None, or_(Task.source != "google", Task.source == None)))
         tasks = [self._map_to_dict(t) for t in result.scalars().all()]
         return self._apply_filters_and_sorting(tasks, filters, sort)
 
@@ -181,7 +181,8 @@ class TasksService:
                 Task.deadline >= start_date,
                 Task.deadline <= end_date,
                 Task.notified == False,
-                Task.deletedAt == None
+                Task.deletedAt == None,
+                or_(Task.source != "google", Task.source == None)
             )
         )
         return [self._map_to_dict(t) for t in result.scalars().all()]
@@ -192,7 +193,8 @@ class TasksService:
                 Task.deadline >= start_date,
                 Task.deadline <= end_date,
                 Task.lastMinuteNotified == False,
-                Task.deletedAt == None
+                Task.deletedAt == None,
+                or_(Task.source != "google", Task.source == None)
             )
         )
         return [self._map_to_dict(t) for t in result.scalars().all()]

@@ -2,7 +2,7 @@ import math
 import uuid
 from datetime import datetime, timedelta
 from typing import Dict, Any, List, Optional, Tuple
-from sqlalchemy import select, delete
+from sqlalchemy import select, delete, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.models import User, Task, TimeBlock
@@ -428,7 +428,7 @@ class SchedulerService:
         }
 
         # 2. Fetch all tasks
-        result = await db.execute(select(Task).where(Task.userId == user_id, Task.deletedAt == None))
+        result = await db.execute(select(Task).where(Task.userId == user_id, Task.deletedAt == None, or_(Task.source != "google", Task.source == None)))
         tasks = result.scalars().all()
         tasks_list = []
         for t in tasks:

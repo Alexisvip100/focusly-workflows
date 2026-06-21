@@ -7,6 +7,7 @@ from urllib.parse import urlencode
 import httpx
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
+from sqlalchemy import delete
 
 from app.config import settings
 from app.models.models import User, Task
@@ -117,6 +118,21 @@ class GoogleCalendarService:
         if not user:
             raise ValueError(f"User {user_id} not found")
 
+        has_changes = False
+
+        # Clean up legacy Google Calendar-only tasks from database
+        delete_result = await self.db.execute(
+            delete(Task).where(
+                Task.userId == user_id,
+                Task.source == "google"
+            )
+        )
+        deleted_count = delete_result.rowcount
+        if deleted_count > 0:
+            await self.db.commit()
+            print(f"[SYNC] Deleted {deleted_count} legacy Google tasks from database for user {user_id}")
+            has_changes = True
+
         sync_token = user.googleCalendarSyncToken
 
         # Check if we have any existing google tasks in the local DB
@@ -185,8 +201,6 @@ class GoogleCalendarService:
                         break
 
                 print(f"Fetched {len(items_to_process)} events/changes to process for user {user_id}")
-                
-                has_changes = False
                 for item in items_to_process:
                     event_id = item.get("id") or ""
                     
@@ -209,6 +223,19 @@ class GoogleCalendarService:
                         summary = item.get("summary") or "Sin título"
                         print(f"Sync Active/Updated Event: {event_id} - \"{summary}\"")
                         
+                        # Check if this event already exists in DB
+                        existing_result = await self.db.execute(
+                            select(Task).where(
+                                Task.userId == user_id,
+                                Task.google_event_id == event_id,
+                                Task.deletedAt == None
+                            )
+                        )
+                        existing_task = existing_result.scalars().first()
+                        if not existing_task:
+                            print(f"[SYNC] Skipping creation of task for google event {event_id} because it only exists in Google Calendar.")
+                            continue
+
                         processed = self._process_google_event(item, user_email=user.email)
 
                         # Check if this event already exists in DB and if so, whether
@@ -228,14 +255,6 @@ class GoogleCalendarService:
 
                         preserve_dates = False
                         if google_updated and event_id:
-                            existing_result = await self.db.execute(
-                                select(Task).where(
-                                    Task.userId == user_id,
-                                    Task.google_event_id == event_id,
-                                    Task.deletedAt == None
-                                )
-                            )
-                            existing_task = existing_result.scalars().first()
                             if existing_task and existing_task.updatedAt:
                                 db_updated = existing_task.updatedAt
                                 # If our DB record is at least 2 seconds newer than Google's event,
@@ -259,7 +278,7 @@ class GoogleCalendarService:
                             "category": "Meeting",
                             "google_event_id": processed["google_event_id"],
                             "task_type": "GoogleTask",
-                            "source": "google",
+                            "source": existing_task.source or "platform",
                             "tags": processed["tags"] or [],
                             "links": processed["links"] or [],
                             "collaborators": processed["collaborators"] or [],

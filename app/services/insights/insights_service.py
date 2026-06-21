@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 
 from app.models.models import Task, FocusSession, User
+from sqlalchemy import or_
 
 class InsightsService:
     def __init__(self, db: AsyncSession, tasks_service=None, focus_sessions_service=None, users_service=None):
@@ -19,7 +20,7 @@ class InsightsService:
         if self.tasks_service:
             all_tasks = await self.tasks_service.find_all_by_user(user_id)
         else:
-            result = await self.db.execute(select(Task).where(Task.userId == user_id, Task.deletedAt == None))
+            result = await self.db.execute(select(Task).where(Task.userId == user_id, Task.deletedAt == None, or_(Task.source != "google", Task.source == None)))
             all_tasks = [self._map_task_to_dict(t) for t in result.scalars().all()]
 
         if self.focus_sessions_service:
