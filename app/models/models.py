@@ -151,3 +151,35 @@ class TimeBlock(Base):
     attendees = Column(JSON, nullable=True)
     createdAt = Column(DateTime, default=func.now(), nullable=False)
     updatedAt = Column(DateTime, default=func.now(), onupdate=func.now(), nullable=False)
+
+class Conversation(Base):
+    __tablename__ = "Conversation"
+
+    id = Column(String, primary_key=True, index=True)
+    userId = Column(String, nullable=False, index=True)
+    title = Column(String, nullable=True)
+    summary = Column(String, nullable=True)
+    createdAt = Column(DateTime, default=func.now(), nullable=False)
+    updatedAt = Column(DateTime, default=func.now(), onupdate=func.now(), nullable=False)
+
+class Message(Base):
+    __tablename__ = "Message"
+
+    id = Column(String, primary_key=True, index=True)
+    conversationId = Column(String, nullable=False, index=True)
+    role = Column(String, nullable=False)
+    content = Column(String, nullable=False)
+    tokenUsage = Column(Integer, nullable=True, default=0)
+    createdAt = Column(DateTime, default=func.now(), nullable=False)
+
+class UserMemory(Base):
+    __tablename__ = "UserMemory"
+
+    id = Column(String, primary_key=True, index=True)
+    userId = Column(String, nullable=False, index=True)
+    memory = Column(String, nullable=False)
+    category = Column(String, nullable=False)
+    importance = Column(Integer, default=1, nullable=False)
+    embedding = Column(JSON, nullable=True)
+    createdAt = Column(DateTime, default=func.now(), nullable=False)
+    updatedAt = Column(DateTime, default=func.now(), onupdate=func.now(), nullable=False)

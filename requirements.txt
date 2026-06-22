@@ -9,4 +9,5 @@ pyjwt[crypto]==2.10.1
 cryptography==43.0.3
 httpx==0.28.1
 python-dotenv==1.0.1
-numpy==2.4.6
+numpy
+google-genai==0.3.0

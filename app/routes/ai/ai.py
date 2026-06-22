@@ -1,12 +1,22 @@
-from fastapi import APIRouter, HTTPException, Depends, Request
+from fastapi import APIRouter, HTTPException, Depends, Request, BackgroundTasks
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from typing import List, Dict, Any, Optional
 import httpx
 import json
+import uuid
 
+from sqlalchemy.future import select
 from app.config import settings
+from app.database import get_db
+from sqlalchemy.ext.asyncio import AsyncSession
 from app.routes.common import get_current_user_id
+from app.models.models import Conversation, Message
+
+from app.services.ai.context_builder import build_context
+from app.services.ai.router import classify_query
+from app.services.ai.memory import extract_and_save_memory
+from app.services.ai.summarizer import check_and_summarize
 
 router = APIRouter(prefix="/ai", tags=["ai"])
 
@@ -17,7 +27,7 @@ class MessageSchema(BaseModel):
 class ChatRequestSchema(BaseModel):
     messages: List[MessageSchema]
     task: Optional[Dict[str, Any]] = None
-    model: Optional[str] = "gemini-2.5-flash-lite"
+    model: Optional[str] = None
 
 class GeminiStreamParser:
     def __init__(self):
@@ -76,15 +86,38 @@ class GeminiStreamParser:
             else:
                 break
 
-async def stream_gemini(payload: dict, model: str):
+async def background_post_chat_tasks(user_id: str, conversation_id: str, user_message: str, assistant_message: str, db: AsyncSession):
+    try:
+        # Save assistant message
+        ast_msg = Message(
+            id=str(uuid.uuid4()),
+            conversationId=conversation_id,
+            role="assistant",
+            content=assistant_message,
+            tokenUsage=0
+        )
+        db.add(ast_msg)
+        await db.commit()
+        
+        # Memory Extraction
+        await extract_and_save_memory(user_id, user_message, db)
+        
+        # Summarizer Check
+        await check_and_summarize(conversation_id, db)
+        
+    except Exception as e:
+        print(f"Background AI task error: {e}")
+
+async def stream_gemini_and_save(payload: dict, model: str, background_tasks: BackgroundTasks, user_id: str, conversation_id: str, user_message: str, db_factory):
     api_key = settings.GOOGLE_GENERATIVE_AI_API_KEY
     if not api_key:
         yield "Error: GOOGLE_GENERATIVE_AI_API_KEY is not set in backend settings."
         return
 
-    selected_model = model or "gemini-2.5-flash-lite"
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/{selected_model}:streamGenerateContent?key={api_key}"
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:streamGenerateContent?key={api_key}"
     parser = GeminiStreamParser()
+    
+    full_assistant_response = ""
     
     async with httpx.AsyncClient() as client:
         try:
@@ -96,58 +129,90 @@ async def stream_gemini(payload: dict, model: str):
                 
                 async for chunk in r.aiter_text():
                     for text in parser.feed(chunk):
+                        full_assistant_response += text
                         yield text
         except Exception as e:
-            yield f"Streaming error: {str(e)}"
+            yield f"\nStreaming error: {str(e)}"
+            
+    # Enqueue background tasks with a fresh db session
+    async for new_db in db_factory():
+        background_tasks.add_task(background_post_chat_tasks, user_id, conversation_id, user_message, full_assistant_response, new_db)
+        break
 
 @router.post("/chat")
 async def chat_endpoint(
     body: ChatRequestSchema,
-    current_user_id: str = Depends(get_current_user_id)
+    background_tasks: BackgroundTasks,
+    current_user_id: str = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db)
 ):
-    # Formulate system instruction based on task metadata
-    system_instruction_text = (
-        "You are Focusly AI, a highly intelligent and helpful task management companion. "
-        "Your goal is to assist the user in analyzing, understanding, planning, and executing their tasks. "
-        "Be direct, polite, concise, structured, and prioritize actionable insights. "
-        "Feel free to suggest task breakdowns, clear sub-steps, or resource organization. "
-        "Always respond in clean, well-formatted Markdown (e.g. use bolding, bullet points, headers). "
-    )
+    if not body.messages:
+        raise HTTPException(status_code=400, detail="Messages array cannot be empty")
+        
+    # We only care about the latest user message since we have state in DB
+    latest_user_message = body.messages[-1].content
     
+    # 1. Get or create default conversation for user
+    conv_result = await db.execute(select(Conversation).filter(Conversation.userId == current_user_id))
+    conversation = conv_result.scalar_one_or_none()
+    
+    if not conversation:
+        conversation = Conversation(
+            id=str(uuid.uuid4()),
+            userId=current_user_id,
+            title="General AI Assistant",
+            summary=""
+        )
+        db.add(conversation)
+        await db.commit()
+        await db.refresh(conversation)
+        
+    # 2. Save user message
+    user_msg = Message(
+        id=str(uuid.uuid4()),
+        conversationId=conversation.id,
+        role="user",
+        content=latest_user_message,
+        tokenUsage=0
+    )
+    db.add(user_msg)
+    await db.commit()
+
+    # 3. Router logic
+    complexity = classify_query(latest_user_message)
+    # Default to pro if complex, flash if simple
+    selected_model = body.model or ("gemini-2.5-pro" if complexity == "complex" else "gemini-2.5-flash-lite")
+
+    # 4. Context Builder
+    system_context = await build_context(current_user_id, conversation.id, latest_user_message, db)
+
     task = body.task
     if task:
-        system_instruction_text += (
-            f"\nThe user is currently viewing/focusing on this task:\n"
+        system_context += (
+            f"\n\nThe user is currently viewing/focusing on this task:\n"
             f"- Title: {task.get('title', 'Untitled')}\n"
             f"- Notes/Description: {task.get('description') or 'No description provided'}\n"
             f"- Current Status: {task.get('status', 'N/A')}\n"
-            f"- Priority Level: {task.get('priority_level', 'N/A')}\n"
-            f"- Estimate Timer: {task.get('estimate_timer', 0)} seconds\n"
-            f"- Accumulated/Real Timer: {task.get('real_timer', 0)} seconds\n"
-            f"- Deadline: {task.get('deadline') or 'None'}\n"
         )
-        
         links = task.get("links", [])
         if links:
-            system_instruction_text += "\nAssociated Links:\n"
+            system_context += "\nAssociated Links:\n"
             for link in links:
-                system_instruction_text += f"- [{link.get('title', 'Link')}]({link.get('url', '#')})\n"
+                system_context += f"- [{link.get('title', 'Link')}]({link.get('url', '#')})\n"
                 
-    # Format messages for Gemini API contents
-    gemini_contents = []
-    for msg in body.messages:
-        role = "model" if msg.role == "assistant" else "user"
-        gemini_contents.append({
-            "role": role,
-            "parts": [{"text": msg.content}]
-        })
+    gemini_contents = [{
+        "role": "user",
+        "parts": [{"text": latest_user_message}]
+    }]
         
     payload = {
         "contents": gemini_contents,
         "systemInstruction": {
-            "parts": [{"text": system_instruction_text}]
+            "parts": [{"text": system_context}]
         }
     }
     
-    model_name = body.model or "gemini-2.5-flash-lite"
-    return StreamingResponse(stream_gemini(payload, model_name), media_type="text/plain")
+    return StreamingResponse(
+        stream_gemini_and_save(payload, selected_model, background_tasks, current_user_id, conversation.id, latest_user_message, get_db),
+        media_type="text/plain"
+    )
