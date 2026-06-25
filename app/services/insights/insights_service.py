@@ -1,32 +1,49 @@
 import re
-import math
 from datetime import datetime, timedelta
-from typing import List, Dict, Any, Tuple, Optional
+from typing import Any
+
+from sqlalchemy import or_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 
-from app.models.models import Task, FocusSession, User
-from sqlalchemy import or_
+from app.models.models import FocusSession, Task, User
+
 
 class InsightsService:
-    def __init__(self, db: AsyncSession, tasks_service=None, focus_sessions_service=None, users_service=None):
+    def __init__(
+        self,
+        db: AsyncSession,
+        tasks_service=None,
+        focus_sessions_service=None,
+        users_service=None,
+    ):
         self.db = db
         self.tasks_service = tasks_service
         self.focus_sessions_service = focus_sessions_service
         self.users_service = users_service
 
-    async def getInsights(self, user_id: str, filter_type: str) -> Dict[str, Any]:
+    async def getInsights(self, user_id: str, filter_type: str) -> dict[str, Any]:
         # 1. Fetch data
         if self.tasks_service:
             all_tasks = await self.tasks_service.find_all_by_user(user_id)
         else:
-            result = await self.db.execute(select(Task).where(Task.userId == user_id, Task.deletedAt == None, or_(Task.source != "google", Task.source == None)))
+            result = await self.db.execute(
+                select(Task).where(
+                    Task.userId == user_id,
+                    Task.deletedAt == None,
+                    or_(Task.source != "google", Task.source == None),
+                )
+            )
             all_tasks = [self._map_task_to_dict(t) for t in result.scalars().all()]
 
         if self.focus_sessions_service:
-            all_focus_sessions = await self.focus_sessions_service.findAllByUser(user_id)
+            all_focus_sessions = await self.focus_sessions_service.findAllByUser(
+                user_id
+            )
         else:
-            result = await self.db.execute(select(FocusSession).where(FocusSession.userId == user_id))
+            result = await self.db.execute(
+                select(FocusSession).where(FocusSession.userId == user_id)
+            )
             all_focus_sessions = list(result.scalars().all())
 
         if self.users_service:
@@ -38,9 +55,9 @@ class InsightsService:
         # 2. Determine Date Range based on filter
         now = datetime.utcnow()
         start_date = datetime(now.year, now.month, now.day)
-        
+
         if filter_type == "Daily":
-            pass # Keep start_date as beginning of today
+            pass  # Keep start_date as beginning of today
         elif filter_type == "Weekly":
             # Monday is 0, Sunday is 6
             day_of_week = start_date.weekday()
@@ -56,12 +73,18 @@ class InsightsService:
         filtered_tasks = []
         for t in all_tasks:
             updated_str = t.get("updatedAt") or t.get("createdAt")
-            task_date = datetime.fromisoformat(updated_str.replace("Z", "+00:00")).replace(tzinfo=None) if updated_str else now
+            task_date = (
+                datetime.fromisoformat(updated_str.replace("Z", "+00:00")).replace(
+                    tzinfo=None
+                )
+                if updated_str
+                else now
+            )
             if task_date >= start_date or t.get("status") != "Done":
                 filtered_tasks.append(t)
 
         # 4. Calculate Metrics
-        
+
         # Total Focus Hours
         total_minutes = sum(t.get("realTimer") or 0 for t in filtered_tasks)
         hours = total_minutes // 60
@@ -69,36 +92,54 @@ class InsightsService:
         total_focus_hours = {
             "value": f"{hours}h {mins}m",
             "change": "+12% vs last period",
-            "trend": "up"
+            "trend": "up",
         }
 
         # Task Completion
         total_in_period = len(filtered_tasks)
-        completed_in_period = sum(1 for t in filtered_tasks if t.get("status") == "Done")
-        completion_rate = round((completed_in_period / total_in_period) * 100) if total_in_period > 0 else 0
+        completed_in_period = sum(
+            1 for t in filtered_tasks if t.get("status") == "Done"
+        )
+        completion_rate = (
+            round((completed_in_period / total_in_period) * 100)
+            if total_in_period > 0
+            else 0
+        )
         task_completion = {
             "value": f"{completion_rate}%",
             "change": "+5% vs last period",
-            "trend": "up"
+            "trend": "up",
         }
 
         energy_score = self.calculate_energy_score(filtered_tasks)
-        
+
         user_settings = user.settings if user else None
-        work_hours_config = user_settings.get("workHoursConfig") if isinstance(user_settings, dict) else None
-        
-        golden_window = self.calculate_golden_window(all_focus_sessions, work_hours_config)
+        work_hours_config = (
+            user_settings.get("workHoursConfig")
+            if isinstance(user_settings, dict)
+            else None
+        )
+
+        golden_window = self.calculate_golden_window(
+            all_focus_sessions, work_hours_config
+        )
         break_stats = self.calculate_break_hours(all_focus_sessions)
 
         # 5. Productivity Trends
-        productivity_trends = self.calculate_productivity_trends(all_tasks, all_focus_sessions, filter_type)
+        productivity_trends = self.calculate_productivity_trends(
+            all_tasks, all_focus_sessions, filter_type
+        )
 
         # 6. Time Distribution
         break_minutes = self.extract_break_minutes(break_stats["value"])
-        time_distribution = self.calculate_time_distribution(filtered_tasks, break_minutes)
+        time_distribution = self.calculate_time_distribution(
+            filtered_tasks, break_minutes
+        )
 
         # 7. Heatmap
-        heatmap_data, heatmap_labels = self.calculate_heatmap(all_focus_sessions, filter_type)
+        heatmap_data, heatmap_labels = self.calculate_heatmap(
+            all_focus_sessions, filter_type
+        )
 
         return {
             "totalFocusHours": total_focus_hours,
@@ -109,10 +150,10 @@ class InsightsService:
             "productivityTrends": productivity_trends,
             "timeDistribution": time_distribution,
             "heatmap": heatmap_data,
-            "heatmapLabels": heatmap_labels
+            "heatmapLabels": heatmap_labels,
         }
 
-    def _map_task_to_dict(self, t: Task) -> Dict[str, Any]:
+    def _map_task_to_dict(self, t: Task) -> dict[str, Any]:
         return {
             "id": t.id,
             "status": t.status,
@@ -121,7 +162,7 @@ class InsightsService:
             "deadline": t.deadline.isoformat() if t.deadline else None,
             "createdAt": t.createdAt.isoformat() if t.createdAt else None,
             "updatedAt": t.updatedAt.isoformat() if t.updatedAt else None,
-            "category": t.category
+            "category": t.category,
         }
 
     def extract_break_minutes(self, break_value: str) -> int:
@@ -130,7 +171,7 @@ class InsightsService:
             return int(match.group(1)) * 60 + int(match.group(2))
         return 0
 
-    def calculate_energy_score(self, tasks: List[Dict[str, Any]]) -> Dict[str, Any]:
+    def calculate_energy_score(self, tasks: list[dict[str, Any]]) -> dict[str, Any]:
         if not tasks:
             return {"value": "N/A", "change": "0 pts", "trend": "neutral"}
 
@@ -151,24 +192,18 @@ class InsightsService:
         raw_score = completion_rate * 60 + efficiency * 40
         score = min(max(round(raw_score), 0), 100)
 
-        return {
-            "value": f"{score}/100",
-            "change": "+2 pts",
-            "trend": "up"
-        }
+        return {"value": f"{score}/100", "change": "+2 pts", "trend": "up"}
 
     def calculate_golden_window(
-        self,
-        sessions: List[FocusSession],
-        work_hours: Optional[Dict[str, Any]] = None
-    ) -> Dict[str, Any]:
+        self, sessions: list[FocusSession], work_hours: dict[str, Any] | None = None
+    ) -> dict[str, Any]:
         if not sessions:
             start = work_hours.get("startTime") if work_hours else "09:00"
             end = work_hours.get("endTime") if work_hours else "11:00"
             return {
                 "value": f"{start} - {end}",
                 "change": "Base on your profile",
-                "trend": "neutral"
+                "trend": "neutral",
             }
 
         hour_stats = [0] * 24
@@ -197,10 +232,10 @@ class InsightsService:
         return {
             "value": f"{format_hour(best_start_hour)} - {format_hour(best_start_hour + 2)}",
             "change": "Most productive period",
-            "trend": "neutral"
+            "trend": "neutral",
         }
 
-    def calculate_break_hours(self, sessions: List[FocusSession]) -> Dict[str, Any]:
+    def calculate_break_hours(self, sessions: list[FocusSession]) -> dict[str, Any]:
         if len(sessions) < 2:
             return {"value": "0h 0m", "change": "0%", "trend": "neutral"}
 
@@ -217,13 +252,17 @@ class InsightsService:
             started_at = sorted_sessions[i].startedAt
             if isinstance(started_at, str):
                 started_at = datetime.fromisoformat(started_at.replace("Z", "+00:00"))
-            
-            current_end = started_at.timestamp() + (sorted_sessions[i].durationMinutes or 0) * 60
-            
+
+            current_end = (
+                started_at.timestamp() + (sorted_sessions[i].durationMinutes or 0) * 60
+            )
+
             next_start_dt = sorted_sessions[i + 1].startedAt
             if isinstance(next_start_dt, str):
-                next_start_dt = datetime.fromisoformat(next_start_dt.replace("Z", "+00:00"))
-            
+                next_start_dt = datetime.fromisoformat(
+                    next_start_dt.replace("Z", "+00:00")
+                )
+
             next_start = next_start_dt.timestamp()
 
             gap_mins = (next_start - current_end) / 60.0
@@ -236,33 +275,41 @@ class InsightsService:
         return {
             "value": f"{hours}h {mins}m",
             "change": "Calculated from gaps",
-            "trend": "neutral"
+            "trend": "neutral",
         }
 
     def calculate_productivity_trends(
         self,
-        tasks: List[Dict[str, Any]],
-        sessions: List[FocusSession],
-        filter_type: str
-    ) -> List[Dict[str, Any]]:
+        tasks: list[dict[str, Any]],
+        sessions: list[FocusSession],
+        filter_type: str,
+    ) -> list[dict[str, Any]]:
         if filter_type == "Daily":
             return self.build_daily_trends(tasks, sessions)
         elif filter_type == "Monthly":
             return self.build_monthly_trends(tasks, sessions)
         return self.build_weekly_trends(tasks, sessions)
 
-    def build_daily_trends(self, tasks: List[Dict[str, Any]], sessions: List[FocusSession]) -> List[Dict[str, Any]]:
+    def build_daily_trends(
+        self, tasks: list[dict[str, Any]], sessions: list[FocusSession]
+    ) -> list[dict[str, Any]]:
         today = datetime.utcnow().date()
         trends = []
         for hour in range(8, 23):
-            label = "12PM" if hour == 12 else (f"{hour - 12}PM" if hour > 12 else f"{hour}AM")
+            label = (
+                "12PM"
+                if hour == 12
+                else (f"{hour - 12}PM" if hour > 12 else f"{hour}AM")
+            )
 
             # Planned
             planned_mins = 0.0
             for t in tasks:
                 dl_str = t.get("deadline") or t.get("createdAt")
                 if dl_str:
-                    dl_date = datetime.fromisoformat(dl_str.replace("Z", "+00:00")).date()
+                    dl_date = datetime.fromisoformat(
+                        dl_str.replace("Z", "+00:00")
+                    ).date()
                     if dl_date == today and t.get("estimateTimer"):
                         planned_mins += (t.get("estimateTimer") or 0) / 9.0
 
@@ -283,14 +330,18 @@ class InsightsService:
                         if u_dt.date() == today and u_dt.hour == hour:
                             actual_mins += t.get("realTimer") or 0
 
-            trends.append({
-                "label": label,
-                "actual": round(actual_mins / 60.0, 1),
-                "planned": round(planned_mins / 60.0, 1)
-            })
+            trends.append(
+                {
+                    "label": label,
+                    "actual": round(actual_mins / 60.0, 1),
+                    "planned": round(planned_mins / 60.0, 1),
+                }
+            )
         return trends
 
-    def build_weekly_trends(self, tasks: List[Dict[str, Any]], sessions: List[FocusSession]) -> List[Dict[str, Any]]:
+    def build_weekly_trends(
+        self, tasks: list[dict[str, Any]], sessions: list[FocusSession]
+    ) -> list[dict[str, Any]]:
         now = datetime.utcnow()
         day_of_week = now.weekday()
         monday = (now - timedelta(days=day_of_week)).date()
@@ -305,7 +356,9 @@ class InsightsService:
             for t in tasks:
                 dl_str = t.get("deadline") or t.get("createdAt")
                 if dl_str:
-                    dl_date = datetime.fromisoformat(dl_str.replace("Z", "+00:00")).date()
+                    dl_date = datetime.fromisoformat(
+                        dl_str.replace("Z", "+00:00")
+                    ).date()
                     if dl_date == target_date:
                         planned_mins += t.get("estimateTimer") or 0
 
@@ -321,22 +374,28 @@ class InsightsService:
                 for t in tasks:
                     u_str = t.get("updatedAt") or t.get("createdAt")
                     if u_str:
-                        u_date = datetime.fromisoformat(u_str.replace("Z", "+00:00")).date()
+                        u_date = datetime.fromisoformat(
+                            u_str.replace("Z", "+00:00")
+                        ).date()
                         if u_date == target_date:
                             actual_mins += t.get("realTimer") or 0
 
-            trends.append({
-                "label": day_names[i],
-                "actual": round(actual_mins / 60.0, 1),
-                "planned": round(planned_mins / 60.0, 1)
-            })
+            trends.append(
+                {
+                    "label": day_names[i],
+                    "actual": round(actual_mins / 60.0, 1),
+                    "planned": round(planned_mins / 60.0, 1),
+                }
+            )
         return trends
 
-    def build_monthly_trends(self, tasks: List[Dict[str, Any]], sessions: List[FocusSession]) -> List[Dict[str, Any]]:
+    def build_monthly_trends(
+        self, tasks: list[dict[str, Any]], sessions: list[FocusSession]
+    ) -> list[dict[str, Any]]:
         now = datetime.utcnow()
         year = now.year
         month = now.month
-        
+
         first_day = datetime(year, month, 1).date()
         if month == 12:
             last_day = (datetime(year + 1, 1, 1) - timedelta(days=1)).date()
@@ -355,7 +414,9 @@ class InsightsService:
             for t in tasks:
                 dl_str = t.get("deadline") or t.get("createdAt")
                 if dl_str:
-                    dl_date = datetime.fromisoformat(dl_str.replace("Z", "+00:00")).date()
+                    dl_date = datetime.fromisoformat(
+                        dl_str.replace("Z", "+00:00")
+                    ).date()
                     if week_start <= dl_date <= week_end:
                         planned_mins += t.get("estimateTimer") or 0
 
@@ -372,22 +433,28 @@ class InsightsService:
                 for t in tasks:
                     u_str = t.get("updatedAt") or t.get("createdAt")
                     if u_str:
-                        u_date = datetime.fromisoformat(u_str.replace("Z", "+00:00")).date()
+                        u_date = datetime.fromisoformat(
+                            u_str.replace("Z", "+00:00")
+                        ).date()
                         if week_start <= u_date <= week_end:
                             actual_mins += t.get("realTimer") or 0
 
-            trends.append({
-                "label": label,
-                "actual": round(actual_mins / 60.0, 1),
-                "planned": round(planned_mins / 60.0, 1)
-            })
+            trends.append(
+                {
+                    "label": label,
+                    "actual": round(actual_mins / 60.0, 1),
+                    "planned": round(planned_mins / 60.0, 1),
+                }
+            )
 
             week_start = week_end + timedelta(days=1)
             week_num += 1
 
         return trends
 
-    def calculate_time_distribution(self, tasks: List[Dict[str, Any]], break_minutes: int) -> List[Dict[str, Any]]:
+    def calculate_time_distribution(
+        self, tasks: list[dict[str, Any]], break_minutes: int
+    ) -> list[dict[str, Any]]:
         category_map = {"Deep Work": 0, "Meetings": 0, "Admin/Misc": 0}
 
         for t in tasks:
@@ -405,19 +472,19 @@ class InsightsService:
             "Deep Work": "#3b82f6",
             "Meetings": "#6366f1",
             "Admin/Misc": "#8b5cf6",
-            "Rest/Breaks": "#1e293b"
+            "Rest/Breaks": "#1e293b",
         }
 
         distribution = []
         for name, mins in category_map.items():
-            distribution.append({
-                "name": name,
-                "value": mins,
-                "color": colors.get(name, "#64748b")
-            })
+            distribution.append(
+                {"name": name, "value": mins, "color": colors.get(name, "#64748b")}
+            )
         return distribution
 
-    def calculate_heatmap(self, sessions: List[FocusSession], filter_type: str) -> Tuple[List[int], List[str]]:
+    def calculate_heatmap(
+        self, sessions: list[FocusSession], filter_type: str
+    ) -> tuple[list[int], list[str]]:
         now = datetime.utcnow()
         intensity_map = {}
 
@@ -429,17 +496,25 @@ class InsightsService:
                     s_dt = datetime.fromisoformat(s_dt.replace("Z", "+00:00"))
                 if s_dt.date().isoformat() == today_str:
                     h_key = str(s_dt.hour)
-                    intensity_map[h_key] = intensity_map.get(h_key, 0) + (s.durationMinutes or 0)
+                    intensity_map[h_key] = intensity_map.get(h_key, 0) + (
+                        s.durationMinutes or 0
+                    )
 
             data = []
             for h in range(24):
                 mins = intensity_map.get(str(h), 0)
-                if mins == 0: data.append(0)
-                elif mins < 15: data.append(1)
-                elif mins < 30: data.append(2)
-                elif mins < 45: data.append(3)
-                elif mins < 60: data.append(4)
-                else: data.append(5)
+                if mins == 0:
+                    data.append(0)
+                elif mins < 15:
+                    data.append(1)
+                elif mins < 30:
+                    data.append(2)
+                elif mins < 45:
+                    data.append(3)
+                elif mins < 60:
+                    data.append(4)
+                else:
+                    data.append(5)
 
             return data, ["12 AM", "6 AM", "12 PM", "6 PM", "11 PM"]
 
@@ -457,17 +532,25 @@ class InsightsService:
                     s_dt = datetime.fromisoformat(s_dt.replace("Z", "+00:00"))
                 date_key = s_dt.date().isoformat()
                 if date_key in days:
-                    intensity_map[date_key] = intensity_map.get(date_key, 0) + (s.durationMinutes or 0)
+                    intensity_map[date_key] = intensity_map.get(date_key, 0) + (
+                        s.durationMinutes or 0
+                    )
 
             data = []
             for day in days:
                 mins = intensity_map.get(day, 0)
-                if mins == 0: data.append(0)
-                elif mins < 60: data.append(1)
-                elif mins < 120: data.append(2)
-                elif mins < 180: data.append(3)
-                elif mins < 240: data.append(4)
-                else: data.append(5)
+                if mins == 0:
+                    data.append(0)
+                elif mins < 60:
+                    data.append(1)
+                elif mins < 120:
+                    data.append(2)
+                elif mins < 180:
+                    data.append(3)
+                elif mins < 240:
+                    data.append(4)
+                else:
+                    data.append(5)
 
             return data, ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"]
 
@@ -483,14 +566,20 @@ class InsightsService:
                 s_dt = datetime.fromisoformat(s_dt.replace("Z", "+00:00"))
             date_key = s_dt.date().isoformat()
             if date_key in month_days:
-                intensity_map[date_key] = intensity_map.get(date_key, 0) + (s.durationMinutes or 0)
+                intensity_map[date_key] = intensity_map.get(date_key, 0) + (
+                    s.durationMinutes or 0
+                )
 
         data = []
         for day in month_days:
             mins = intensity_map.get(day, 0)
-            if mins == 0: data.append(0)
-            elif mins < 60: data.append(1)
-            elif mins < 180: data.append(2)
-            else: data.append(3)
+            if mins == 0:
+                data.append(0)
+            elif mins < 60:
+                data.append(1)
+            elif mins < 180:
+                data.append(2)
+            else:
+                data.append(3)
 
         return data, ["Start", "Middle", "End"]

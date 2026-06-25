@@ -1,64 +1,78 @@
 import uuid
 from datetime import datetime
-from typing import List, Dict, Any, Optional
+from typing import Any
+
+from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
-from sqlalchemy import update
 
 from app.models.models import Workspace
 from app.schemas.workspaces import WorkspaceCreateSchema
+
 
 class WorkspacesService:
     def __init__(self, db: AsyncSession):
         self.db = db
 
-    async def create(self, create_input: Dict[str, Any], user_id: str) -> Workspace:
+    async def create(self, create_input: dict[str, Any], user_id: str) -> Workspace:
         workspace_id = str(uuid.uuid4())
         group_id = create_input.pop("groupId", None)
         folder_id = create_input.get("folderId")
         if folder_id:
             from app.models.models import Folder
-            res = await self.db.execute(select(Folder.groupId).where(Folder.id == folder_id))
+
+            res = await self.db.execute(
+                select(Folder.groupId).where(Folder.id == folder_id)
+            )
             inherited_group_id = res.scalar()
             if inherited_group_id:
                 group_id = inherited_group_id
 
         workspace_data = WorkspaceCreateSchema(**create_input)
-        
+
         workspace = Workspace(
             id=workspace_id,
             userId=user_id,
             groupId=group_id,
-            **workspace_data.model_dump()
+            **workspace_data.model_dump(),
         )
-        
+
         self.db.add(workspace)
         await self.db.commit()
         await self.db.refresh(workspace)
         return workspace
 
-    async def find_all(self, user_id: str, search: Optional[str] = None, folder_id: Optional[str] = None, group_id: Optional[str] = None) -> List[Workspace]:
+    async def find_all(
+        self,
+        user_id: str,
+        search: str | None = None,
+        folder_id: str | None = None,
+        group_id: str | None = None,
+    ) -> list[Workspace]:
         query = select(Workspace).where(Workspace.userId == user_id)
         if folder_id:
             query = query.where(Workspace.folderId == folder_id)
         if group_id is not None:
             from app.models.models import Folder
+
             query = query.outerjoin(Folder, Workspace.folderId == Folder.id)
             query = query.where(
-                (Workspace.groupId == group_id) |
-                ((Workspace.folderId != None) & (Folder.groupId == group_id))
+                (Workspace.groupId == group_id)
+                | ((Workspace.folderId != None) & (Folder.groupId == group_id))
             )
-            
+
         result = await self.db.execute(query)
         workspaces = list(result.scalars().all())
-        
+
         if search:
             search_lower = search.lower()
             workspaces = [
-                w for w in workspaces
-                if search_lower in (w.title or "").lower() or search_lower in (w.content or "").lower()
+                w
+                for w in workspaces
+                if search_lower in (w.title or "").lower()
+                or search_lower in (w.content or "").lower()
             ]
-            
+
         return workspaces
 
     async def find_one(self, id: str, user_id: str) -> Workspace:
@@ -70,10 +84,15 @@ class WorkspacesService:
 
     async def get_total_workspaces(self, user_id: str) -> int:
         from sqlalchemy import func
-        result = await self.db.execute(select(func.count(Workspace.id)).where(Workspace.userId == user_id))
+
+        result = await self.db.execute(
+            select(func.count(Workspace.id)).where(Workspace.userId == user_id)
+        )
         return result.scalar() or 0
 
-    async def update(self, id: str, update_input: Dict[str, Any], user_id: str) -> Workspace:
+    async def update(
+        self, id: str, update_input: dict[str, Any], user_id: str
+    ) -> Workspace:
         result = await self.db.execute(select(Workspace).where(Workspace.id == id))
         workspace = result.scalars().first()
         if not workspace or workspace.userId != user_id:
@@ -96,14 +115,14 @@ class WorkspacesService:
             workspace.content = update_input["content"]
         if "saveStatus" in update_input:
             workspace.saveStatus = update_input["saveStatus"]
-            
+
         # Handle emoji removal/persistence
         emoji = update_input.get("emoji")
         if emoji == "" or emoji is None:
             workspace.emoji = None
         else:
             workspace.emoji = emoji
-            
+
         # Handle background color
         bg = update_input.get("background_color")
         if bg == "none" or bg is None:
@@ -121,7 +140,10 @@ class WorkspacesService:
             workspace.folderId = update_input["folderId"]
             if workspace.folderId:
                 from app.models.models import Folder
-                res = await self.db.execute(select(Folder.groupId).where(Folder.id == workspace.folderId))
+
+                res = await self.db.execute(
+                    select(Folder.groupId).where(Folder.id == workspace.folderId)
+                )
                 inherited_group_id = res.scalar()
                 if inherited_group_id:
                     workspace.groupId = inherited_group_id
@@ -143,6 +165,8 @@ class WorkspacesService:
         await self.db.commit()
         return True
 
-    async def find_by_task_id(self, task_id: str) -> Optional[Workspace]:
-        result = await self.db.execute(select(Workspace).where(Workspace.taskId == task_id))
+    async def find_by_task_id(self, task_id: str) -> Workspace | None:
+        result = await self.db.execute(
+            select(Workspace).where(Workspace.taskId == task_id)
+        )
         return result.scalars().first()

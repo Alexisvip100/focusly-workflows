@@ -1,5 +1,4 @@
 import strawberry
-from typing import List, Optional
 
 from app.graphql import types
 from app.graphql.common import get_user_id
@@ -9,7 +8,7 @@ from app.services.folders.folders_service import FoldersService
 @strawberry.type
 class ProjectQuery:
     @strawberry.field
-    async def projects(self, info, group_id: Optional[str] = None) -> List[types.Project]:
+    async def projects(self, info, group_id: str | None = None) -> list[types.Project]:
         user_id = get_user_id(info)
         db = info.context["db"]
         folders_serv = FoldersService(db)
@@ -22,8 +21,9 @@ class ProjectQuery:
                 color=f.color,
                 group_id=f.groupId,
                 created_at=f.createdAt,
-                updated_at=f.updatedAt
-            ) for f in res
+                updated_at=f.updatedAt,
+            )
+            for f in res
         ]
 
     @strawberry.field
@@ -39,7 +39,7 @@ class ProjectQuery:
             color=res.color,
             group_id=res.groupId,
             created_at=res.createdAt,
-            updated_at=res.updatedAt
+            updated_at=res.updatedAt,
         )
 
     @strawberry.field

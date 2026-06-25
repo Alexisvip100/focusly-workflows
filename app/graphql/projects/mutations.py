@@ -8,14 +8,16 @@ from app.services.folders.folders_service import FoldersService
 @strawberry.type
 class ProjectMutation:
     @strawberry.mutation
-    async def create_project(self, info, create_project_input: types.CreateProjectInput) -> types.Project:
+    async def create_project(
+        self, info, create_project_input: types.CreateProjectInput
+    ) -> types.Project:
         user_id = get_user_id(info)
         db = info.context["db"]
         folders_serv = FoldersService(db)
         create_data = {
             "name": create_project_input.name,
             "color": create_project_input.color,
-            "groupId": create_project_input.groupId
+            "groupId": create_project_input.groupId,
         }
         res = await folders_serv.create(create_data, user_id)
         return types.Project(
@@ -25,15 +27,17 @@ class ProjectMutation:
             color=res.color,
             group_id=res.groupId,
             created_at=res.createdAt,
-            updated_at=res.updatedAt
+            updated_at=res.updatedAt,
         )
 
     @strawberry.mutation
-    async def update_project(self, info, update_project_input: types.UpdateProjectInput) -> types.Project:
+    async def update_project(
+        self, info, update_project_input: types.UpdateProjectInput
+    ) -> types.Project:
         user_id = get_user_id(info)
         db = info.context["db"]
         folders_serv = FoldersService(db)
-        
+
         update_data = {}
         if update_project_input.name is not None:
             update_data["name"] = update_project_input.name
@@ -42,7 +46,9 @@ class ProjectMutation:
         if update_project_input.groupId is not None:
             update_data["groupId"] = update_project_input.groupId
 
-        res = await folders_serv.update(str(update_project_input.id), update_data, user_id)
+        res = await folders_serv.update(
+            str(update_project_input.id), update_data, user_id
+        )
         return types.Project(
             id=strawberry.ID(res.id),
             name=res.name,
@@ -50,7 +56,7 @@ class ProjectMutation:
             color=res.color,
             group_id=res.groupId,
             created_at=res.createdAt,
-            updated_at=res.updatedAt
+            updated_at=res.updatedAt,
         )
 
     @strawberry.mutation

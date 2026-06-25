@@ -1,5 +1,4 @@
 import strawberry
-from typing import List, Optional
 
 from app.graphql import types
 from app.graphql.common import get_user_id
@@ -12,10 +11,10 @@ class WorkspaceQuery:
     async def workspaces(
         self,
         info,
-        search: Optional[str] = None,
-        project_id: Optional[str] = None,
-        group_id: Optional[str] = None
-    ) -> List[types.Workspace]:
+        search: str | None = None,
+        project_id: str | None = None,
+        group_id: str | None = None,
+    ) -> list[types.Workspace]:
         user_id = get_user_id(info)
         db = info.context["db"]
         ws_serv = WorkspacesService(db)
@@ -34,8 +33,9 @@ class WorkspaceQuery:
                 content=w.content,
                 saveStatus=w.saveStatus,
                 createdAt=w.createdAt,
-                updatedAt=w.updatedAt
-            ) for w in res
+                updatedAt=w.updatedAt,
+            )
+            for w in res
         ]
 
     @strawberry.field
@@ -57,7 +57,7 @@ class WorkspaceQuery:
             content=res.content,
             saveStatus=res.saveStatus,
             createdAt=res.createdAt,
-            updatedAt=res.updatedAt
+            updatedAt=res.updatedAt,
         )
 
     @strawberry.field

@@ -1,6 +1,17 @@
-from sqlalchemy import Column, String, Integer, Float, Boolean, DateTime, JSON, BigInteger, ForeignKey
+from sqlalchemy import (
+    JSON,
+    BigInteger,
+    Boolean,
+    Column,
+    DateTime,
+    Float,
+    Integer,
+    String,
+)
 from sqlalchemy.sql import func
+
 from app.database import Base
+
 
 class User(Base):
     __tablename__ = "User"
@@ -19,12 +30,15 @@ class User(Base):
     externalId = Column(String, nullable=True)
     fcmToken = Column(String, nullable=True)
     createdAt = Column(DateTime, default=func.now(), nullable=False)
-    updatedAt = Column(DateTime, default=func.now(), onupdate=func.now(), nullable=False)
+    updatedAt = Column(
+        DateTime, default=func.now(), onupdate=func.now(), nullable=False
+    )
     lastSyncAt = Column(DateTime, nullable=True)
     googleCalendarSyncToken = Column(String, nullable=True)
     googleChannelId = Column(String, nullable=True)
     googleResourceId = Column(String, nullable=True)
     googleChannelExpiration = Column(BigInteger, nullable=True)
+
 
 class Task(Base):
     __tablename__ = "Task"
@@ -45,7 +59,9 @@ class Task(Base):
     status = Column(String, nullable=False, default="Todo")
     completedAt = Column(DateTime, nullable=True)
     createdAt = Column(DateTime, default=func.now(), nullable=False)
-    updatedAt = Column(DateTime, default=func.now(), onupdate=func.now(), nullable=False)
+    updatedAt = Column(
+        DateTime, default=func.now(), onupdate=func.now(), nullable=False
+    )
     deletedAt = Column(DateTime, nullable=True)
     tags = Column(JSON, nullable=True)
     filters = Column(JSON, nullable=True)
@@ -60,7 +76,8 @@ class Task(Base):
     use_ai = Column(Boolean, nullable=True, default=False)
     workspaceId = Column(String, nullable=True)
     is_owner = Column(Boolean, nullable=True, default=False)
-    
+
+
 class Workspace(Base):
     __tablename__ = "Workspace"
 
@@ -76,7 +93,10 @@ class Workspace(Base):
     content = Column(String, nullable=False)
     saveStatus = Column(Boolean, nullable=True, default=False)
     createdAt = Column(DateTime, default=func.now(), nullable=False)
-    updatedAt = Column(DateTime, default=func.now(), onupdate=func.now(), nullable=False)
+    updatedAt = Column(
+        DateTime, default=func.now(), onupdate=func.now(), nullable=False
+    )
+
 
 class Folder(Base):
     __tablename__ = "Folder"
@@ -87,7 +107,10 @@ class Folder(Base):
     color = Column(String, nullable=True)
     groupId = Column(String, nullable=True)
     createdAt = Column(DateTime, default=func.now(), nullable=False)
-    updatedAt = Column(DateTime, default=func.now(), onupdate=func.now(), nullable=False)
+    updatedAt = Column(
+        DateTime, default=func.now(), onupdate=func.now(), nullable=False
+    )
+
 
 class ProjectGroup(Base):
     __tablename__ = "ProjectGroup"
@@ -98,7 +121,10 @@ class ProjectGroup(Base):
     color = Column(String, nullable=True)
     emoji = Column(String, nullable=True)
     createdAt = Column(DateTime, default=func.now(), nullable=False)
-    updatedAt = Column(DateTime, default=func.now(), onupdate=func.now(), nullable=False)
+    updatedAt = Column(
+        DateTime, default=func.now(), onupdate=func.now(), nullable=False
+    )
+
 
 class Tag(Base):
     __tablename__ = "Tag"
@@ -106,6 +132,7 @@ class Tag(Base):
     id = Column(String, primary_key=True, index=True)
     name = Column(String, nullable=False)
     userId = Column(String, nullable=True)
+
 
 class Notification(Base):
     __tablename__ = "Notification"
@@ -119,7 +146,10 @@ class Notification(Base):
     title = Column(String, nullable=False)
     body = Column(String, nullable=False)
     createdAt = Column(DateTime, default=func.now(), nullable=False)
-    updatedAt = Column(DateTime, default=func.now(), onupdate=func.now(), nullable=False)
+    updatedAt = Column(
+        DateTime, default=func.now(), onupdate=func.now(), nullable=False
+    )
+
 
 class FocusSession(Base):
     __tablename__ = "FocusSession"
@@ -133,7 +163,10 @@ class FocusSession(Base):
     distractionCount = Column(Integer, nullable=False, default=0)
     wasSuccessful = Column(Boolean, nullable=False, default=True)
     createdAt = Column(DateTime, default=func.now(), nullable=False)
-    updatedAt = Column(DateTime, default=func.now(), onupdate=func.now(), nullable=False)
+    updatedAt = Column(
+        DateTime, default=func.now(), onupdate=func.now(), nullable=False
+    )
+
 
 class TimeBlock(Base):
     __tablename__ = "TimeBlock"
@@ -150,7 +183,10 @@ class TimeBlock(Base):
     meetingUrl = Column(String, nullable=True)
     attendees = Column(JSON, nullable=True)
     createdAt = Column(DateTime, default=func.now(), nullable=False)
-    updatedAt = Column(DateTime, default=func.now(), onupdate=func.now(), nullable=False)
+    updatedAt = Column(
+        DateTime, default=func.now(), onupdate=func.now(), nullable=False
+    )
+
 
 class Conversation(Base):
     __tablename__ = "Conversation"
@@ -160,7 +196,10 @@ class Conversation(Base):
     title = Column(String, nullable=True)
     summary = Column(String, nullable=True)
     createdAt = Column(DateTime, default=func.now(), nullable=False)
-    updatedAt = Column(DateTime, default=func.now(), onupdate=func.now(), nullable=False)
+    updatedAt = Column(
+        DateTime, default=func.now(), onupdate=func.now(), nullable=False
+    )
+
 
 class Message(Base):
     __tablename__ = "Message"
@@ -172,6 +211,7 @@ class Message(Base):
     tokenUsage = Column(Integer, nullable=True, default=0)
     createdAt = Column(DateTime, default=func.now(), nullable=False)
 
+
 class UserMemory(Base):
     __tablename__ = "UserMemory"
 
@@ -182,4 +222,6 @@ class UserMemory(Base):
     importance = Column(Integer, default=1, nullable=False)
     embedding = Column(JSON, nullable=True)
     createdAt = Column(DateTime, default=func.now(), nullable=False)
-    updatedAt = Column(DateTime, default=func.now(), onupdate=func.now(), nullable=False)
+    updatedAt = Column(
+        DateTime, default=func.now(), onupdate=func.now(), nullable=False
+    )

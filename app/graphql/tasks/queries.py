@@ -1,5 +1,4 @@
 import strawberry
-from typing import List, Optional
 
 from app.graphql import types
 from app.graphql.common import get_user_id
@@ -9,7 +8,7 @@ from app.services.tasks.tasks_service import TasksService
 @strawberry.type
 class TaskQuery:
     @strawberry.field
-    async def get_tasks(self, info) -> List[types.Task]:
+    async def get_tasks(self, info) -> list[types.Task]:
         get_user_id(info)
         db = info.context["db"]
         tasks_serv = TasksService(db)
@@ -21,13 +20,13 @@ class TaskQuery:
         self,
         info,
         user_id: str,
-        filters: Optional[types.TaskFilterInput] = None,
-        sort: Optional[types.TaskSortInput] = None
-    ) -> List[types.Task]:
+        filters: types.TaskFilterInput | None = None,
+        sort: types.TaskSortInput | None = None,
+    ) -> list[types.Task]:
         get_user_id(info)
         db = info.context["db"]
         tasks_serv = TasksService(db)
-        
+
         # Convert filters input to dict
         filters_dict = None
         if filters:
@@ -47,10 +46,7 @@ class TaskQuery:
 
         sort_dict = None
         if sort:
-            sort_dict = {
-                "sort": sort.sort,
-                "order": sort.order or "asc"
-            }
+            sort_dict = {"sort": sort.sort, "order": sort.order or "asc"}
 
         res = await tasks_serv.find_all_by_user(user_id, filters_dict, sort_dict)
         return [types.map_dict_to_strawberry_task(t) for t in res]
@@ -60,10 +56,10 @@ class TaskQuery:
         self,
         info,
         user_id: str,
-        filters: Optional[types.TaskFilterInput] = None,
-        sort: Optional[types.TaskSortInput] = None,
-        offset: Optional[int] = 0,
-        limit: Optional[int] = None
+        filters: types.TaskFilterInput | None = None,
+        sort: types.TaskSortInput | None = None,
+        offset: int | None = 0,
+        limit: int | None = None,
     ) -> types.PaginatedTasks:
         get_user_id(info)
         db = info.context["db"]
@@ -87,22 +83,19 @@ class TaskQuery:
 
         sort_dict = None
         if sort:
-            sort_dict = {
-                "sort": sort.sort,
-                "order": sort.order or "asc"
-            }
+            sort_dict = {"sort": sort.sort, "order": sort.order or "asc"}
 
         paginated_res, total = await tasks_serv.find_paginated_by_user(
             user_id=user_id,
             filters=filters_dict,
             sort=sort_dict,
             offset=offset or 0,
-            limit=limit
+            limit=limit,
         )
 
         return types.PaginatedTasks(
             tasks=[types.map_dict_to_strawberry_task(t) for t in paginated_res],
-            totalCount=total
+            totalCount=total,
         )
 
     @strawberry.field
@@ -115,10 +108,8 @@ class TaskQuery:
 
     @strawberry.field
     async def get_task_by_filters(
-        self,
-        info,
-        filters: types.TaskFilterInput
-    ) -> List[types.Task]:
+        self, info, filters: types.TaskFilterInput
+    ) -> list[types.Task]:
         get_user_id(info)
         db = info.context["db"]
         tasks_serv = TasksService(db)

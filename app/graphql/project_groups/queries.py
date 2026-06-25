@@ -1,5 +1,4 @@
 import strawberry
-from typing import List
 
 from app.graphql import types
 from app.graphql.common import get_user_id
@@ -9,7 +8,7 @@ from app.services.project_groups.project_groups_service import ProjectGroupsServ
 @strawberry.type
 class ProjectGroupQuery:
     @strawberry.field
-    async def project_groups(self, info) -> List[types.ProjectGroup]:
+    async def project_groups(self, info) -> list[types.ProjectGroup]:
         user_id = get_user_id(info)
         db = info.context["db"]
         pg_serv = ProjectGroupsService(db)
@@ -22,8 +21,9 @@ class ProjectGroupQuery:
                 color=g.color,
                 emoji=g.emoji,
                 created_at=g.createdAt,
-                updated_at=g.updatedAt
-            ) for g in res
+                updated_at=g.updatedAt,
+            )
+            for g in res
         ]
 
     @strawberry.field
@@ -39,5 +39,5 @@ class ProjectGroupQuery:
             color=res.color,
             emoji=res.emoji,
             created_at=res.createdAt,
-            updated_at=res.updatedAt
+            updated_at=res.updatedAt,
         )

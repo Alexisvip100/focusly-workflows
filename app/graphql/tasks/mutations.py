@@ -1,20 +1,23 @@
 import strawberry
-from typing import List
 
 from app.graphql import types
 from app.graphql.common import get_user_id
-from app.services.tasks.tasks_service import TasksService
 from app.services.auth.auth_service import AuthService
+from app.services.tasks.tasks_service import TasksService
 
 
 @strawberry.type
 class TaskMutation:
     @strawberry.mutation
-    async def create_task(self, info, create_task_input: types.CreateTaskInput) -> types.Task:
+    async def create_task(
+        self, info, create_task_input: types.CreateTaskInput
+    ) -> types.Task:
         get_user_id(info)
         db = info.context["db"]
-        
-        from app.services.google_calendar.google_calendar_service import GoogleCalendarService
+
+        from app.services.google_calendar.google_calendar_service import (
+            GoogleCalendarService,
+        )
         from app.services.scheduler.scheduler_service import SchedulerService
         from app.sockets.realtime import realtime_gateway
 
@@ -37,8 +40,12 @@ class TaskMutation:
             "category": create_task_input.category,
             "color": create_task_input.color,
             "status": create_task_input.status,
-            "tags": [{"name": t} for t in create_task_input.tags] if create_task_input.tags else [],
-            "links": [{"title": l.title, "url": l.url} for l in create_task_input.links] if create_task_input.links else [],
+            "tags": [{"name": t} for t in create_task_input.tags]
+            if create_task_input.tags
+            else [],
+            "links": [{"title": l.title, "url": l.url} for l in create_task_input.links]
+            if create_task_input.links
+            else [],
             "task_type": create_task_input.task_type or "PlatformTask",
             "google_event_id": create_task_input.google_event_id,
             "estimated_start_date": create_task_input.estimated_start_date,
@@ -50,21 +57,28 @@ class TaskMutation:
                     "name": c.name,
                     "email": c.email,
                     "avatar": c.avatar,
-                    "responseStatus": c.responseStatus
-                } for c in create_task_input.collaborators
-            ] if create_task_input.collaborators else [],
-            "use_ai": create_task_input.use_ai
+                    "responseStatus": c.responseStatus,
+                }
+                for c in create_task_input.collaborators
+            ]
+            if create_task_input.collaborators
+            else [],
+            "use_ai": create_task_input.use_ai,
         }
 
         res = await tasks_serv.create(task_data)
         return types.map_dict_to_strawberry_task(res)
 
     @strawberry.mutation
-    async def update_task(self, info, update_task_input: types.UpdateTaskInput) -> types.Task:
+    async def update_task(
+        self, info, update_task_input: types.UpdateTaskInput
+    ) -> types.Task:
         user_id = get_user_id(info)
         db = info.context["db"]
-        
-        from app.services.google_calendar.google_calendar_service import GoogleCalendarService
+
+        from app.services.google_calendar.google_calendar_service import (
+            GoogleCalendarService,
+        )
         from app.services.scheduler.scheduler_service import SchedulerService
         from app.sockets.realtime import realtime_gateway
 
@@ -75,7 +89,9 @@ class TaskMutation:
         tasks_serv.google_calendar_service = gc_service
 
         update_data = {
-            "userId": update_task_input.user_id if update_task_input.user_id is not None else user_id
+            "userId": update_task_input.user_id
+            if update_task_input.user_id is not None
+            else user_id
         }
         if update_task_input.title is not None:
             update_data["title"] = update_task_input.title
@@ -100,7 +116,9 @@ class TaskMutation:
         if update_task_input.tags is not None:
             update_data["tags"] = [{"name": t} for t in update_task_input.tags]
         if update_task_input.links is not None:
-            update_data["links"] = [{"title": l.title, "url": l.url} for l in update_task_input.links]
+            update_data["links"] = [
+                {"title": l.title, "url": l.url} for l in update_task_input.links
+            ]
         if update_task_input.task_type is not None:
             update_data["task_type"] = update_task_input.task_type
         if update_task_input.google_event_id is not None:
@@ -119,8 +137,9 @@ class TaskMutation:
                     "name": c.name,
                     "email": c.email,
                     "avatar": c.avatar,
-                    "responseStatus": c.responseStatus
-                } for c in update_task_input.collaborators
+                    "responseStatus": c.responseStatus,
+                }
+                for c in update_task_input.collaborators
             ]
         if update_task_input.use_ai is not None:
             update_data["use_ai"] = update_task_input.use_ai
@@ -132,8 +151,10 @@ class TaskMutation:
     async def delete_task(self, info, id: str) -> bool:
         get_user_id(info)
         db = info.context["db"]
-        
-        from app.services.google_calendar.google_calendar_service import GoogleCalendarService
+
+        from app.services.google_calendar.google_calendar_service import (
+            GoogleCalendarService,
+        )
         from app.services.scheduler.scheduler_service import SchedulerService
         from app.sockets.realtime import realtime_gateway
 
@@ -147,11 +168,13 @@ class TaskMutation:
         return True
 
     @strawberry.mutation
-    async def delete_tasks(self, info, ids: List[str]) -> bool:
+    async def delete_tasks(self, info, ids: list[str]) -> bool:
         get_user_id(info)
         db = info.context["db"]
-        
-        from app.services.google_calendar.google_calendar_service import GoogleCalendarService
+
+        from app.services.google_calendar.google_calendar_service import (
+            GoogleCalendarService,
+        )
         from app.services.scheduler.scheduler_service import SchedulerService
         from app.sockets.realtime import realtime_gateway
 
@@ -168,8 +191,10 @@ class TaskMutation:
     async def delete_workspace_tasks(self, info, workspace_id: str) -> bool:
         get_user_id(info)
         db = info.context["db"]
-        
-        from app.services.google_calendar.google_calendar_service import GoogleCalendarService
+
+        from app.services.google_calendar.google_calendar_service import (
+            GoogleCalendarService,
+        )
         from app.services.scheduler.scheduler_service import SchedulerService
         from app.sockets.realtime import realtime_gateway
 

@@ -17,7 +17,6 @@ import logging
 from datetime import datetime, timedelta
 
 from sqlalchemy import select, update
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import async_session_local
 from app.models.models import Task, User
@@ -30,7 +29,7 @@ async def _check_and_notify_once() -> None:
     """Run a single notification sweep across all active users and tasks."""
     now = datetime.utcnow()
     five_min_from_now = now + timedelta(minutes=5)
-    one_min_from_now  = now + timedelta(minutes=1)
+    one_min_from_now = now + timedelta(minutes=1)
 
     async with async_session_local() as db:
         # ── 5-minute warning ──────────────────────────────────────────────
@@ -65,7 +64,9 @@ async def _check_and_notify_once() -> None:
             )
             logger.info(
                 "[NOTIFIER] 5-min alert sent → user=%s task=%s (%s)",
-                task.userId, task.id, task.title,
+                task.userId,
+                task.id,
+                task.title,
             )
 
         # ── 1-minute warning ──────────────────────────────────────────────
@@ -97,7 +98,9 @@ async def _check_and_notify_once() -> None:
             )
             logger.info(
                 "[NOTIFIER] 1-min alert sent → user=%s task=%s (%s)",
-                task.userId, task.id, task.title,
+                task.userId,
+                task.id,
+                task.title,
             )
 
         await db.commit()

@@ -1,48 +1,53 @@
 import uuid
 from datetime import datetime
-from typing import List, Dict, Any, Optional
+from typing import Any
 
+from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
-from sqlalchemy import update
 
-from app.models.models import ProjectGroup, Folder, Workspace
+from app.models.models import Folder, ProjectGroup, Workspace
 from app.schemas.project_groups import ProjectGroupCreateSchema
+
 
 class ProjectGroupsService:
     def __init__(self, db: AsyncSession):
         self.db = db
 
-    async def create(self, create_input: Dict[str, Any], user_id: str) -> ProjectGroup:
+    async def create(self, create_input: dict[str, Any], user_id: str) -> ProjectGroup:
         group_id = str(uuid.uuid4())
         group_data = ProjectGroupCreateSchema(**create_input)
 
-        group = ProjectGroup(
-            id=group_id,
-            userId=user_id,
-            **group_data.model_dump()
-        )
+        group = ProjectGroup(id=group_id, userId=user_id, **group_data.model_dump())
 
         self.db.add(group)
         await self.db.commit()
         await self.db.refresh(group)
         return group
 
-    async def find_all(self, user_id: str) -> List[ProjectGroup]:
+    async def find_all(self, user_id: str) -> list[ProjectGroup]:
         result = await self.db.execute(
-            select(ProjectGroup).where(ProjectGroup.userId == user_id).order_by(ProjectGroup.createdAt)
+            select(ProjectGroup)
+            .where(ProjectGroup.userId == user_id)
+            .order_by(ProjectGroup.createdAt)
         )
         return list(result.scalars().all())
 
     async def find_one(self, id: str, user_id: str) -> ProjectGroup:
-        result = await self.db.execute(select(ProjectGroup).where(ProjectGroup.id == id))
+        result = await self.db.execute(
+            select(ProjectGroup).where(ProjectGroup.id == id)
+        )
         group = result.scalars().first()
         if not group or group.userId != user_id:
             raise ValueError(f"ProjectGroup with ID {id} not found")
         return group
 
-    async def update(self, id: str, update_input: Dict[str, Any], user_id: str) -> ProjectGroup:
-        result = await self.db.execute(select(ProjectGroup).where(ProjectGroup.id == id))
+    async def update(
+        self, id: str, update_input: dict[str, Any], user_id: str
+    ) -> ProjectGroup:
+        result = await self.db.execute(
+            select(ProjectGroup).where(ProjectGroup.id == id)
+        )
         group = result.scalars().first()
         if not group or group.userId != user_id:
             raise ValueError(f"ProjectGroup with ID {id} not found")
@@ -60,19 +65,25 @@ class ProjectGroupsService:
         return group
 
     async def remove(self, id: str, user_id: str) -> bool:
-        result = await self.db.execute(select(ProjectGroup).where(ProjectGroup.id == id))
+        result = await self.db.execute(
+            select(ProjectGroup).where(ProjectGroup.id == id)
+        )
         group = result.scalars().first()
         if not group or group.userId != user_id:
             raise ValueError(f"ProjectGroup with ID {id} not found")
 
         # Disassociate folders from this group
         await self.db.execute(
-            update(Folder).where(Folder.groupId == id).values(groupId=None, updatedAt=datetime.utcnow())
+            update(Folder)
+            .where(Folder.groupId == id)
+            .values(groupId=None, updatedAt=datetime.utcnow())
         )
 
         # Disassociate workspaces from this group
         await self.db.execute(
-            update(Workspace).where(Workspace.groupId == id).values(groupId=None, updatedAt=datetime.utcnow())
+            update(Workspace)
+            .where(Workspace.groupId == id)
+            .values(groupId=None, updatedAt=datetime.utcnow())
         )
 
         await self.db.delete(group)
@@ -81,5 +92,8 @@ class ProjectGroupsService:
 
     async def get_total(self, user_id: str) -> int:
         from sqlalchemy import func
-        result = await self.db.execute(select(func.count(ProjectGroup.id)).where(ProjectGroup.userId == user_id))
+
+        result = await self.db.execute(
+            select(func.count(ProjectGroup.id)).where(ProjectGroup.userId == user_id)
+        )
         return result.scalar() or 0

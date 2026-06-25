@@ -1,5 +1,7 @@
 import os
+
 from google import genai
+
 
 def classify_query(user_query: str) -> str:
     """
@@ -10,7 +12,7 @@ def classify_query(user_query: str) -> str:
     api_key = os.environ.get("GEMINI_API_KEY")
     if not api_key:
         return "complex"
-        
+
     client = genai.Client(api_key=api_key)
     prompt = f"""
 Analyze the user's query and classify it as either 'simple' or 'complex'.
@@ -29,7 +31,7 @@ User Query: {user_query}
 """
     try:
         response = client.models.generate_content(
-            model='gemini-2.5-flash',
+            model="gemini-2.5-flash",
             contents=prompt,
         )
         result = response.text.strip().lower()
@@ -38,4 +40,4 @@ User Query: {user_query}
         return "complex"
     except Exception as e:
         print(f"Router error: {e}")
-        return "complex" # Default to complex on failure
+        return "complex"  # Default to complex on failure

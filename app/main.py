@@ -1,22 +1,21 @@
 import asyncio
-import strawberry
-import jwt
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, Request, Response
+
+import jwt
+import socketio
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from strawberry.fastapi import GraphQLRouter
-import socketio
-from typing import Any
 
 from app.config import settings
 from app.database import async_session_local
-from app.sockets.realtime import sio
+from app.routes.ai.ai import router as ai_router
 from app.routes.auth.auth import router as auth_router
-from app.routes.users.users import router as users_router
 from app.routes.google_calendar.google_calendar import router as google_calendar_router
 from app.routes.time_blocks.time_blocks import router as time_blocks_router
-from app.routes.ai.ai import router as ai_router
+from app.routes.users.users import router as users_router
 from app.services.notifications.task_notifier_service import run_task_notifier_loop
+from app.sockets.realtime import sio
 
 
 @asynccontextmanager
@@ -29,6 +28,7 @@ async def lifespan(app: FastAPI):
         await notifier_task
     except asyncio.CancelledError:
         pass
+
 
 # 1. Initialize FastAPI
 fastapi_app = FastAPI(title="Focusly Backend", version="1.0.0", lifespan=lifespan)
@@ -53,6 +53,7 @@ fastapi_app.include_router(google_calendar_router)
 fastapi_app.include_router(time_blocks_router)
 fastapi_app.include_router(ai_router)
 
+
 # 4. GraphQL Setup with session management and auth context
 @fastapi_app.middleware("http")
 async def db_session_middleware(request: Request, call_next):
@@ -64,9 +65,10 @@ async def db_session_middleware(request: Request, call_next):
     else:
         return await call_next(request)
 
+
 async def get_context(request: Request):
     db = getattr(request.state, "db", None)
-    
+
     # Extract user ID from cookies or Authorization header
     token = request.cookies.get("access_token")
     print(f"[AUTH DEBUG] Cookies: {dict(request.cookies)}")
@@ -74,7 +76,7 @@ async def get_context(request: Request):
         auth_header = request.headers.get("Authorization")
         if auth_header and auth_header.startswith("Bearer "):
             token = auth_header.split(" ")[1]
-            
+
     user_id = None
     if token:
         try:
@@ -83,22 +85,22 @@ async def get_context(request: Request):
             print(f"[AUTH DEBUG] JWT Decoded successfully. sub={user_id}")
         except Exception as e:
             print(f"[AUTH DEBUG] JWT decode error: {e}")
-            pass # Invalid token, keep user_id = None
+            pass  # Invalid token, keep user_id = None
 
-    return {
-        "db": db,
-        "user_id": user_id,
-        "request": request
-    }
+    return {"db": db, "user_id": user_id, "request": request}
+
 
 from app.graphql import schema
+
 graphql_router = GraphQLRouter(schema, context_getter=get_context)
 fastapi_app.include_router(graphql_router, prefix="/graphql")
+
 
 # Root / health check endpoint
 @fastapi_app.get("/")
 async def root():
     return {"status": "ok", "service": "focusly-back-python"}
 
+
 # 5. Combined ASGI App with Socket.io wrapper
-app = socketio.ASGIApp(sio, other_asgi_app=fastapi_app, socketio_path='socket.io')
+app = socketio.ASGIApp(sio, other_asgi_app=fastapi_app, socketio_path="socket.io")

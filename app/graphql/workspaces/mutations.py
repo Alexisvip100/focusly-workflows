@@ -8,11 +8,13 @@ from app.services.workspaces.workspaces_service import WorkspacesService
 @strawberry.type
 class WorkspaceMutation:
     @strawberry.mutation
-    async def create_workspace(self, info, create_workspace_input: types.CreateWorkspaceInput) -> types.Workspace:
+    async def create_workspace(
+        self, info, create_workspace_input: types.CreateWorkspaceInput
+    ) -> types.Workspace:
         user_id = get_user_id(info)
         db = info.context["db"]
         ws_serv = WorkspacesService(db)
-        
+
         create_data = {
             "userId": user_id,
             "title": create_workspace_input.title,
@@ -23,7 +25,9 @@ class WorkspaceMutation:
             "taskId": create_workspace_input.taskId,
             "folderId": create_workspace_input.projectId,
             "groupId": create_workspace_input.groupId,
-            "saveStatus": create_workspace_input.saveStatus if create_workspace_input.saveStatus is not None else False
+            "saveStatus": create_workspace_input.saveStatus
+            if create_workspace_input.saveStatus is not None
+            else False,
         }
         res = await ws_serv.create(create_data, user_id)
         return types.Workspace(
@@ -39,15 +43,17 @@ class WorkspaceMutation:
             content=res.content,
             saveStatus=res.saveStatus,
             createdAt=res.createdAt,
-            updatedAt=res.updatedAt
+            updatedAt=res.updatedAt,
         )
 
     @strawberry.mutation
-    async def update_workspace(self, info, update_workspace_input: types.UpdateWorkspaceInput) -> types.Workspace:
+    async def update_workspace(
+        self, info, update_workspace_input: types.UpdateWorkspaceInput
+    ) -> types.Workspace:
         user_id = get_user_id(info)
         db = info.context["db"]
         ws_serv = WorkspacesService(db)
-        
+
         update_data = {}
         if update_workspace_input.title is not None:
             update_data["title"] = update_workspace_input.title
@@ -56,7 +62,9 @@ class WorkspaceMutation:
         if update_workspace_input.background_color is not None:
             update_data["background_color"] = update_workspace_input.background_color
         if update_workspace_input.card_show_background is not None:
-            update_data["card_show_background"] = update_workspace_input.card_show_background
+            update_data["card_show_background"] = (
+                update_workspace_input.card_show_background
+            )
         if update_workspace_input.projectId is not None:
             update_data["folderId"] = update_workspace_input.projectId
         if update_workspace_input.groupId is not None:
@@ -67,7 +75,7 @@ class WorkspaceMutation:
             update_data["taskId"] = update_workspace_input.taskId
         if update_workspace_input.saveStatus is not None:
             update_data["saveStatus"] = update_workspace_input.saveStatus
- 
+
         res = await ws_serv.update(str(update_workspace_input.id), update_data, user_id)
         return types.Workspace(
             id=strawberry.ID(res.id),
@@ -82,7 +90,7 @@ class WorkspaceMutation:
             content=res.content,
             saveStatus=res.saveStatus,
             createdAt=res.createdAt,
-            updatedAt=res.updatedAt
+            updatedAt=res.updatedAt,
         )
 
     @strawberry.mutation

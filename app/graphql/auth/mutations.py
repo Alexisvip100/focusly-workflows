@@ -14,7 +14,7 @@ class AuthMutation:
         auth_service = AuthService(db)
         try:
             result = await auth_service.validate_google_token(code, redirect_uri=origin)
-            
+
             # Map user
             u = result["user"]
             settings_dict = u.get("settings")
@@ -24,7 +24,7 @@ class AuthMutation:
                 u_settings = types.UserSettings(
                     focus_duration_pref=settings_dict.get("focusDurationPref"),
                     break_duration_pref=settings_dict.get("breakDurationPref"),
-                    notifications_enabled=settings_dict.get("notificationsEnabled")
+                    notifications_enabled=settings_dict.get("notificationsEnabled"),
                 )
 
             user_obj = types.User(
@@ -37,12 +37,12 @@ class AuthMutation:
                 google_refresh_token=u.get("googleRefreshToken"),
                 subscription_status=u.get("subscriptionStatus", "free"),
                 settings=u_settings,
-                bio=u.get("bio")
+                bio=u.get("bio"),
             )
             return types.AuthResponse(
                 access_token=result["access_token"],
                 user=user_obj,
-                google_access_token=result.get("google_access_token")
+                google_access_token=result.get("google_access_token"),
             )
         except Exception as e:
             print("GraphQL googleLogin error:", e)

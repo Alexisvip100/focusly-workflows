@@ -1,13 +1,16 @@
-from typing import List, Dict, Any, Optional
+from typing import Any
+
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
+
 from app.models.models import User
+
 
 class UsersService:
     def __init__(self, db: AsyncSession):
         self.db = db
 
-    async def create(self, user_data: Dict[str, Any]) -> User:
+    async def create(self, user_data: dict[str, Any]) -> User:
         user = User(
             id=user_data.get("id"),
             email=user_data.get("email"),
@@ -20,26 +23,26 @@ class UsersService:
             subscriptionStatus=user_data.get("subscriptionStatus", "free"),
             settings=user_data.get("settings"),
             externalId=user_data.get("externalId"),
-            fcmToken=user_data.get("fcmToken")
+            fcmToken=user_data.get("fcmToken"),
         )
         self.db.add(user)
         await self.db.commit()
         await self.db.refresh(user)
         return user
 
-    async def findOne(self, id: str) -> Optional[User]:
+    async def findOne(self, id: str) -> User | None:
         result = await self.db.execute(select(User).where(User.id == id))
         return result.scalars().first()
 
-    async def findByEmail(self, email: str) -> Optional[User]:
+    async def findByEmail(self, email: str) -> User | None:
         result = await self.db.execute(select(User).where(User.email == email))
         return result.scalars().first()
 
-    async def find(self) -> List[User]:
+    async def find(self) -> list[User]:
         result = await self.db.execute(select(User))
         return list(result.scalars().all())
 
-    async def update(self, id: str, update_data: Dict[str, Any]) -> Optional[User]:
+    async def update(self, id: str, update_data: dict[str, Any]) -> User | None:
         result = await self.db.execute(select(User).where(User.id == id))
         user = result.scalars().first()
         if not user:
