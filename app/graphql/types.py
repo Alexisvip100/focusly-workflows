@@ -60,7 +60,6 @@ class Workspace:
     emoji: Optional[str] = None
     background_color: Optional[str] = strawberry.field(name="background_color", default=None)
     card_show_background: Optional[bool] = strawberry.field(name="card_show_background", default=None)
-    projectId: Optional[str] = None
     groupId: Optional[str] = None
     content: str
     saveStatus: Optional[bool] = None
@@ -81,65 +80,6 @@ class Workspace:
         except:
             return None
 
-    @strawberry.field
-    async def project(self, info) -> Optional["Project"]:
-        if not self.projectId:
-            return None
-        db = info.context["db"]
-        from app.services.folders.folders_service import FoldersService
-        folders_serv = FoldersService(db)
-        try:
-            res = await folders_serv.find_one(self.projectId, self.userId)
-            if res:
-                return Project(
-                    id=strawberry.ID(res.id),
-                    name=res.name,
-                    user_id=res.userId,
-                    color=res.color,
-                    created_at=res.createdAt,
-                    updated_at=res.updatedAt
-                )
-        except:
-            return None
-
-@strawberry.type
-class Project:
-    id: strawberry.ID
-    name: str
-    user_id: str = strawberry.field(name="userId")
-    color: Optional[str] = None
-    group_id: Optional[str] = strawberry.field(name="groupId", default=None)
-    created_at: datetime = strawberry.field(name="createdAt")
-    updated_at: datetime = strawberry.field(name="updatedAt")
-
-    @strawberry.field
-    async def workspaces(self, info) -> List[Workspace]:
-        db = info.context["db"]
-        from app.services.workspaces.workspaces_service import WorkspacesService
-        ws_serv = WorkspacesService(db)
-        res = await ws_serv.find_all(self.user_id, folder_id=str(self.id))
-        return [
-            Workspace(
-                id=strawberry.ID(w.id),
-                userId=w.userId,
-                taskId=w.taskId,
-                title=w.title,
-                emoji=w.emoji,
-                background_color=w.background_color,
-                card_show_background=w.card_show_background,
-                projectId=w.folderId,
-                content=w.content,
-                saveStatus=w.saveStatus,
-                createdAt=w.createdAt,
-                updatedAt=w.updatedAt
-            ) for w in res
-        ]
-
-    @strawberry.field
-    async def workspace_count(self, info) -> int:
-        workspaces = await self.workspaces(info)
-        return len(workspaces)
-
 @strawberry.type
 class ProjectGroup:
     id: strawberry.ID
@@ -151,26 +91,8 @@ class ProjectGroup:
     updated_at: datetime = strawberry.field(name="updatedAt")
 
     @strawberry.field
-    async def folders(self, info) -> List[Project]:
-        db = info.context["db"]
-        from app.services.folders.folders_service import FoldersService
-        folders_serv = FoldersService(db)
-        res = await folders_serv.find_all(self.user_id, group_id=str(self.id))
-        return [
-            Project(
-                id=strawberry.ID(f.id),
-                name=f.name,
-                user_id=f.userId,
-                color=f.color,
-                group_id=f.groupId,
-                created_at=f.createdAt,
-                updated_at=f.updatedAt
-            ) for f in res
-        ]
-
-    @strawberry.field
-    async def general_workspaces(self, info) -> List[Workspace]:
-        """Workspaces that belong to this group but not to any specific folder."""
+    async def workspaces(self, info) -> List[Workspace]:
+        """Workspaces that belong to this group."""
         db = info.context["db"]
         from app.services.workspaces.workspaces_service import WorkspacesService
         ws_serv = WorkspacesService(db)
@@ -184,19 +106,13 @@ class ProjectGroup:
                 emoji=w.emoji,
                 background_color=w.background_color,
                 card_show_background=w.card_show_background,
-                projectId=w.folderId,
                 groupId=w.groupId,
                 content=w.content,
                 saveStatus=w.saveStatus,
                 createdAt=w.createdAt,
                 updatedAt=w.updatedAt
-            ) for w in all_ws if not w.folderId
+            ) for w in all_ws
         ]
-
-    @strawberry.field
-    async def folder_count(self, info) -> int:
-        folders = await self.folders(info)
-        return len(folders)
 
 @strawberry.type
 class Task:
@@ -243,7 +159,7 @@ class Task:
                 emoji=res.emoji,
                 background_color=res.background_color,
                 card_show_background=res.card_show_background,
-                projectId=res.folderId,
+                groupId=res.groupId,
                 content=res.content,
                 saveStatus=res.saveStatus,
                 createdAt=res.createdAt,
@@ -374,7 +290,6 @@ class CreateWorkspaceInput:
     emoji: Optional[str] = None
     background_color: Optional[str] = strawberry.field(name="background_color", default=None)
     card_show_background: Optional[bool] = strawberry.field(name="card_show_background", default=None)
-    projectId: Optional[str] = None
     groupId: Optional[str] = None
     taskId: Optional[str] = None
     saveStatus: Optional[bool] = None
@@ -387,23 +302,9 @@ class UpdateWorkspaceInput:
     emoji: Optional[str] = None
     background_color: Optional[str] = strawberry.field(name="background_color", default=None)
     card_show_background: Optional[bool] = strawberry.field(name="card_show_background", default=None)
-    projectId: Optional[str] = None
     groupId: Optional[str] = None
     taskId: Optional[str] = None
     saveStatus: Optional[bool] = None
-
-@strawberry.input
-class CreateProjectInput:
-    name: str
-    color: Optional[str] = None
-    groupId: Optional[str] = None
-
-@strawberry.input
-class UpdateProjectInput:
-    id: strawberry.ID
-    name: Optional[str] = None
-    color: Optional[str] = None
-    groupId: Optional[str] = None
 
 @strawberry.input
 class CreateProjectGroupInput:

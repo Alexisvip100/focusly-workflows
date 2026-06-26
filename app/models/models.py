@@ -71,21 +71,9 @@ class Workspace(Base):
     emoji = Column(String, nullable=True)
     background_color = Column(String, nullable=True)
     card_show_background = Column(Boolean, nullable=True)
-    folderId = Column(String, nullable=True)
     groupId = Column(String, nullable=True)
     content = Column(String, nullable=False)
     saveStatus = Column(Boolean, nullable=True, default=False)
-    createdAt = Column(DateTime, default=func.now(), nullable=False)
-    updatedAt = Column(DateTime, default=func.now(), onupdate=func.now(), nullable=False)
-
-class Folder(Base):
-    __tablename__ = "Folder"
-
-    id = Column(String, primary_key=True, index=True)
-    name = Column(String, nullable=False)
-    userId = Column(String, nullable=False, index=True)
-    color = Column(String, nullable=True)
-    groupId = Column(String, nullable=True)
     createdAt = Column(DateTime, default=func.now(), nullable=False)
     updatedAt = Column(DateTime, default=func.now(), onupdate=func.now(), nullable=False)
 

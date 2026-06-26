@@ -21,7 +21,6 @@ class WorkspaceMutation:
             "card_show_background": create_workspace_input.card_show_background,
             "content": create_workspace_input.content,
             "taskId": create_workspace_input.taskId,
-            "folderId": create_workspace_input.projectId,
             "groupId": create_workspace_input.groupId,
             "saveStatus": create_workspace_input.saveStatus if create_workspace_input.saveStatus is not None else False
         }
@@ -34,7 +33,6 @@ class WorkspaceMutation:
             emoji=res.emoji,
             background_color=res.background_color,
             card_show_background=res.card_show_background,
-            projectId=res.folderId,
             groupId=res.groupId,
             content=res.content,
             saveStatus=res.saveStatus,
@@ -57,8 +55,6 @@ class WorkspaceMutation:
             update_data["background_color"] = update_workspace_input.background_color
         if update_workspace_input.card_show_background is not None:
             update_data["card_show_background"] = update_workspace_input.card_show_background
-        if update_workspace_input.projectId is not None:
-            update_data["folderId"] = update_workspace_input.projectId
         if update_workspace_input.groupId is not None:
             update_data["groupId"] = update_workspace_input.groupId
         if update_workspace_input.content is not None:
@@ -77,7 +73,6 @@ class WorkspaceMutation:
             emoji=res.emoji,
             background_color=res.background_color,
             card_show_background=res.card_show_background,
-            projectId=res.folderId,
             groupId=res.groupId,
             content=res.content,
             saveStatus=res.saveStatus,

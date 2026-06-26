@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy import update
 
-from app.models.models import ProjectGroup, Folder, Workspace
+from app.models.models import ProjectGroup, Workspace
 from app.schemas.project_groups import ProjectGroupCreateSchema
 
 class ProjectGroupsService:
@@ -65,10 +65,7 @@ class ProjectGroupsService:
         if not group or group.userId != user_id:
             raise ValueError(f"ProjectGroup with ID {id} not found")
 
-        # Disassociate folders from this group
-        await self.db.execute(
-            update(Folder).where(Folder.groupId == id).values(groupId=None, updatedAt=datetime.utcnow())
-        )
+
 
         # Disassociate workspaces from this group
         await self.db.execute(

@@ -8,7 +8,6 @@ class WorkspaceCreateSchema(BaseModel):
     card_show_background: Optional[bool] = None
     content: Optional[str] = ""
     taskId: Optional[str] = None
-    folderId: Optional[str] = None
     saveStatus: Optional[bool] = False
 
     @model_validator(mode="before")
