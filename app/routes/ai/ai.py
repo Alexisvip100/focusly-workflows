@@ -180,8 +180,8 @@ async def chat_endpoint(
 
     # 3. Router logic
     complexity = classify_query(latest_user_message)
-    # Default to pro if complex, flash if simple
-    selected_model = body.model or ("gemini-2.5-pro" if complexity == "complex" else "gemini-2.5-flash-lite")
+    # Default to flash if complex, flash-lite if simple
+    selected_model = body.model or ("gemini-2.5-flash" if complexity == "complex" else "gemini-2.5-flash-lite")
 
     # 4. Context Builder
     system_context = await build_context(current_user_id, conversation.id, latest_user_message, db)
