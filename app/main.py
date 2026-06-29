@@ -19,9 +19,17 @@ from app.routes.ai.ai import router as ai_router
 from app.services.notifications.task_notifier_service import run_task_notifier_loop
 
 
+from app.database import engine, Base
+from app.models.models import Conversation, Message
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Start background tasks on startup, clean up on shutdown."""
+    print("[INIT] Initializing database and creating tables if missing...")
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    print("[INIT] Database initialized successfully.")
+
     notifier_task = asyncio.create_task(run_task_notifier_loop())
     yield
     notifier_task.cancel()
@@ -30,8 +38,32 @@ async def lifespan(app: FastAPI):
     except asyncio.CancelledError:
         pass
 
+from fastapi.responses import JSONResponse
+import traceback
+
 # 1. Initialize FastAPI
 fastapi_app = FastAPI(title="Focusly Backend", version="1.0.0", lifespan=lifespan)
+
+@fastapi_app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    print(f"[GLOBAL EXCEPTION] Unhandled error: {exc}")
+    traceback.print_exc()
+    
+    response = JSONResponse(
+        status_code=500,
+        content={"detail": "Internal Server Error", "error": str(exc)},
+    )
+    
+    origin = request.headers.get("origin")
+    if origin in [
+        "https://focusly-front-psi.vercel.app",
+        "http://localhost:5173",
+        "http://localhost:3000",
+    ]:
+        response.headers["Access-Control-Allow-Origin"] = origin
+        response.headers["Access-Control-Allow-Credentials"] = "true"
+        
+    return response
 
 # 2. CORS Middleware
 fastapi_app.add_middleware(
