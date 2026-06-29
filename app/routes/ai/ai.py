@@ -28,6 +28,7 @@ class ChatRequestSchema(BaseModel):
     messages: List[MessageSchema]
     task: Optional[Dict[str, Any]] = None
     model: Optional[str] = None
+    conversationId: Optional[str] = None
 
 class GeminiStreamParser:
     def __init__(self):
@@ -152,15 +153,23 @@ async def chat_endpoint(
     # We only care about the latest user message since we have state in DB
     latest_user_message = body.messages[-1].content
     
-    # 1. Get or create default conversation for user
-    conv_result = await db.execute(select(Conversation).filter(Conversation.userId == current_user_id))
-    conversation = conv_result.scalar_one_or_none()
-    
-    if not conversation:
+    # 1. Get or create conversation for user
+    conversation_id = body.conversationId
+    if conversation_id:
+        conv_result = await db.execute(
+            select(Conversation)
+            .filter(Conversation.id == conversation_id)
+            .filter(Conversation.userId == current_user_id)
+        )
+        conversation = conv_result.scalar_one_or_none()
+        if not conversation:
+            raise HTTPException(status_code=404, detail="Conversation not found")
+    else:
+        title_snippet = latest_user_message[:30] + ("..." if len(latest_user_message) > 30 else "")
         conversation = Conversation(
             id=str(uuid.uuid4()),
             userId=current_user_id,
-            title="General AI Assistant",
+            title=title_snippet,
             summary=""
         )
         db.add(conversation)
@@ -216,3 +225,78 @@ async def chat_endpoint(
         stream_gemini_and_save(payload, selected_model, background_tasks, current_user_id, conversation.id, latest_user_message, get_db),
         media_type="text/plain"
     )
+
+@router.get("/conversations")
+async def get_conversations(
+    current_user_id: str = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db)
+):
+    result = await db.execute(
+        select(Conversation)
+        .filter(Conversation.userId == current_user_id)
+        .order_by(Conversation.updatedAt.desc())
+    )
+    conversations = result.scalars().all()
+    return [
+        {
+            "id": c.id,
+            "title": c.title,
+            "summary": c.summary,
+            "createdAt": c.createdAt.isoformat(),
+            "updatedAt": c.updatedAt.isoformat()
+        }
+        for c in conversations
+    ]
+
+@router.get("/conversations/{conversation_id}/messages")
+async def get_conversation_messages(
+    conversation_id: str,
+    current_user_id: str = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db)
+):
+    # Verify ownership
+    conv_result = await db.execute(
+        select(Conversation)
+        .filter(Conversation.id == conversation_id)
+        .filter(Conversation.userId == current_user_id)
+    )
+    conversation = conv_result.scalar_one_or_none()
+    if not conversation:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+        
+    result = await db.execute(
+        select(Message)
+        .filter(Message.conversationId == conversation_id)
+        .order_by(Message.createdAt.asc())
+    )
+    messages = result.scalars().all()
+    return [
+        {
+            "id": m.id,
+            "role": m.role,
+            "content": m.content,
+            "createdAt": m.createdAt.isoformat()
+        }
+        for m in messages
+    ]
+
+@router.delete("/conversations/{conversation_id}")
+async def delete_conversation(
+    conversation_id: str,
+    current_user_id: str = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db)
+):
+    conv_result = await db.execute(
+        select(Conversation)
+        .filter(Conversation.id == conversation_id)
+        .filter(Conversation.userId == current_user_id)
+    )
+    conversation = conv_result.scalar_one_or_none()
+    if not conversation:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+        
+    from sqlalchemy import delete
+    await db.execute(delete(Message).where(Message.conversationId == conversation_id))
+    await db.execute(delete(Conversation).where(Conversation.id == conversation_id))
+    await db.commit()
+    return {"status": "success", "message": "Conversation deleted"}
