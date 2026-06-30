@@ -1,6 +1,6 @@
 from sqlalchemy.future import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.models.models import Conversation, Message, ProjectGroup, Workspace, Task
+from app.models.models import Conversation, Message, ProjectGroup, Workspace, Task, User
 from .prompts import SYSTEM_PROMPT
 from .memory import search_memories
 
@@ -10,7 +10,19 @@ async def build_context(user_id: str, conversation_id: str, query: str, db: Asyn
     """
     import datetime
     now_utc = datetime.datetime.utcnow()
-    context = f"{SYSTEM_PROMPT}\n\n--- ENVIRONMENT INFO ---\n- Current Date/Time: {now_utc.strftime('%Y-%m-%d %H:%M UTC')}\n\n"
+    
+    # Fetch user profile to get their name
+    user_res = await db.execute(select(User).filter(User.id == user_id))
+    user = user_res.scalars().first()
+    user_name = user.fullName if user else "Usuario"
+    
+    context = (
+        f"{SYSTEM_PROMPT}\n\n"
+        f"--- USER PROFILE ---\n"
+        f"- Name: {user_name}\n\n"
+        f"--- ENVIRONMENT INFO ---\n"
+        f"- Current Date/Time: {now_utc.strftime('%Y-%m-%d %H:%M UTC')}\n\n"
+    )
     
     # 1. Fetch relevant memories
     memories = await search_memories(user_id, query, db)
