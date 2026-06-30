@@ -18,6 +18,7 @@ class Settings:
     GOOGLE_GENERATIVE_AI_API_KEY: str = os.getenv("GOOGLE_GENERATIVE_AI_API_KEY", "")
     WEBHOOK_URL: str = os.getenv("WEBHOOK_URL", "http://localhost:3000")
     RESEND_API_KEY: str = os.getenv("RESEND_API_KEY", "")
+    IS_PRODUCTION: bool = os.getenv("ENV", "development") == "production"
     _raw_ai_url = os.getenv("FOCUSLY_AI_URL", "http://localhost:8001").strip().strip('"').strip("'")
     
     # Normalize URL protocol
