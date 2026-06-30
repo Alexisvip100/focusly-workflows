@@ -140,6 +140,68 @@ async def stream_gemini_and_save(payload: dict, model: str, background_tasks: Ba
         background_tasks.add_task(background_post_chat_tasks, user_id, conversation_id, user_message, full_assistant_response, new_db)
         break
 
+from app.services.insights.behavioral_analyzer import BehavioralAnalyzer
+from app.services.ai.prompts import GOLDEN_HOURS_SYSTEM_INSTRUCTION, GOLDEN_HOURS_USER_PROMPT
+
+@router.post("/analyze-patterns")
+async def analyze_patterns_endpoint(
+    current_user_id: str = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db)
+):
+    analyzer = BehavioralAnalyzer(db)
+    signals = await analyzer.collect_signals(current_user_id)
+
+    api_key = settings.GOOGLE_GENERATIVE_AI_API_KEY
+    if not api_key:
+        raise HTTPException(status_code=500, detail="Gemini API key is not configured")
+
+    from app.models.models import User
+    user_result = await db.execute(select(User).where(User.id == current_user_id))
+    user_record = user_result.scalars().first()
+    user_name = user_record.name if user_record and user_record.name else "ahí"
+
+    system_instruction = GOLDEN_HOURS_SYSTEM_INSTRUCTION
+
+    user_prompt = GOLDEN_HOURS_USER_PROMPT.format(
+        user_name=user_name,
+        hour_buckets=json.dumps(signals['hour_buckets'], indent=2),
+        task_stats=json.dumps(signals['task_stats'], indent=2),
+        session_stats=json.dumps(signals['session_stats'], indent=2),
+        top_productive_hours=signals['top_productive_hours'],
+        work_style_hint=signals['work_style_hint']
+    )
+
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={api_key}"
+    payload = {
+        "contents": [{
+            "role": "user",
+            "parts": [{"text": user_prompt}]
+        }],
+        "systemInstruction": {
+            "parts": [{"text": system_instruction}]
+        },
+        "generationConfig": {
+            "responseMimeType": "application/json"
+        }
+    }
+
+    async with httpx.AsyncClient() as client:
+        try:
+            r = await client.post(url, json=payload, timeout=30.0)
+            if r.status_code != 200:
+                raise HTTPException(status_code=502, detail=f"Gemini API returned code {r.status_code}")
+            res_json = r.json()
+            text_response = res_json["candidates"][0]["content"]["parts"][0]["text"]
+            
+            # Parse & return Gemini's structured response
+            analysis = json.loads(text_response.strip())
+            return {
+                "success": True,
+                "data": analysis
+            }
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Error analyzing patterns: {str(e)}")
+
 @router.post("/chat")
 async def chat_endpoint(
     body: ChatRequestSchema,
