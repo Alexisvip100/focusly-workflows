@@ -109,31 +109,39 @@ async def background_post_chat_tasks(user_id: str, conversation_id: str, user_me
     except Exception as e:
         print(f"Background AI task error: {e}")
 
-async def stream_gemini_and_save(payload: dict, model: str, background_tasks: BackgroundTasks, user_id: str, conversation_id: str, user_message: str, db_factory):
-    api_key = settings.GOOGLE_GENERATIVE_AI_API_KEY
-    if not api_key:
-        yield "Error: GOOGLE_GENERATIVE_AI_API_KEY is not set in backend settings."
-        return
-
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:streamGenerateContent?key={api_key}"
-    parser = GeminiStreamParser()
+async def stream_gemini_and_save(
+    messages: List[Dict[str, str]],
+    system_context: str,
+    model: str,
+    background_tasks: BackgroundTasks,
+    user_id: str,
+    conversation_id: str,
+    user_message: str,
+    db_factory
+):
+    url = f"{settings.FOCUSLY_AI_URL}/ai/chat"
+    payload = {
+        "messages": messages,
+        "system_context": system_context,
+        "model": model
+    }
     
     full_assistant_response = ""
     
     async with httpx.AsyncClient() as client:
         try:
+            # We connect to focusly-ai's /chat endpoint, which returns clean text/plain stream
             async with client.stream("POST", url, json=payload, timeout=60.0) as r:
                 if r.status_code != 200:
                     error_text = await r.aread()
-                    yield f"Error calling Gemini API: {r.status_code} - {error_text.decode('utf-8', errors='ignore')}"
+                    yield f"Error calling focusly-ai service: {r.status_code} - {error_text.decode('utf-8', errors='ignore')}"
                     return
                 
                 async for chunk in r.aiter_text():
-                    for text in parser.feed(chunk):
-                        full_assistant_response += text
-                        yield text
+                    full_assistant_response += chunk
+                    yield chunk
         except Exception as e:
-            yield f"\nStreaming error: {str(e)}"
+            yield f"\nStreaming error from focusly-ai: {str(e)}"
             
     # Enqueue background tasks with a fresh db session
     async for new_db in db_factory():
@@ -141,7 +149,6 @@ async def stream_gemini_and_save(payload: dict, model: str, background_tasks: Ba
         break
 
 from app.services.insights.behavioral_analyzer import BehavioralAnalyzer
-from app.services.ai.prompts import GOLDEN_HOURS_SYSTEM_INSTRUCTION, GOLDEN_HOURS_USER_PROMPT
 
 @router.post("/analyze-patterns")
 async def analyze_patterns_endpoint(
@@ -151,56 +158,29 @@ async def analyze_patterns_endpoint(
     analyzer = BehavioralAnalyzer(db)
     signals = await analyzer.collect_signals(current_user_id)
 
-    api_key = settings.GOOGLE_GENERATIVE_AI_API_KEY
-    if not api_key:
-        raise HTTPException(status_code=500, detail="Gemini API key is not configured")
-
     from app.models.models import User
     user_result = await db.execute(select(User).where(User.id == current_user_id))
     user_record = user_result.scalars().first()
     user_name = user_record.name if user_record and user_record.name else "ahí"
 
-    system_instruction = GOLDEN_HOURS_SYSTEM_INSTRUCTION
-
-    user_prompt = GOLDEN_HOURS_USER_PROMPT.format(
-        user_name=user_name,
-        hour_buckets=json.dumps(signals['hour_buckets'], indent=2),
-        task_stats=json.dumps(signals['task_stats'], indent=2),
-        session_stats=json.dumps(signals['session_stats'], indent=2),
-        top_productive_hours=signals['top_productive_hours'],
-        work_style_hint=signals['work_style_hint']
-    )
-
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={api_key}"
+    url = f"{settings.FOCUSLY_AI_URL}/ai/analyze-patterns"
     payload = {
-        "contents": [{
-            "role": "user",
-            "parts": [{"text": user_prompt}]
-        }],
-        "systemInstruction": {
-            "parts": [{"text": system_instruction}]
-        },
-        "generationConfig": {
-            "responseMimeType": "application/json"
-        }
+        "user_name": user_name,
+        "hour_buckets": signals['hour_buckets'],
+        "task_stats": signals['task_stats'],
+        "session_stats": signals['session_stats'],
+        "top_productive_hours": signals['top_productive_hours'],
+        "work_style_hint": signals['work_style_hint']
     }
 
     async with httpx.AsyncClient() as client:
         try:
             r = await client.post(url, json=payload, timeout=30.0)
             if r.status_code != 200:
-                raise HTTPException(status_code=502, detail=f"Gemini API returned code {r.status_code}")
-            res_json = r.json()
-            text_response = res_json["candidates"][0]["content"]["parts"][0]["text"]
-            
-            # Parse & return Gemini's structured response
-            analysis = json.loads(text_response.strip())
-            return {
-                "success": True,
-                "data": analysis
-            }
+                raise HTTPException(status_code=502, detail=f"focusly-ai service returned code {r.status_code}")
+            return r.json()
         except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Error analyzing patterns: {str(e)}")
+            raise HTTPException(status_code=500, detail=f"Error proxying patterns analysis to focusly-ai: {str(e)}")
 
 @router.post("/chat")
 async def chat_endpoint(
@@ -251,7 +231,6 @@ async def chat_endpoint(
 
     # 3. Router logic
     complexity = classify_query(latest_user_message)
-    # Default to flash if complex, flash-lite if simple
     selected_model = body.model or ("gemini-2.5-flash" if complexity == "complex" else "gemini-2.5-flash-lite")
 
     # 4. Context Builder
@@ -271,20 +250,20 @@ async def chat_endpoint(
             for link in links:
                 system_context += f"- [{link.get('title', 'Link')}]({link.get('url', '#')})\n"
                 
-    gemini_contents = [{
-        "role": "user",
-        "parts": [{"text": latest_user_message}]
-    }]
-        
-    payload = {
-        "contents": gemini_contents,
-        "systemInstruction": {
-            "parts": [{"text": system_context}]
-        }
-    }
+    # Prepare payload for focusly-ai endpoint
+    messages_payload = [{"role": m.role, "content": m.content} for m in body.messages]
     
     return StreamingResponse(
-        stream_gemini_and_save(payload, selected_model, background_tasks, current_user_id, conversation.id, latest_user_message, get_db),
+        stream_gemini_and_save(
+            messages_payload,
+            system_context,
+            selected_model,
+            background_tasks,
+            current_user_id,
+            conversation.id,
+            latest_user_message,
+            get_db
+        ),
         media_type="text/plain"
     )
 

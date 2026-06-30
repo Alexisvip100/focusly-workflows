@@ -19,5 +19,6 @@ class Settings:
     WEBHOOK_URL: str = os.getenv("WEBHOOK_URL", "http://localhost:3000")
     RESEND_API_KEY: str = os.getenv("RESEND_API_KEY", "")
     IS_PRODUCTION: bool = os.getenv("ENV", "development") == "production"
+    FOCUSLY_AI_URL: str = os.getenv("FOCUSLY_AI_URL", "http://localhost:8001")
 
 settings = Settings()
