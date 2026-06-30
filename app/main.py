@@ -16,6 +16,7 @@ from app.routes.users.users import router as users_router
 from app.routes.google_calendar.google_calendar import router as google_calendar_router
 from app.routes.time_blocks.time_blocks import router as time_blocks_router
 from app.routes.ai.ai import router as ai_router
+from app.routes.ai.planner import router as planner_router
 from app.services.notifications.task_notifier_service import run_task_notifier_loop
 
 
@@ -84,6 +85,7 @@ fastapi_app.include_router(users_router)
 fastapi_app.include_router(google_calendar_router)
 fastapi_app.include_router(time_blocks_router)
 fastapi_app.include_router(ai_router)
+fastapi_app.include_router(planner_router)
 
 # 4. GraphQL Setup with session management and auth context
 @fastapi_app.middleware("http")

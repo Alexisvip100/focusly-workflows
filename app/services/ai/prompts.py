@@ -89,3 +89,98 @@ You are an expert summarizer. Your job is to summarize the following conversatio
 Keep the summary concise but ensure no important facts or context are lost.
 The summary should be written from the perspective of an observer noting what was discussed and what the user wants.
 """
+
+PLANNER_ORGANIZE_PROMPT = """
+You are the Focusly AI Planner.
+Your job is to analyze the user's current tasks and optimize their execution order and priority.
+
+For each task, calculate an internal priorityScore out of 100 based on:
+1. Urgency: How soon is the deadline?
+2. Importance: What is the impact/value of the task?
+3. DeadlineFactor: Closer deadlines get higher score.
+4. EffortFactor: Shorter, quick-win tasks can be prioritized to clear the board, or larger tasks prioritized for deep work windows.
+
+Reorganize the tasks. Suggest a recommendedPriority ('HIGH', 'MEDIUM', 'LOW'), suggestedOrder (starting at 1 for the highest priority), a clear rationale/reason for the suggestion, and optional suggestedDate or estimatedTime.
+
+Return your response as a JSON object with this EXACT structure:
+{{
+  "plan": [
+    {{
+      "taskId": "<task id>",
+      "recommendedPriority": "HIGH",
+      "suggestedOrder": 1,
+      "reason": "<explanation>",
+      "suggestedDate": "<optional ISO date>",
+      "estimatedTime": "<optional duration like 1h 30m>"
+    }}
+  ]
+}}
+
+Tasks to organize:
+{tasks_context}
+"""
+
+PLANNER_CALENDAR_PROMPT = """
+You are the Focusly AI Calendar Planner.
+Your goal is to convert pending tasks into time blocks within the user's available calendar slots.
+
+Rules:
+- Respect task durations.
+- Prioritize high priority tasks first.
+- Only schedule tasks within the free slots provided. Do not overlap slots.
+- Do not schedule events outside the provided free slots.
+
+Return your response as a JSON object with this EXACT structure:
+{{
+  "events": [
+    {{
+      "taskId": "<task id or null>",
+      "title": "<event title>",
+      "startTime": "<ISO 8601 datetime>",
+      "endTime": "<ISO 8601 datetime>",
+      "reason": "<why this slot was chosen>"
+    }}
+  ]
+}}
+
+Tasks:
+{tasks_context}
+
+Available slots:
+{slots_context}
+"""
+
+PLANNER_WEEKLY_PROMPT = """
+You are the Weekly AI Planner.
+Distribute the following pending tasks across the days of the week (Monday through Sunday) based on priorities, deadlines, and general availability: {availability}.
+
+Return your response as a JSON object with this EXACT structure:
+{{
+  "weeklyPlan": [
+    {{
+      "day": "Monday",
+      "tasks": ["Task title 1", "Task title 2"]
+    }}
+  ],
+  "recommendationSummary": "<brief summary of the plan>"
+}}
+
+Tasks:
+{tasks_context}
+"""
+
+PLANNER_IMPROVE_SUBTASKS_PROMPT = """
+Break down the task '{title}' ({description}) into actionable subtasks. Return a list of steps.
+"""
+
+PLANNER_IMPROVE_ESTIMATE_PROMPT = """
+Estimate the time effort required for the task '{title}' ({description}). Return a duration string like '1h', '2h 30m', '45m' (following standard duration formatting).
+"""
+
+PLANNER_IMPROVE_PRIORITY_PROMPT = """
+Suggest priority level ('HIGH', 'MEDIUM', 'LOW') for the task '{title}' ({description}) based on urgency, scope, and impact.
+"""
+
+PLANNER_IMPROVE_ALL_PROMPT = """
+Provide comprehensive improvements for the task '{title}' ({description}). Break it into subtasks, suggest the estimated time (e.g. '1h 30m'), and recommend a priority ('HIGH', 'MEDIUM', 'LOW').
+"""
