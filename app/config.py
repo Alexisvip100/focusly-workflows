@@ -4,6 +4,16 @@ from dotenv import load_dotenv
 # Load .env file
 load_dotenv()
 
+# Read and normalize FOCUSLY_AI_URL at module level
+_raw_ai_url = os.getenv("FOCUSLY_AI_URL", "http://localhost:8001").strip().strip('"').strip("'")
+if not (_raw_ai_url.startswith("http://") or _raw_ai_url.startswith("https://")):
+    if any(h in _raw_ai_url for h in ["localhost", "127.0.0.1", "host.docker.internal"]):
+        _normalized_ai_url = f"http://{_raw_ai_url}"
+    else:
+        _normalized_ai_url = f"https://{_raw_ai_url}"
+else:
+    _normalized_ai_url = _raw_ai_url
+
 class Settings:
     _raw_db_url = os.getenv("DATABASE_URL", "postgresql+asyncpg://alexis@localhost:5432/focusly").strip()
     DATABASE_URL: str = (
@@ -19,15 +29,6 @@ class Settings:
     WEBHOOK_URL: str = os.getenv("WEBHOOK_URL", "http://localhost:3000")
     RESEND_API_KEY: str = os.getenv("RESEND_API_KEY", "")
     IS_PRODUCTION: bool = os.getenv("ENV", "development") == "production"
-    _raw_ai_url = os.getenv("FOCUSLY_AI_URL", "http://localhost:8001").strip().strip('"').strip("'")
-    
-    # Normalize URL protocol
-    if not (_raw_ai_url.startswith("http://") or _raw_ai_url.startswith("https://")):
-        if any(h in _raw_ai_url for h in ["localhost", "127.0.0.1", "host.docker.internal"]):
-            FOCUSLY_AI_URL = f"http://{_raw_ai_url}"
-        else:
-            FOCUSLY_AI_URL = f"https://{_raw_ai_url}"
-    else:
-        FOCUSLY_AI_URL = _raw_ai_url
+    FOCUSLY_AI_URL: str = _normalized_ai_url
 
 settings = Settings()
