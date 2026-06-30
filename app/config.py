@@ -18,7 +18,15 @@ class Settings:
     GOOGLE_GENERATIVE_AI_API_KEY: str = os.getenv("GOOGLE_GENERATIVE_AI_API_KEY", "")
     WEBHOOK_URL: str = os.getenv("WEBHOOK_URL", "http://localhost:3000")
     RESEND_API_KEY: str = os.getenv("RESEND_API_KEY", "")
-    IS_PRODUCTION: bool = os.getenv("ENV", "development") == "production"
-    FOCUSLY_AI_URL: str = os.getenv("FOCUSLY_AI_URL", "http://localhost:8001")
+    _raw_ai_url = os.getenv("FOCUSLY_AI_URL", "http://localhost:8001").strip().strip('"').strip("'")
+    
+    # Normalize URL protocol
+    if not (_raw_ai_url.startswith("http://") or _raw_ai_url.startswith("https://")):
+        if any(h in _raw_ai_url for h in ["localhost", "127.0.0.1", "host.docker.internal"]):
+            FOCUSLY_AI_URL = f"http://{_raw_ai_url}"
+        else:
+            FOCUSLY_AI_URL = f"https://{_raw_ai_url}"
+    else:
+        FOCUSLY_AI_URL = _raw_ai_url
 
 settings = Settings()
