@@ -14,7 +14,7 @@ async def build_context(user_id: str, conversation_id: str, query: str, db: Asyn
     # Fetch user profile to get their name
     user_res = await db.execute(select(User).filter(User.id == user_id))
     user = user_res.scalars().first()
-    user_name = user.fullName if user else "Usuario"
+    user_name = user.name if user else "Usuario"
     
     context = (
         f"{SYSTEM_PROMPT}\n\n"
