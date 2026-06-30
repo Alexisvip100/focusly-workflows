@@ -2,11 +2,13 @@
 Task Notifier Service
 ─────────────────────
 Polls the database every minute and emits WebSocket events to connected
-frontend clients when a task's deadline is approaching.
+frontend clients when a task is about to start on the calendar.
+
+Uses estimated_start_date when set, otherwise falls back to deadline.
 
 Two notification windows:
-  • "5-minute warning"  → fires when deadline is 4-6 min away  (notified flag)
-  • "1-minute warning"  → fires when deadline is 0-2 min away  (lastMinuteNotified flag)
+  • "5-minute warning"  → fires when start is 4-6 min away  (notified flag)
+  • "1-minute warning"  → fires when start is 0-2 min away  (lastMinuteNotified flag)
 
 Socket event emitted: "task_upcoming"
 Payload: { taskId, title, deadline, minutesLeft, type: "5min" | "1min" }
@@ -16,8 +18,7 @@ import asyncio
 import logging
 from datetime import datetime, timedelta
 
-from sqlalchemy import select, update
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import func, or_, select, update
 
 from app.database import async_session_local
 from app.models.models import Task, User
@@ -25,41 +26,46 @@ from app.sockets.realtime import sio
 
 logger = logging.getLogger(__name__)
 
+_ACTIVE_STATUSES = ["completed", "cancelled", "Completed"]
+_notification_time = func.coalesce(Task.estimated_start_date, Task.deadline)
+
+
+def _task_start_at(task: Task) -> datetime:
+    return task.estimated_start_date or task.deadline
+
 
 async def _check_and_notify_once() -> None:
     """Run a single notification sweep across all active users and tasks."""
     now = datetime.utcnow()
-    five_min_from_now = now + timedelta(minutes=5)
-    one_min_from_now  = now + timedelta(minutes=1)
 
     async with async_session_local() as db:
         # ── 5-minute warning ──────────────────────────────────────────────
-        # Tasks whose deadline falls in [now+4min, now+6min] and haven't been
-        # notified yet for the 5-min window.
+        # Tasks whose start time falls in [now+4min, now+6min] and haven't
+        # been notified yet for the 5-min window.
         result = await db.execute(
             select(Task, User)
             .join(User, User.id == Task.userId)
             .where(
                 Task.deletedAt == None,
-                Task.status.notin_(["completed", "cancelled", "Completed"]),
-                Task.notified == False,
-                Task.deadline >= now + timedelta(minutes=4),
-                Task.deadline <= now + timedelta(minutes=6),
+                Task.status.notin_(_ACTIVE_STATUSES),
+                or_(Task.notified == False, Task.notified.is_(None)),
+                _notification_time >= now + timedelta(minutes=4),
+                _notification_time <= now + timedelta(minutes=6),
             )
         )
         tasks_5min = result.all()
 
         for task, user in tasks_5min:
-            minutes_left = int((task.deadline - now).total_seconds() / 60)
+            start_at = _task_start_at(task)
+            minutes_left = int((start_at - now).total_seconds() / 60)
             await _emit_notification(
                 user_id=task.userId,
                 task_id=task.id,
                 title=task.title,
-                deadline=task.deadline,
+                start_at=start_at,
                 minutes_left=minutes_left,
                 notif_type="5min",
             )
-            # Mark as notified so we don't fire again
             await db.execute(
                 update(Task).where(Task.id == task.id).values(notified=True)
             )
@@ -74,21 +80,22 @@ async def _check_and_notify_once() -> None:
             .join(User, User.id == Task.userId)
             .where(
                 Task.deletedAt == None,
-                Task.status.notin_(["completed", "cancelled", "Completed"]),
-                Task.lastMinuteNotified == False,
-                Task.deadline >= now,
-                Task.deadline <= one_min_from_now + timedelta(minutes=1),
+                Task.status.notin_(_ACTIVE_STATUSES),
+                or_(Task.lastMinuteNotified == False, Task.lastMinuteNotified.is_(None)),
+                _notification_time >= now,
+                _notification_time <= now + timedelta(minutes=2),
             )
         )
         tasks_1min = result.all()
 
         for task, user in tasks_1min:
-            minutes_left = max(0, int((task.deadline - now).total_seconds() / 60))
+            start_at = _task_start_at(task)
+            minutes_left = max(0, int((start_at - now).total_seconds() / 60))
             await _emit_notification(
                 user_id=task.userId,
                 task_id=task.id,
                 title=task.title,
-                deadline=task.deadline,
+                start_at=start_at,
                 minutes_left=minutes_left,
                 notif_type="1min",
             )
@@ -107,7 +114,7 @@ async def _emit_notification(
     user_id: str,
     task_id: str,
     title: str,
-    deadline: datetime,
+    start_at: datetime,
     minutes_left: int,
     notif_type: str,
 ) -> None:
@@ -116,7 +123,7 @@ async def _emit_notification(
     payload = {
         "taskId": task_id,
         "title": title,
-        "deadline": deadline.isoformat() + "Z",
+        "deadline": start_at.isoformat() + "Z",
         "minutesLeft": minutes_left,
         "type": notif_type,
     }

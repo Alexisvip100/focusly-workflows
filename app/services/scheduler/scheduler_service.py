@@ -539,7 +539,11 @@ class SchedulerService:
                 task_res = await db.execute(select(Task).where(Task.id == t_id))
                 t_obj = task_res.scalars().first()
                 if t_obj:
-                    t_obj.estimated_start_date = first_wb["start"]
+                    new_start = first_wb["start"]
+                    if t_obj.estimated_start_date != new_start:
+                        t_obj.notified = False
+                        t_obj.lastMinuteNotified = False
+                    t_obj.estimated_start_date = new_start
                     t_obj.estimated_end_date = last_wb["end"]
                     t_obj.status = "Scheduled"
                     t_obj.updatedAt = datetime.utcnow()

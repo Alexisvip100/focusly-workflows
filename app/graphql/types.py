@@ -193,6 +193,22 @@ class TimeDistribution:
     color: str
 
 @strawberry.type
+class HeatmapCompletedTask:
+    id: str
+    title: str
+    completed_at: Optional[str] = strawberry.field(name="completedAt", default=None)
+    category: Optional[str] = None
+    real_timer: Optional[int] = strawberry.field(name="realTimer", default=None)
+
+@strawberry.type
+class HeatmapCell:
+    key: str
+    label: str
+    intensity: int
+    count: int
+    tasks: List[HeatmapCompletedTask]
+
+@strawberry.type
 class InsightsResponse:
     total_focus_hours: StatCardValue = strawberry.field(name="totalFocusHours")
     task_completion: StatCardValue = strawberry.field(name="taskCompletion")
@@ -203,6 +219,7 @@ class InsightsResponse:
     time_distribution: List[TimeDistribution] = strawberry.field(name="timeDistribution")
     heatmap: List[int]
     heatmap_labels: Optional[List[str]] = strawberry.field(name="heatmapLabels", default=None)
+    heatmap_cells: List[HeatmapCell] = strawberry.field(name="heatmapCells", default_factory=list)
 
 # Inputs
 

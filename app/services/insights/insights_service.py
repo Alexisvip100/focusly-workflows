@@ -15,7 +15,7 @@ class InsightsService:
         self.focus_sessions_service = focus_sessions_service
         self.users_service = users_service
 
-    async def getInsights(self, user_id: str, filter_type: str) -> Dict[str, Any]:
+    async def getInsights(self, user_id: str, filter_type: str, timezone_offset_minutes: int = 0) -> Dict[str, Any]:
         # 1. Fetch data
         if self.tasks_service:
             all_tasks = await self.tasks_service.find_all_by_user(user_id)
@@ -36,19 +36,19 @@ class InsightsService:
             user = result.scalars().first()
 
         # 2. Determine Date Range based on filter
-        now = datetime.utcnow()
+        # timezone_offset_minutes: JS getTimezoneOffset() value (e.g. 360 for UTC-6)
+        # Subtract offset to convert UTC → local time
+        now = datetime.utcnow() - timedelta(minutes=timezone_offset_minutes)
         start_date = datetime(now.year, now.month, now.day)
-        
+
         if filter_type == "Daily":
-            pass # Keep start_date as beginning of today
+            pass  # Keep start_date as beginning of today
         elif filter_type == "Weekly":
-            # Monday is 0, Sunday is 6
             day_of_week = start_date.weekday()
             start_date = start_date - timedelta(days=day_of_week)
         elif filter_type == "Monthly":
             start_date = datetime(start_date.year, start_date.month, 1)
         else:
-            # Default to Weekly
             day_of_week = start_date.weekday()
             start_date = start_date - timedelta(days=day_of_week)
 
@@ -97,8 +97,8 @@ class InsightsService:
         break_minutes = self.extract_break_minutes(break_stats["value"])
         time_distribution = self.calculate_time_distribution(filtered_tasks, break_minutes)
 
-        # 7. Heatmap
-        heatmap_data, heatmap_labels = self.calculate_heatmap(all_focus_sessions, filter_type)
+        # 7. Activity Map (completed tasks)
+        heatmap_data, heatmap_labels, heatmap_cells = self.calculate_activity_map(all_tasks, filter_type, timezone_offset_minutes)
 
         return {
             "totalFocusHours": total_focus_hours,
@@ -109,20 +109,194 @@ class InsightsService:
             "productivityTrends": productivity_trends,
             "timeDistribution": time_distribution,
             "heatmap": heatmap_data,
-            "heatmapLabels": heatmap_labels
+            "heatmapLabels": heatmap_labels,
+            "heatmapCells": heatmap_cells,
         }
 
     def _map_task_to_dict(self, t: Task) -> Dict[str, Any]:
         return {
             "id": t.id,
+            "title": t.title,
             "status": t.status,
             "estimateTimer": t.estimateTimer,
             "realTimer": t.realTimer,
             "deadline": t.deadline.isoformat() if t.deadline else None,
+            "completedAt": t.completedAt.isoformat() if t.completedAt else None,
             "createdAt": t.createdAt.isoformat() if t.createdAt else None,
             "updatedAt": t.updatedAt.isoformat() if t.updatedAt else None,
             "category": t.category
         }
+
+    def _get_completion_datetime(self, task: Dict[str, Any]) -> Optional[datetime]:
+        if task.get("status") != "Done":
+            return None
+        for field in ("completedAt", "updatedAt", "createdAt"):
+            val = task.get(field)
+            if val:
+                return datetime.fromisoformat(val.replace("Z", "+00:00")).replace(tzinfo=None)
+        return None
+
+    def _intensity_from_count(self, count: int, filter_type: str) -> int:
+        if count == 0:
+            return 0
+        if filter_type == "Monthly":
+            if count == 1:
+                return 1
+            if count <= 4:
+                return 2
+            return 3
+        if count == 1:
+            return 1
+        if count <= 3:
+            return 2
+        if count <= 5:
+            return 3
+        if count <= 8:
+            return 4
+        return 5
+
+    def _format_hour_label(self, hour: int) -> str:
+        suffix = "AM" if hour < 12 else "PM"
+        display = hour % 12
+        display = 12 if display == 0 else display
+        return f"{display} {suffix}"
+
+    def calculate_activity_map(
+        self,
+        tasks: List[Dict[str, Any]],
+        filter_type: str,
+        timezone_offset_minutes: int = 0,
+    ) -> Tuple[List[int], List[str], List[Dict[str, Any]]]:
+        # Convert UTC now to user's local time
+        now = datetime.utcnow() - timedelta(minutes=timezone_offset_minutes)
+        completed_tasks = [t for t in tasks if self._get_completion_datetime(t) is not None]
+
+        if filter_type == "Daily":
+            return self._build_daily_activity_map(completed_tasks, now, timezone_offset_minutes)
+        if filter_type == "Monthly":
+            return self._build_monthly_activity_map(completed_tasks, now, timezone_offset_minutes)
+        return self._build_weekly_activity_map(completed_tasks, now, timezone_offset_minutes)
+
+    def _build_task_entry(self, task: Dict[str, Any]) -> Dict[str, Any]:
+        completed_at = self._get_completion_datetime(task)
+        return {
+            "id": task.get("id", ""),
+            "title": task.get("title") or "Untitled",
+            "completedAt": completed_at.isoformat() if completed_at else None,
+            "category": task.get("category"),
+            "realTimer": task.get("realTimer"),
+        }
+
+    def _build_daily_activity_map(
+        self,
+        completed_tasks: List[Dict[str, Any]],
+        now: datetime,
+        timezone_offset_minutes: int = 0,
+    ) -> Tuple[List[int], List[str], List[Dict[str, Any]]]:
+        today = now.date()
+        bucket: Dict[int, List[Dict[str, Any]]] = {h: [] for h in range(24)}
+
+        for task in completed_tasks:
+            completed_at = self._get_completion_datetime(task)
+            if completed_at:
+                # Convert task's UTC completed_at to user local time
+                local_completed_at = completed_at - timedelta(minutes=timezone_offset_minutes)
+                if local_completed_at.date() == today:
+                    bucket[local_completed_at.hour].append(self._build_task_entry(task))
+
+        cells = []
+        intensities = []
+        for hour in range(24):
+            tasks_in_hour = bucket[hour]
+            count = len(tasks_in_hour)
+            intensity = self._intensity_from_count(count, "Daily")
+            intensities.append(intensity)
+            cells.append({
+                "key": str(hour),
+                "label": self._format_hour_label(hour),
+                "intensity": intensity,
+                "count": count,
+                "tasks": tasks_in_hour,
+            })
+
+        return intensities, ["12 AM", "6 AM", "12 PM", "6 PM", "11 PM"], cells
+
+    def _build_weekly_activity_map(
+        self,
+        completed_tasks: List[Dict[str, Any]],
+        now: datetime,
+        timezone_offset_minutes: int = 0,
+    ) -> Tuple[List[int], List[str], List[Dict[str, Any]]]:
+        day_of_week = now.weekday()
+        monday = (now - timedelta(days=day_of_week)).date()
+        day_names = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"]
+        full_day_names = [
+            "Monday", "Tuesday", "Wednesday", "Thursday",
+            "Friday", "Saturday", "Sunday",
+        ]
+        days = [monday + timedelta(days=i) for i in range(7)]
+        bucket: Dict[str, List[Dict[str, Any]]] = {d.isoformat(): [] for d in days}
+
+        for task in completed_tasks:
+            completed_at = self._get_completion_datetime(task)
+            if completed_at:
+                local_completed_at = completed_at - timedelta(minutes=timezone_offset_minutes)
+                date_key = local_completed_at.date().isoformat()
+                if date_key in bucket:
+                    bucket[date_key].append(self._build_task_entry(task))
+
+        cells = []
+        intensities = []
+        for i, day in enumerate(days):
+            date_key = day.isoformat()
+            tasks_on_day = bucket[date_key]
+            count = len(tasks_on_day)
+            intensity = self._intensity_from_count(count, "Weekly")
+            intensities.append(intensity)
+            cells.append({
+                "key": date_key,
+                "label": f"{full_day_names[i]}, {day.strftime('%b %d')}",
+                "intensity": intensity,
+                "count": count,
+                "tasks": tasks_on_day,
+            })
+
+        return intensities, day_names, cells
+
+    def _build_monthly_activity_map(
+        self,
+        completed_tasks: List[Dict[str, Any]],
+        now: datetime,
+        timezone_offset_minutes: int = 0,
+    ) -> Tuple[List[int], List[str], List[Dict[str, Any]]]:
+        month_days = [(now - timedelta(days=i)).date() for i in range(29, -1, -1)]
+        bucket: Dict[str, List[Dict[str, Any]]] = {d.isoformat(): [] for d in month_days}
+
+        for task in completed_tasks:
+            completed_at = self._get_completion_datetime(task)
+            if completed_at:
+                local_completed_at = completed_at - timedelta(minutes=timezone_offset_minutes)
+                date_key = local_completed_at.date().isoformat()
+                if date_key in bucket:
+                    bucket[date_key].append(self._build_task_entry(task))
+
+        cells = []
+        intensities = []
+        for day in month_days:
+            date_key = day.isoformat()
+            tasks_on_day = bucket[date_key]
+            count = len(tasks_on_day)
+            intensity = self._intensity_from_count(count, "Monthly")
+            intensities.append(intensity)
+            cells.append({
+                "key": date_key,
+                "label": day.strftime("%A, %b %d"),
+                "intensity": intensity,
+                "count": count,
+                "tasks": tasks_on_day,
+            })
+
+        return intensities, ["Start", "Middle", "End"], cells
 
     def extract_break_minutes(self, break_value: str) -> int:
         match = re.match(r"(\d+)h\s+(\d+)m", break_value)
@@ -417,80 +591,3 @@ class InsightsService:
             })
         return distribution
 
-    def calculate_heatmap(self, sessions: List[FocusSession], filter_type: str) -> Tuple[List[int], List[str]]:
-        now = datetime.utcnow()
-        intensity_map = {}
-
-        if filter_type == "Daily":
-            today_str = now.date().isoformat()
-            for s in sessions:
-                s_dt = s.startedAt
-                if isinstance(s_dt, str):
-                    s_dt = datetime.fromisoformat(s_dt.replace("Z", "+00:00"))
-                if s_dt.date().isoformat() == today_str:
-                    h_key = str(s_dt.hour)
-                    intensity_map[h_key] = intensity_map.get(h_key, 0) + (s.durationMinutes or 0)
-
-            data = []
-            for h in range(24):
-                mins = intensity_map.get(str(h), 0)
-                if mins == 0: data.append(0)
-                elif mins < 15: data.append(1)
-                elif mins < 30: data.append(2)
-                elif mins < 45: data.append(3)
-                elif mins < 60: data.append(4)
-                else: data.append(5)
-
-            return data, ["12 AM", "6 AM", "12 PM", "6 PM", "11 PM"]
-
-        if filter_type == "Weekly":
-            day_of_week = now.weekday()
-            monday = (now - timedelta(days=day_of_week)).date()
-            days = []
-            for i in range(7):
-                d = monday + timedelta(days=i)
-                days.append(d.isoformat())
-
-            for s in sessions:
-                s_dt = s.startedAt
-                if isinstance(s_dt, str):
-                    s_dt = datetime.fromisoformat(s_dt.replace("Z", "+00:00"))
-                date_key = s_dt.date().isoformat()
-                if date_key in days:
-                    intensity_map[date_key] = intensity_map.get(date_key, 0) + (s.durationMinutes or 0)
-
-            data = []
-            for day in days:
-                mins = intensity_map.get(day, 0)
-                if mins == 0: data.append(0)
-                elif mins < 60: data.append(1)
-                elif mins < 120: data.append(2)
-                elif mins < 180: data.append(3)
-                elif mins < 240: data.append(4)
-                else: data.append(5)
-
-            return data, ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"]
-
-        # Monthly
-        month_days = []
-        for i in range(29, -1, -1):
-            d = now - timedelta(days=i)
-            month_days.append(d.date().isoformat())
-
-        for s in sessions:
-            s_dt = s.startedAt
-            if isinstance(s_dt, str):
-                s_dt = datetime.fromisoformat(s_dt.replace("Z", "+00:00"))
-            date_key = s_dt.date().isoformat()
-            if date_key in month_days:
-                intensity_map[date_key] = intensity_map.get(date_key, 0) + (s.durationMinutes or 0)
-
-        data = []
-        for day in month_days:
-            mins = intensity_map.get(day, 0)
-            if mins == 0: data.append(0)
-            elif mins < 60: data.append(1)
-            elif mins < 180: data.append(2)
-            else: data.append(3)
-
-        return data, ["Start", "Middle", "End"]

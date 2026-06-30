@@ -14,7 +14,8 @@ class InsightsQuery:
         self,
         info,
         user_id: str,
-        filter: Optional[str] = "Weekly"
+        filter: Optional[str] = "Weekly",
+        timezone_offset: Optional[int] = 0,
     ) -> types.InsightsResponse:
         get_user_id(info)
         db = info.context["db"]
@@ -34,7 +35,7 @@ class InsightsQuery:
             users_service=users_serv
         )
         
-        res = await insights_serv.getInsights(user_id, filter or "Weekly")
+        res = await insights_serv.getInsights(user_id, filter or "Weekly", timezone_offset or 0)
         
         # Map ProductivityTrend
         trends = []
@@ -83,5 +84,24 @@ class InsightsQuery:
             productivity_trends=trends,
             time_distribution=dist,
             heatmap=res["heatmap"],
-            heatmap_labels=res["heatmapLabels"]
+            heatmap_labels=res["heatmapLabels"],
+            heatmap_cells=[
+                types.HeatmapCell(
+                    key=cell["key"],
+                    label=cell["label"],
+                    intensity=cell["intensity"],
+                    count=cell["count"],
+                    tasks=[
+                        types.HeatmapCompletedTask(
+                            id=t["id"],
+                            title=t["title"],
+                            completed_at=t.get("completedAt"),
+                            category=t.get("category"),
+                            real_timer=t.get("realTimer"),
+                        )
+                        for t in cell["tasks"]
+                    ],
+                )
+                for cell in res.get("heatmapCells", [])
+            ],
         )

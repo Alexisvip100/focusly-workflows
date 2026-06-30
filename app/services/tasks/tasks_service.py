@@ -263,10 +263,18 @@ class TasksService:
                     if current_val != dt_val:
                         setattr(task, key, dt_val)
                         has_changes = True
+                        if key == "estimated_start_date":
+                            task.notified = False
+                            task.lastMinuteNotified = False
                 else:
                     if current_val != value:
                         setattr(task, key, value)
                         has_changes = True
+                        if key == "status":
+                            if value == "Done" and not task.completedAt:
+                                task.completedAt = datetime.utcnow()
+                            elif value != "Done" and task.completedAt:
+                                task.completedAt = None
 
         if has_changes:
             task.updatedAt = datetime.utcnow()
