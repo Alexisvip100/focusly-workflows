@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy import delete, and_, or_
 
-from app.models.models import Task, User, Workspace
+from app.models import Task, User, Workspace
 from app.services.scheduler.scheduler_service import SchedulerService
 from app.schemas.tasks import TaskCreateSchema
 
@@ -67,7 +67,6 @@ class TasksService:
             )
             existing = result.scalars().first()
             if existing:
-                print(f"[UPSERT] Task with google_event_id {google_event_id} already exists. Updating instead.")
                 return await self.update(existing.id, task_data, skip_scheduling=skip_scheduling, skip_google_sync=skip_google_sync)
 
         # 2. Sync to Google Calendar
@@ -84,7 +83,7 @@ class TasksService:
                         task_data["google_event_id"] = google_event["id"]
                         task_data["task_type"] = "GoogleTask"
             except Exception as e:
-                print("Error creating Google Calendar event on task creation:", e)
+                pass
 
         task_id = task_data.get("id") or str(uuid.uuid4())
         now = datetime.utcnow()
@@ -284,12 +283,11 @@ class TasksService:
                 try:
                     updated_task_dict = self._map_to_dict(task)
                     google_event_body = self._map_task_to_google_event(updated_task_dict)
-                    print(f"[GOOGLE CAL] Syncing update of GoogleTask {task.id} (Event: {task.google_event_id}) to Google Calendar...")
                     await self.google_calendar_service.patch_event(
                         task.userId, task.google_event_id, google_event_body
                     )
                 except Exception as e:
-                    print(f"Error syncing task update to Google Calendar for task {task.id}: {e}")
+                    pass
 
             await self.db.commit()
             await self.db.refresh(task)
@@ -316,7 +314,7 @@ class TasksService:
                 try:
                     await self.google_calendar_service.delete_event(task.userId, task.google_event_id)
                 except Exception as e:
-                    print("Failed to delete synced Google Calendar event:", e)
+                    pass
 
         # Release task references from workspaces
         workspaces_res = await self.db.execute(select(Workspace).where(Workspace.taskId == id))

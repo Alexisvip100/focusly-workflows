@@ -45,5 +45,4 @@ class AuthMutation:
                 google_access_token=result.get("google_access_token")
             )
         except Exception as e:
-            print("GraphQL googleLogin error:", e)
             raise Exception(f"Google login failed: {str(e)}")

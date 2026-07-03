@@ -1,6 +1,6 @@
 from sqlalchemy.future import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.models.models import Conversation, Message, ProjectGroup, Workspace, Task, User
+from app.models import Conversation, Message, ProjectGroup, Workspace, Task, User
 from .prompts import SYSTEM_PROMPT
 from .memory import search_memories
 
@@ -106,7 +106,7 @@ async def build_context(user_id: str, conversation_id: str, query: str, db: Asyn
                     context += f"  * {t.get('label')}: Planned {t.get('planned')}h, Actual {t.get('actual')}h\n"
             context += "\n"
     except Exception as e:
-        print(f"[INSIGHTS CONTEXT ERROR] {e}")
+        pass
 
     # 4. Fetch conversation summary
     conv_result = await db.execute(select(Conversation).filter(Conversation.id == conversation_id))

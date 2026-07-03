@@ -5,7 +5,7 @@ import numpy as np
 from sqlalchemy.future import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from google import genai
-from app.models.models import UserMemory
+from app.models import UserMemory
 from .embeddings import generate_embedding
 from .prompts import MEMORY_EXTRACTION_PROMPT
 
@@ -95,4 +95,4 @@ async def extract_and_save_memory(user_id: str, message: str, db: AsyncSession):
             
         await db.commit()
     except Exception as e:
-        print(f"Memory extraction error: {e}")
+        pass

@@ -7,7 +7,7 @@ from app.database import get_db
 from app.routes.common import get_current_user_id
 from app.services.google_calendar.google_calendar_service import GoogleCalendarService
 from sqlalchemy import select
-from app.models.models import User
+from app.models import User
 from app.sockets.realtime import realtime_gateway
 
 router = APIRouter(prefix="/google-calendar", tags=["google-calendar"])
@@ -80,7 +80,6 @@ async def get_events(
 
         return mapped_events
     except Exception as e:
-        print("Error getting Google Calendar events:", e)
         raise HTTPException(status_code=500, detail="Failed to retrieve Google Calendar events")
 
 @router.post("/events")
@@ -98,7 +97,6 @@ async def create_event(
         await realtime_gateway.emitScheduleUpdate(user_id, {"source": "google_calendar_create"})
         return google_event
     except Exception as e:
-        print("Error creating Google Calendar event:", e)
         raise HTTPException(status_code=500, detail="Failed to create Google Calendar event")
 
 @router.patch("/events/{id}")
@@ -117,7 +115,6 @@ async def patch_event(
         await realtime_gateway.emitScheduleUpdate(user_id, {"source": "google_calendar_patch"})
         return google_event
     except Exception as e:
-        print("Error patching Google Calendar event:", e)
         raise HTTPException(status_code=500, detail="Failed to patch Google Calendar event")
 
 @router.delete("/events/{id}")
@@ -135,7 +132,6 @@ async def remove_event(
         await realtime_gateway.emitScheduleUpdate(user_id, {"source": "google_calendar_delete"})
         return {"success": True}
     except Exception as e:
-        print("Error deleting Google Calendar event:", e)
         raise HTTPException(status_code=500, detail="Failed to delete Google Calendar event")
 
 @router.post("/webhook")
@@ -147,15 +143,11 @@ async def handle_google_webhook(
     x_goog_resource_state: str = Header(None, alias="x-goog-resource-state"),
     db: AsyncSession = Depends(get_db)
 ):
-    print(f"Google Webhook received for user: {x_goog_channel_token}, state: {x_goog_resource_state}, channelId: {x_goog_channel_id}")
-
     if x_goog_resource_state == "sync":
-        print(f"Channel {x_goog_channel_id} successfully synchronized.")
         return {"status": "synchronized"}
 
     if x_goog_resource_state == "exists":
         userId = x_goog_channel_token
-        print(f"Triggering incremental sync for user: {userId}")
         
         # Async background sync to prevent Google timeout
         async def run_sync_bg():
@@ -185,9 +177,8 @@ async def handle_google_webhook(
                     await gc_service_bg.sync_calendar(userId)
                     # Notify frontend via WebSocket so it re-fetches Google events in real-time
                     await realtime_gateway.emitScheduleUpdate(userId, {"source": "google_calendar_webhook"})
-                    print(f"[WS] Emitted schedule_updated to user {userId} after Google webhook sync")
                 except Exception as err:
-                    print(f"Failed to execute incremental sync for user {userId} via webhook: {err}")
+                    pass
 
         # Start background task
         asyncio.create_task(run_sync_bg())

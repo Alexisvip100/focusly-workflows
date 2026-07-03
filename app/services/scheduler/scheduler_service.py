@@ -5,7 +5,7 @@ from typing import Dict, Any, List, Optional, Tuple
 from sqlalchemy import select, delete, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.models import User, Task, TimeBlock
+from app.models import User, Task, TimeBlock
 
 class SchedulerService:
     async def schedule(
@@ -17,7 +17,6 @@ class SchedulerService:
         constraints: Dict[str, Any],
         existing_work_blocks: Optional[List[Dict[str, Any]]] = None
     ) -> Dict[str, Any]:
-        print(f"[SCHEDULER] Starting scheduling for user: {user_id}")
         scheduled_at = datetime.utcnow()
         existing_work_blocks = existing_work_blocks or []
 
@@ -388,13 +387,10 @@ class SchedulerService:
         return min(total_scheduled / total_available, 1.0)
 
     async def run_scheduling_pipeline(self, user_id: str, db: AsyncSession, socket_server=None) -> None:
-        print(f"[SCHEDULER] Running Motion-style scheduler pipeline for user: {user_id}")
-        
         # 1. Fetch user settings
         result = await db.execute(select(User).where(User.id == user_id))
         user = result.scalars().first()
         if not user:
-            print(f"[SCHEDULER] User {user_id} not found. Aborting.")
             return
 
         settings_dict = user.settings or {}
@@ -559,6 +555,5 @@ class SchedulerService:
                     room=f"user_{user_id}",
                     namespace="/realtime"
                 )
-                print(f"[SCHEDULER] Emitted schedule_updated to room user_{user_id}")
             except Exception as e:
-                print("Error emitting schedule_updated socket event:", e)
+                pass

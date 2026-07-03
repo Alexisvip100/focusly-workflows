@@ -10,7 +10,7 @@ from sqlalchemy.future import select
 from sqlalchemy import delete
 
 from app.config import settings
-from app.models.models import User, Task
+from app.models import User, Task
 
 class GoogleCalendarService:
     def __init__(self, db: AsyncSession, auth_service=None, tasks_service=None, scheduler_service=None):
@@ -94,7 +94,6 @@ class GoogleCalendarService:
         if not self.auth_service:
             raise ValueError("AuthService is required to delete event")
             
-        print(f"[GOOGLE CAL] Deleting event {event_id} for user {user_id}")
         token_info = await self.auth_service.refresh_google_access_token(user_id)
         access_token = token_info.get("access_token")
 
@@ -102,11 +101,9 @@ class GoogleCalendarService:
         async with httpx.AsyncClient() as client:
             res = await client.delete(url, headers={"Authorization": f"Bearer {access_token}"})
             if res.status_code != 200 and res.status_code != 204 and res.status_code != 404:
-                print(f"[GOOGLE CAL] Delete failed ({res.status_code}): {res.text}")
                 raise Exception("Failed to delete Google event")
 
     async def sync_calendar(self, user_id: str) -> None:
-        print(f"Starting syncCalendar for user: {user_id}")
         if not self.auth_service or not self.tasks_service or not self.scheduler_service:
             raise ValueError("Required services not injected in GoogleCalendarService")
 
@@ -130,7 +127,6 @@ class GoogleCalendarService:
         deleted_count = delete_result.rowcount
         if deleted_count > 0:
             await self.db.commit()
-            print(f"[SYNC] Deleted {deleted_count} legacy Google tasks from database for user {user_id}")
             has_changes = True
 
         sync_token = user.googleCalendarSyncToken
@@ -148,7 +144,6 @@ class GoogleCalendarService:
         # If we have a sync token but no local tasks, it indicates a database reset
         # or out-of-sync state. Force a full sync by clearing the sync token.
         if sync_token and not existing_google_tasks:
-            print(f"Sync token exists but 0 GoogleTasks found in DB for user {user_id}. Clearing sync token to force a full sync.")
             sync_token = None
             user.googleCalendarSyncToken = None
             await self.db.commit()
@@ -178,7 +173,6 @@ class GoogleCalendarService:
                     res = await client.get(url, headers={"Authorization": f"Bearer {access_token}"})
 
                     if res.status_code == 410:
-                        print(f"Sync token expired for user {user_id}. Retrying with full sync.")
                         user.googleCalendarSyncToken = None
                         await self.db.commit()
                         sync_token = None
@@ -186,7 +180,6 @@ class GoogleCalendarService:
                         continue
 
                     if res.status_code != 200:
-                        print(f"Error response from Google Calendar API: {res.text}")
                         raise Exception("Failed to fetch from Google Calendar")
 
                     data = res.json()
@@ -200,12 +193,10 @@ class GoogleCalendarService:
                     if not next_page_token:
                         break
 
-                print(f"Fetched {len(items_to_process)} events/changes to process for user {user_id}")
                 for item in items_to_process:
                     event_id = item.get("id") or ""
                     
                     if item.get("status") == "cancelled":
-                        print(f"Sync Cancelled/Deleted Event: {event_id} for user {user_id}")
                         # Find existing task
                         result_tasks = await self.db.execute(
                             select(Task).where(
@@ -221,7 +212,6 @@ class GoogleCalendarService:
                             has_changes = True
                     else:
                         summary = item.get("summary") or "Sin título"
-                        print(f"Sync Active/Updated Event: {event_id} - \"{summary}\"")
                         
                         # Check if this event already exists in DB
                         existing_result = await self.db.execute(
@@ -233,7 +223,6 @@ class GoogleCalendarService:
                         )
                         existing_task = existing_result.scalars().first()
                         if not existing_task:
-                            print(f"[SYNC] Skipping creation of task for google event {event_id} because it only exists in Google Calendar.")
                             continue
 
                         processed = self._process_google_event(item, user_email=user.email)
@@ -261,11 +250,6 @@ class GoogleCalendarService:
                                 # it means WE triggered this change; skip date overwrite.
                                 if db_updated >= google_updated - timedelta(seconds=2):
                                     preserve_dates = True
-                                    print(
-                                        f"[SYNC] Preserving local dates for event {event_id}: "
-                                        f"DB updated={db_updated.isoformat()}, "
-                                        f"Google updated={google_updated.isoformat()}"
-                                    )
                         
                         task_data = {
                             "userId": user_id,
@@ -301,20 +285,15 @@ class GoogleCalendarService:
                 if new_sync_token:
                     user.googleCalendarSyncToken = new_sync_token
                     await self.db.commit()
-                    print(f"Updated syncToken to: {new_sync_token} for user {user_id}")
 
                 if has_changes:
-                    print(f"Sync Calendar detected changes. Running scheduler for user: {user_id}")
                     # In python tasks service, scheduler pipeline uses the socket server we injected or default
                     await self.scheduler_service.run_scheduling_pipeline(user_id, self.db, self.tasks_service.socket_server)
-                else:
-                    print(f"Sync Calendar detected no actual changes for user: {user_id}. Skipping scheduler.")
 
                 # Register push watch
                 await self.watch_calendar(user_id)
 
             except Exception as error:
-                print(f"Error in syncCalendar: {error}")
                 raise error
 
     async def watch_calendar(self, user_id: str) -> None:
@@ -329,21 +308,19 @@ class GoogleCalendarService:
 
             # Check if valid for next 24 hours
             if expiration and expiration - now > 24 * 60 * 60 * 1000:
-                print(f"Watch channel for user {user_id} is still valid. Skipping setup.")
                 return
 
             if user.googleChannelId and user.googleResourceId:
                 try:
                     await self.stop_watching_calendar(user_id)
                 except Exception as e:
-                    print(f"Failed to stop old watch channel: {e}")
+                    pass
 
             token_info = await self.auth_service.refresh_google_access_token(user_id)
             access_token = token_info.get("access_token")
 
             webhook_url = settings.WEBHOOK_URL
             if not webhook_url:
-                print(f"WEBHOOK_URL not set in settings. Cannot establish watch channel for user {user_id}.")
                 return
 
             channel_id = str(uuid.uuid4())
@@ -367,7 +344,6 @@ class GoogleCalendarService:
                     }
                 )
                 if res.status_code != 200:
-                    print(f"Failed to register watch channel. Status: {res.status_code}. Body: {res.text}")
                     return
 
                 data = res.json()
@@ -377,10 +353,10 @@ class GoogleCalendarService:
             user.googleChannelExpiration = int(data.get("expiration") or expiration_time)
             await self.db.commit()
 
-            print(f"Watch channel registered for user {user_id}. Expires: {datetime.fromtimestamp(user.googleChannelExpiration / 1000).isoformat()}")
+            pass
 
         except Exception as error:
-            print(f"Error setting up watch channel: {error}")
+            pass
 
     async def stop_watching_calendar(self, user_id: str) -> None:
         try:

@@ -37,5 +37,4 @@ User Query: {user_query}
             return "simple"
         return "complex"
     except Exception as e:
-        print(f"Router error: {e}")
         return "complex" # Default to complex on failure

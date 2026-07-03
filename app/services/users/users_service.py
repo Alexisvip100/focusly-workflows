@@ -1,7 +1,7 @@
 from typing import List, Dict, Any, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
-from app.models.models import User
+from app.models import User
 
 class UsersService:
     def __init__(self, db: AsyncSession):

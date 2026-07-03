@@ -4,7 +4,7 @@ from typing import List, Dict, Any, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 
-from app.models.models import FocusSession
+from app.models import FocusSession
 from app.schemas.focus_sessions import FocusSessionCreateSchema
 
 class FocusSessionsService:

@@ -4,7 +4,7 @@ from typing import List, Dict, Any, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 
-from app.models.models import Notification
+from app.models import Notification
 from app.schemas.notifications import NotificationCreateSchema
 
 class NotificationsService:
@@ -46,9 +46,5 @@ class NotificationsService:
         data: Optional[Dict[str, str]] = None
     ) -> None:
         # Mock/Simulate push notification
-        print(f"[PUSH NOTIFICATION] Sending to token: {token}")
-        print(f"Title: {title}")
-        print(f"Body: {body}")
-        if data:
-            print(f"Data: {data}")
+        pass
         # Logged successfully.
