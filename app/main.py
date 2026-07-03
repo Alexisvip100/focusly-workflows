@@ -21,15 +21,13 @@ from app.services.notifications.task_notifier_service import run_task_notifier_l
 
 
 from app.database import engine, Base
-from app.models.models import Conversation, Message
+from app.models import Conversation, Message
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Start background tasks on startup, clean up on shutdown."""
-    print("[INIT] Initializing database and creating tables if missing...")
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
-    print("[INIT] Database initialized successfully.")
 
     notifier_task = asyncio.create_task(run_task_notifier_loop())
     yield
@@ -47,9 +45,6 @@ fastapi_app = FastAPI(title="Focusly Backend", version="1.0.0", lifespan=lifespa
 
 @fastapi_app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
-    print(f"[GLOBAL EXCEPTION] Unhandled error: {exc}")
-    traceback.print_exc()
-    
     response = JSONResponse(
         status_code=500,
         content={"detail": "Internal Server Error", "error": str(exc)},
@@ -103,7 +98,6 @@ async def get_context(request: Request):
     
     # Extract user ID from cookies or Authorization header
     token = request.cookies.get("access_token")
-    print(f"[AUTH DEBUG] Cookies: {dict(request.cookies)}")
     if not token:
         auth_header = request.headers.get("Authorization")
         if auth_header and auth_header.startswith("Bearer "):
@@ -114,9 +108,7 @@ async def get_context(request: Request):
         try:
             payload = jwt.decode(token, settings.JWT_SECRET, algorithms=["HS256"])
             user_id = payload.get("sub")
-            print(f"[AUTH DEBUG] JWT Decoded successfully. sub={user_id}")
         except Exception as e:
-            print(f"[AUTH DEBUG] JWT decode error: {e}")
             pass # Invalid token, keep user_id = None
 
     return {

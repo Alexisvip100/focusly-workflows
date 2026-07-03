@@ -64,7 +64,6 @@ async def google_login(
     except ValueError as e:
         raise HTTPException(status_code=401, detail=str(e))
     except Exception as e:
-        print("Google login error:", e)
         raise HTTPException(status_code=500, detail="Internal server error")
 
 @router.post("/refresh")
@@ -123,7 +122,6 @@ async def request_magic_link(
         await auth_service.send_magic_link(body.email, token)
         return {"success": True, "message": "Magic link sent successfully"}
     except Exception as e:
-        print("Magic link request error:", e)
         raise HTTPException(status_code=500, detail="Internal server error")
 
 @router.post("/magic-link/verify")
@@ -139,5 +137,4 @@ async def verify_magic_link(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        print("Magic link verification error:", e)
         raise HTTPException(status_code=500, detail="Internal server error")

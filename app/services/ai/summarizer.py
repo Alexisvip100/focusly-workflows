@@ -2,7 +2,7 @@ import os
 from sqlalchemy.future import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from google import genai
-from app.models.models import Conversation, Message
+from app.models import Conversation, Message
 from .prompts import SUMMARIZATION_PROMPT
 
 async def check_and_summarize(conversation_id: str, db: AsyncSession, threshold: int = 20):
@@ -62,4 +62,4 @@ async def check_and_summarize(conversation_id: str, db: AsyncSession, threshold:
             
         await db.commit()
     except Exception as e:
-        print(f"Summarization error: {e}")
+        pass

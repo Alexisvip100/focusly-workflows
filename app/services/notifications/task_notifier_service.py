@@ -15,16 +15,13 @@ Payload: { taskId, title, deadline, minutesLeft, type: "5min" | "1min" }
 """
 
 import asyncio
-import logging
 from datetime import datetime, timedelta
 
 from sqlalchemy import func, or_, select, update
 
 from app.database import async_session_local
-from app.models.models import Task, User
+from app.models import Task, User
 from app.sockets.realtime import sio
-
-logger = logging.getLogger(__name__)
 
 _ACTIVE_STATUSES = ["completed", "cancelled", "Completed"]
 _notification_time = func.coalesce(Task.estimated_start_date, Task.deadline)
@@ -69,10 +66,6 @@ async def _check_and_notify_once() -> None:
             await db.execute(
                 update(Task).where(Task.id == task.id).values(notified=True)
             )
-            logger.info(
-                "[NOTIFIER] 5-min alert sent → user=%s task=%s (%s)",
-                task.userId, task.id, task.title,
-            )
 
         # ── 1-minute warning ──────────────────────────────────────────────
         result = await db.execute(
@@ -102,10 +95,6 @@ async def _check_and_notify_once() -> None:
             await db.execute(
                 update(Task).where(Task.id == task.id).values(lastMinuteNotified=True)
             )
-            logger.info(
-                "[NOTIFIER] 1-min alert sent → user=%s task=%s (%s)",
-                task.userId, task.id, task.title,
-            )
 
         await db.commit()
 
@@ -129,9 +118,8 @@ async def _emit_notification(
     }
     try:
         await sio.emit("task_upcoming", payload, room=room, namespace="/realtime")
-        logger.debug("[NOTIFIER] Emitted task_upcoming to room %s: %s", room, payload)
     except Exception as exc:
-        logger.error("[NOTIFIER] Failed to emit to room %s: %s", room, exc)
+        pass
 
 
 async def run_task_notifier_loop() -> None:
@@ -139,10 +127,9 @@ async def run_task_notifier_loop() -> None:
     Background loop that runs every 60 seconds.
     Call this once at application startup (see main.py lifespan).
     """
-    logger.info("[NOTIFIER] Task notifier loop started.")
     while True:
         try:
             await _check_and_notify_once()
         except Exception as exc:
-            logger.error("[NOTIFIER] Unexpected error in sweep: %s", exc)
+            pass
         await asyncio.sleep(60)

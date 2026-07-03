@@ -6,7 +6,7 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from app.database import async_session_local
 from app.graphql import Query
-from app.models.models import User
+from app.models import User
 from sqlalchemy.future import select
 
 class DummyInfo:

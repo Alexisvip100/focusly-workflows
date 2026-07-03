@@ -7,7 +7,7 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from app.database import async_session_local
 from app.services.scheduler.scheduler_service import SchedulerService
 from sqlalchemy.future import select
-from app.models.models import User, Task, TimeBlock
+from app.models import User, Task, TimeBlock
 
 async def main():
     async with async_session_local() as db:

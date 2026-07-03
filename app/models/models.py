@@ -1,173 +1,63 @@
-from sqlalchemy import Column, String, Integer, Float, Boolean, DateTime, JSON, BigInteger, ForeignKey
-from sqlalchemy.sql import func
-from app.database import Base
+"""
+Centralizado de importación de todos los modelos SQLAlchemy.
 
-class User(Base):
-    __tablename__ = "User"
+Este archivo re-exporta todos los modelos de sus subcarpetas para proporcionar
+una interfaz consistente y simplificada para importar modelos en toda la aplicación.
 
-    id = Column(String, primary_key=True, index=True)
-    email = Column(String, unique=True, index=True, nullable=False)
-    name = Column(String, nullable=True)
-    picture = Column(String, nullable=True)
-    role = Column(String, nullable=True)
-    bio = Column(String, nullable=True)
-    passwordHash = Column(String, nullable=True)
-    authProvider = Column(String, nullable=True)
-    googleRefreshToken = Column(String, nullable=True)
-    subscriptionStatus = Column(String, default="free", nullable=False)
-    settings = Column(JSON, nullable=True)
-    externalId = Column(String, nullable=True)
-    fcmToken = Column(String, nullable=True)
-    createdAt = Column(DateTime, default=func.now(), nullable=False)
-    updatedAt = Column(DateTime, default=func.now(), onupdate=func.now(), nullable=False)
-    lastSyncAt = Column(DateTime, nullable=True)
-    googleCalendarSyncToken = Column(String, nullable=True)
-    googleChannelId = Column(String, nullable=True)
-    googleResourceId = Column(String, nullable=True)
-    googleChannelExpiration = Column(BigInteger, nullable=True)
+Uso:
+    from app.models import Task, User, Workspace
+    from app.models.models import Conversation, Message
+"""
 
-class Task(Base):
-    __tablename__ = "Task"
+# AI Models
+from app.models.AI.conversation import Conversation
+from app.models.AI.message import Message
+from app.models.AI.userMemory import UserMemory
 
-    id = Column(String, primary_key=True, index=True)
-    userId = Column(String, nullable=False, index=True)
-    title = Column(String, nullable=False)
-    notesEncrypted = Column(String, nullable=False)
-    estimateTimer = Column(Integer, nullable=True)
-    realTimer = Column(Float, nullable=True)
-    duration = Column(DateTime, nullable=True)
-    priorityLevel = Column(Integer, nullable=False, default=2)
-    category = Column(String, nullable=True)
-    color = Column(String, nullable=True)
-    estimated_start_date = Column(DateTime, nullable=True)
-    estimated_end_date = Column(DateTime, nullable=True)
-    deadline = Column(DateTime, nullable=False)
-    status = Column(String, nullable=False, default="Todo")
-    completedAt = Column(DateTime, nullable=True)
-    createdAt = Column(DateTime, default=func.now(), nullable=False)
-    updatedAt = Column(DateTime, default=func.now(), onupdate=func.now(), nullable=False)
-    deletedAt = Column(DateTime, nullable=True)
-    tags = Column(JSON, nullable=True)
-    filters = Column(JSON, nullable=True)
-    links = Column(JSON, nullable=True)
-    task_type = Column(String, nullable=True)
-    google_event_id = Column(String, nullable=True, index=True)
-    source = Column(String, nullable=True)
-    sync_status = Column(String, nullable=True)
-    collaborators = Column(JSON, nullable=True)
-    notified = Column(Boolean, nullable=True, default=False)
-    lastMinuteNotified = Column(Boolean, nullable=True, default=False)
-    use_ai = Column(Boolean, nullable=True, default=False)
-    workspaceId = Column(String, nullable=True)
-    is_owner = Column(Boolean, nullable=True, default=False)
-    
-class Workspace(Base):
-    __tablename__ = "Workspace"
+# Focus Session Models
+from app.models.FocusSession.focusSession import FocusSession
 
-    id = Column(String, primary_key=True, index=True)
-    userId = Column(String, nullable=False, index=True)
-    taskId = Column(String, nullable=True)
-    title = Column(String, nullable=False)
-    emoji = Column(String, nullable=True)
-    background_color = Column(String, nullable=True)
-    card_show_background = Column(Boolean, nullable=True)
-    groupId = Column(String, nullable=True)
-    content = Column(String, nullable=False)
-    saveStatus = Column(Boolean, nullable=True, default=False)
-    createdAt = Column(DateTime, default=func.now(), nullable=False)
-    updatedAt = Column(DateTime, default=func.now(), onupdate=func.now(), nullable=False)
+# Notification Models
+from app.models.Notification.notification import Notification
 
-class ProjectGroup(Base):
-    __tablename__ = "ProjectGroup"
+# ProjectGroup Models
+from app.models.ProjectGroup.projectGroup import ProjectGroup
 
-    id = Column(String, primary_key=True, index=True)
-    name = Column(String, nullable=False)
-    userId = Column(String, nullable=False, index=True)
-    color = Column(String, nullable=True)
-    emoji = Column(String, nullable=True)
-    createdAt = Column(DateTime, default=func.now(), nullable=False)
-    updatedAt = Column(DateTime, default=func.now(), onupdate=func.now(), nullable=False)
+# Tag Models
+from app.models.Tag.tag import Tag
 
-class Tag(Base):
-    __tablename__ = "Tag"
+# Task Models
+from app.models.Task.task import Task
 
-    id = Column(String, primary_key=True, index=True)
-    name = Column(String, nullable=False)
-    userId = Column(String, nullable=True)
+# TimeBlock Models
+from app.models.TimeBlock.timeBlock import TimeBlock
 
-class Notification(Base):
-    __tablename__ = "Notification"
+# User Models
+from app.models.User.user import User
 
-    id = Column(String, primary_key=True, index=True)
-    userId = Column(String, nullable=False, index=True)
-    relatedTaskId = Column(String, nullable=True)
-    type = Column(String, nullable=False)
-    scheduledAt = Column(DateTime, nullable=False)
-    status = Column(String, nullable=False, default="pending")
-    title = Column(String, nullable=False)
-    body = Column(String, nullable=False)
-    createdAt = Column(DateTime, default=func.now(), nullable=False)
-    updatedAt = Column(DateTime, default=func.now(), onupdate=func.now(), nullable=False)
+# Workspace Models
+from app.models.Workspace.workspace import Workspace
 
-class FocusSession(Base):
-    __tablename__ = "FocusSession"
-
-    id = Column(String, primary_key=True, index=True)
-    userId = Column(String, nullable=False, index=True)
-    taskId = Column(String, nullable=False)
-    startedAt = Column(DateTime, nullable=False)
-    endedAt = Column(DateTime, nullable=False)
-    durationMinutes = Column(Integer, nullable=False)
-    distractionCount = Column(Integer, nullable=False, default=0)
-    wasSuccessful = Column(Boolean, nullable=False, default=True)
-    createdAt = Column(DateTime, default=func.now(), nullable=False)
-    updatedAt = Column(DateTime, default=func.now(), onupdate=func.now(), nullable=False)
-
-class TimeBlock(Base):
-    __tablename__ = "TimeBlock"
-
-    id = Column(String, primary_key=True, index=True)
-    userId = Column(String, nullable=False, index=True)
-    taskId = Column(String, nullable=True)
-    startTime = Column(DateTime, nullable=False)
-    endTime = Column(DateTime, nullable=False)
-    blockType = Column(String, nullable=False)
-    externalEventId = Column(String, nullable=True)
-    source = Column(String, nullable=False)
-    title = Column(String, nullable=False)
-    meetingUrl = Column(String, nullable=True)
-    attendees = Column(JSON, nullable=True)
-    createdAt = Column(DateTime, default=func.now(), nullable=False)
-    updatedAt = Column(DateTime, default=func.now(), onupdate=func.now(), nullable=False)
-
-class Conversation(Base):
-    __tablename__ = "Conversation"
-
-    id = Column(String, primary_key=True, index=True)
-    userId = Column(String, nullable=False, index=True)
-    title = Column(String, nullable=True)
-    summary = Column(String, nullable=True)
-    createdAt = Column(DateTime, default=func.now(), nullable=False)
-    updatedAt = Column(DateTime, default=func.now(), onupdate=func.now(), nullable=False)
-
-class Message(Base):
-    __tablename__ = "Message"
-
-    id = Column(String, primary_key=True, index=True)
-    conversationId = Column(String, nullable=False, index=True)
-    role = Column(String, nullable=False)
-    content = Column(String, nullable=False)
-    tokenUsage = Column(Integer, nullable=True, default=0)
-    createdAt = Column(DateTime, default=func.now(), nullable=False)
-
-class UserMemory(Base):
-    __tablename__ = "UserMemory"
-
-    id = Column(String, primary_key=True, index=True)
-    userId = Column(String, nullable=False, index=True)
-    memory = Column(String, nullable=False)
-    category = Column(String, nullable=False)
-    importance = Column(Integer, default=1, nullable=False)
-    embedding = Column(JSON, nullable=True)
-    createdAt = Column(DateTime, default=func.now(), nullable=False)
-    updatedAt = Column(DateTime, default=func.now(), onupdate=func.now(), nullable=False)
+# Export all models
+__all__ = [
+    # AI Models
+    "Conversation",
+    "Message",
+    "UserMemory",
+    # Focus Session Models
+    "FocusSession",
+    # Notification Models
+    "Notification",
+    # ProjectGroup Models
+    "ProjectGroup",
+    # Tag Models
+    "Tag",
+    # Task Models
+    "Task",
+    # TimeBlock Models
+    "TimeBlock",
+    # User Models
+    "User",
+    # Workspace Models
+    "Workspace",
+]

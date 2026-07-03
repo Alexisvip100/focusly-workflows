@@ -32,7 +32,6 @@ async def create_time_block(
         block_id = await tb_service.create(body.model_dump())
         return block_id
     except Exception as e:
-        print("Error creating time block:", e)
         raise HTTPException(status_code=400, detail=str(e))
 
 @router.get("", response_model=List[Dict[str, Any]])

@@ -11,7 +11,7 @@ from app.config import settings
 from app.database import get_db
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.routes.common import get_current_user_id
-from app.models.models import Conversation, Message
+from app.models import Conversation, Message
 
 from app.services.ai.context_builder import build_context
 from app.services.ai.router import classify_query
@@ -107,7 +107,7 @@ async def background_post_chat_tasks(user_id: str, conversation_id: str, user_me
         await check_and_summarize(conversation_id, db)
         
     except Exception as e:
-        print(f"Background AI task error: {e}")
+        pass
 
 async def stream_gemini_and_save(
     messages: List[Dict[str, str]],
@@ -158,7 +158,7 @@ async def analyze_patterns_endpoint(
     analyzer = BehavioralAnalyzer(db)
     signals = await analyzer.collect_signals(current_user_id)
 
-    from app.models.models import User
+    from app.models import User
     user_result = await db.execute(select(User).where(User.id == current_user_id))
     user_record = user_result.scalars().first()
     user_name = user_record.name if user_record and user_record.name else "ahí"

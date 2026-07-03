@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy import update
 
-from app.models.models import ProjectGroup, Workspace
+from app.models import ProjectGroup, Workspace
 from app.schemas.project_groups import ProjectGroupCreateSchema
 
 class ProjectGroupsService:

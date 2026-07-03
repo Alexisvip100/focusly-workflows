@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy import or_
 
-from app.models.models import Task, FocusSession, Workspace
+from app.models import Task, FocusSession, Workspace
 
 
 class BehavioralAnalyzer:

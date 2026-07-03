@@ -5,7 +5,7 @@ from typing import List, Dict, Any, Tuple, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 
-from app.models.models import Task, FocusSession, User
+from app.models import Task, FocusSession, User
 from sqlalchemy import or_
 
 class InsightsService:

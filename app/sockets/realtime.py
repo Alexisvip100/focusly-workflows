@@ -25,13 +25,10 @@ async def connect(sid, environ, auth=None):
     
     if user_id:
         await sio.enter_room(sid, f"user_{user_id}", namespace='/realtime')
-        print(f"[WS] Client {sid} connected and joined room: user_{user_id}")
-    else:
-        print(f"[WS] Client {sid} connected without userId. Query: {query_string}")
 
 @sio.event(namespace='/realtime')
 async def disconnect(sid):
-    print(f"[WS] Client {sid} disconnected")
+    pass
 
 class RealTimeGateway:
     def __init__(self):
@@ -39,7 +36,6 @@ class RealTimeGateway:
 
     async def emitScheduleUpdate(self, user_id: str, data: Any):
         room_name = f"user_{user_id}"
-        print(f"[WS] Emitting schedule_updated to room {room_name}")
         await self.sio.emit('schedule_updated', data, room=room_name, namespace='/realtime')
 
 # Singleton instance

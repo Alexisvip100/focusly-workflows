@@ -17,5 +17,4 @@ def generate_embedding(text: str) -> list[float]:
         )
         return response.embeddings[0].values
     except Exception as e:
-        print(f"Embedding error: {e}")
         return []

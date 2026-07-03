@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 
 from app.config import settings
-from app.models.models import User
+from app.models import User
 from app.database import async_session_local
 
 
@@ -79,7 +79,6 @@ class AuthService:
             jwt_data["google_access_token"] = access_token
             return jwt_data
         except Exception as e:
-            print("Google token validation failed:", e)
             raise ValueError(f"Invalid Google OAuth Token: {str(e)}")
 
     async def refresh_google_access_token(self, user_id: str) -> Dict[str, Any]:
@@ -198,20 +197,10 @@ class AuthService:
                            """
                        }
                     )
-                    if response.status_code not in (200, 201):
-                        print("Failed to send email via Resend:", response.text)
-                    else:
-                        print("Email sent successfully via Resend to:", email)
+                    if response.status_code in (200, 201):
                         return
                 except Exception as err:
-                    print("Error sending email via Resend:", err)
-                    
-        # Fallback: Print to console for development
-        print("\n" + "="*80)
-        print("[DEVELOPMENT LOG] MAGIC LINK REQUESTED")
-        print(f"For: {email}")
-        print(f"Link: {magic_link}")
-        print("="*80 + "\n")
+                    pass
 
     async def verify_magic_link_token(self, token: str) -> Dict[str, Any]:
         try:

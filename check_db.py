@@ -1,6 +1,6 @@
 import asyncio
 from app.database import async_session_local
-from app.models.models import Workspace, ProjectGroup, Folder
+from app.models import Workspace, ProjectGroup, Folder
 from sqlalchemy import select
 
 async def main():
