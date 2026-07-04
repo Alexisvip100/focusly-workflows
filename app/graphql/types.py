@@ -72,7 +72,7 @@ class Workspace:
         if not self.taskId:
             return None
         db = info.context["db"]
-        from app.services.tasks.tasks_service import TasksService
+        from app.modules.task.services.tasks_service import TasksService
         tasks_serv = TasksService(db)
         try:
             res = await tasks_serv.find_one(self.taskId)
@@ -94,7 +94,7 @@ class ProjectGroup:
     async def workspaces(self, info) -> List[Workspace]:
         """Workspaces that belong to this group."""
         db = info.context["db"]
-        from app.services.workspaces.workspaces_service import WorkspacesService
+        from app.modules.workspace.services.workspaces_service import WorkspacesService
         ws_serv = WorkspacesService(db)
         all_ws = await ws_serv.find_all(self.user_id, group_id=str(self.id))
         return [
@@ -147,7 +147,7 @@ class Task:
     @strawberry.field
     async def workspace(self, info) -> Optional[Workspace]:
         db = info.context["db"]
-        from app.services.workspaces.workspaces_service import WorkspacesService
+        from app.modules.workspace.services.workspaces_service import WorkspacesService
         ws_serv = WorkspacesService(db)
         res = await ws_serv.find_by_task_id(str(self.id))
         if res:

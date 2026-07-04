@@ -11,13 +11,13 @@ from typing import Any
 from app.config import settings
 from app.database import async_session_local
 from app.sockets.realtime import sio
-from app.routes.auth.auth import router as auth_router
-from app.routes.users.users import router as users_router
-from app.routes.google_calendar.google_calendar import router as google_calendar_router
-from app.routes.time_blocks.time_blocks import router as time_blocks_router
-from app.routes.ai.ai import router as ai_router
-from app.routes.ai.planner import router as planner_router
-from app.services.notifications.task_notifier_service import run_task_notifier_loop
+from app.modules.auth.routes import router as auth_router
+from app.modules.user.routes import router as users_router
+from app.modules.google_calendar.routes import router as google_calendar_router
+from app.modules.task.routes.time_blocks import router as time_blocks_router
+from app.modules.ai.routes.ai import router as ai_router
+from app.modules.ai.routes.planner import router as planner_router
+from app.modules.notification.services.task_notifier_service import run_task_notifier_loop
 
 
 from app.database import engine, Base
