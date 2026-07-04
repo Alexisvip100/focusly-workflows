@@ -1,5 +1,5 @@
 import time
-from typing import Dict, Any, Optional
+from typing import Any
 import jwt
 import httpx
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -13,7 +13,7 @@ class AuthService:
     def __init__(self, db: AsyncSession):
         self.db = db
 
-    async def validate_google_token(self, code: str, redirect_uri: Optional[str] = None) -> Dict[str, Any]:
+    async def validate_google_token(self, code: str, redirect_uri: str | None = None) -> dict[str, Any]:
         try:
             # Exchange code for Google tokens
             async with httpx.AsyncClient() as client:
@@ -79,7 +79,7 @@ class AuthService:
         except Exception as e:
             raise ValueError(f"Invalid Google OAuth Token: {str(e)}")
 
-    async def refresh_google_access_token(self, user_id: str) -> Dict[str, Any]:
+    async def refresh_google_access_token(self, user_id: str) -> dict[str, Any]:
         result = await self.db.execute(select(User).where(User.id == user_id))
         user = result.scalars().first()
 
@@ -112,7 +112,7 @@ class AuthService:
             raise ValueError("User not found")
         return user
 
-    def generate_jwt(self, user: User) -> Dict[str, Any]:
+    def generate_jwt(self, user: User) -> dict[str, Any]:
         now = time.time()
         payload = {
             "email": user.email,
@@ -154,7 +154,7 @@ class AuthService:
             "user": user_dict
         }
 
-    def generate_magic_link_token(self, email: str, full_name: Optional[str] = None) -> str:
+    def generate_magic_link_token(self, email: str, full_name: str | None = None) -> str:
         now = time.time()
         payload = {
             "email": email.strip().lower(),
@@ -200,7 +200,7 @@ class AuthService:
                 except Exception:
                     pass
 
-    async def verify_magic_link_token(self, token: str) -> Dict[str, Any]:
+    async def verify_magic_link_token(self, token: str) -> dict[str, Any]:
         try:
             decoded = jwt.decode(token, settings.JWT_SECRET, algorithms=["HS256"])
         except jwt.ExpiredSignatureError:

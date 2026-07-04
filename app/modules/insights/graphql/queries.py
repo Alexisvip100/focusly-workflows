@@ -1,5 +1,4 @@
 import strawberry
-from typing import Optional
 
 from app.graphql import types
 from app.graphql.common import get_user_id
@@ -14,8 +13,8 @@ class InsightsQuery:
         self,
         info,
         user_id: str,
-        filter: Optional[str] = "Weekly",
-        timezone_offset: Optional[int] = 0,
+        filter: str | None = "Weekly",
+        timezone_offset: int | None = 0,
     ) -> types.InsightsResponse:
         get_user_id(info)
         db = info.context["db"]

@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime, timedelta
-from typing import Dict, Any, List, Optional, Tuple
+from typing import Any
 from sqlalchemy import select, delete, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -10,12 +10,12 @@ class SchedulerService:
     async def schedule(
         self,
         user_id: str,
-        external_events: List[Dict[str, Any]],
-        meetings: List[Dict[str, Any]],
-        tasks: List[Dict[str, Any]],
-        constraints: Dict[str, Any],
-        existing_work_blocks: Optional[List[Dict[str, Any]]] = None
-    ) -> Dict[str, Any]:
+        external_events: list[dict[str, Any]],
+        meetings: list[dict[str, Any]],
+        tasks: list[dict[str, Any]],
+        constraints: dict[str, Any],
+        existing_work_blocks: list[dict[str, Any]] | None = None
+    ) -> dict[str, Any]:
         scheduled_at = datetime.utcnow()
         existing_work_blocks = existing_work_blocks or []
 
@@ -81,9 +81,9 @@ class SchedulerService:
 
     def _build_hard_constraints(
         self,
-        external_events: List[Dict[str, Any]],
-        meetings: List[Dict[str, Any]]
-    ) -> List[Dict[str, Any]]:
+        external_events: list[dict[str, Any]],
+        meetings: list[dict[str, Any]]
+    ) -> list[dict[str, Any]]:
         constraints = []
         for event in external_events:
             if not event.get("start") or not event.get("end"):
@@ -108,16 +108,16 @@ class SchedulerService:
         constraints.sort(key=lambda x: x["start"])
         return constraints
 
-    def _filter_tasks_needing_scheduling(self, tasks: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    def _filter_tasks_needing_scheduling(self, tasks: list[dict[str, Any]]) -> list[dict[str, Any]]:
         return [
             t for t in tasks 
             if t.get("status") not in ["completed", "cancelled", "in_progress"]
         ]
 
-    def _sort_tasks_by_priority(self, tasks: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    def _sort_tasks_by_priority(self, tasks: list[dict[str, Any]]) -> list[dict[str, Any]]:
         sorted_tasks = list(tasks)
         
-        def sort_key(t: Dict[str, Any]):
+        def sort_key(t: dict[str, Any]):
             priority_val = t.get("priorityValue", 2)
             deadline = t.get("deadline")
             deadline_ts = deadline.timestamp() if deadline else float('inf')
@@ -139,11 +139,11 @@ class SchedulerService:
 
     async def _schedule_single_task(
         self,
-        task: Dict[str, Any],
-        hard_constraints: List[Dict[str, Any]],
-        constraints: Dict[str, Any],
-        existing_work_blocks: List[Dict[str, Any]]
-    ) -> Dict[str, Any]:
+        task: dict[str, Any],
+        hard_constraints: list[dict[str, Any]],
+        constraints: dict[str, Any],
+        existing_work_blocks: list[dict[str, Any]]
+    ) -> dict[str, Any]:
         work_blocks = []
         remaining_duration = task.get("estimatedDuration") or 30
 
@@ -207,7 +207,7 @@ class SchedulerService:
                 "reason": "no_available_slots"
             }
 
-    def _calculate_scheduling_window(self, task: Dict[str, Any], constraints: Dict[str, Any]) -> Tuple[datetime, datetime]:
+    def _calculate_scheduling_window(self, task: dict[str, Any], constraints: dict[str, Any]) -> tuple[datetime, datetime]:
         now = datetime.utcnow()
         # Round to next 5 minutes
         minutes_to_add = 5 - (now.minute % 5)
@@ -226,10 +226,10 @@ class SchedulerService:
         self,
         start_time: datetime,
         end_time: datetime,
-        hard_constraints: List[Dict[str, Any]],
-        existing_work_blocks: List[Dict[str, Any]],
-        constraints: Dict[str, Any]
-    ) -> List[Dict[str, Any]]:
+        hard_constraints: list[dict[str, Any]],
+        existing_work_blocks: list[dict[str, Any]],
+        constraints: dict[str, Any]
+    ) -> list[dict[str, Any]]:
         slots = []
         slot_size = 5 # 5 minutes granularity
         current_ptr = start_time
@@ -265,7 +265,7 @@ class SchedulerService:
 
         return slots
 
-    def _is_within_working_hours(self, date: datetime, constraints: Dict[str, Any]) -> bool:
+    def _is_within_working_hours(self, date: datetime, constraints: dict[str, Any]) -> bool:
         day_names = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
         # Python weekday: Monday is 0, Sunday is 6
         day_name = day_names[date.weekday()]
@@ -284,13 +284,13 @@ class SchedulerService:
 
         return start_val <= time_val < end_val
 
-    def _is_overlapping(self, start: datetime, end: datetime, constraints: List[Dict[str, Any]]) -> bool:
+    def _is_overlapping(self, start: datetime, end: datetime, constraints: list[dict[str, Any]]) -> bool:
         for c in constraints:
             if start < c["end"] and end > c["start"]:
                 return True
         return False
 
-    def _is_overlapping_with_work_blocks(self, start: datetime, end: datetime, blocks: List[Dict[str, Any]]) -> bool:
+    def _is_overlapping_with_work_blocks(self, start: datetime, end: datetime, blocks: list[dict[str, Any]]) -> bool:
         for wb in blocks:
             if start < wb["end"] and end > wb["start"]:
                 return True
@@ -298,11 +298,11 @@ class SchedulerService:
 
     def _create_work_block(
         self,
-        task: Dict[str, Any],
+        task: dict[str, Any],
         start: datetime,
         end: datetime,
-        constraints: Dict[str, Any]
-    ) -> Dict[str, Any]:
+        constraints: dict[str, Any]
+    ) -> dict[str, Any]:
         duration = (end - start).total_seconds() / 60.0
         return {
             "id": f"wb_{int(start.timestamp())}_{uuid.uuid4().hex[:6]}",
@@ -321,10 +321,10 @@ class SchedulerService:
 
     def _calculate_scheduling_score(
         self,
-        task: Dict[str, Any],
+        task: dict[str, Any],
         start: datetime,
         end: datetime,
-        constraints: Dict[str, Any]
+        constraints: dict[str, Any]
     ) -> float:
         score = 0.0
         hour = start.hour
@@ -343,7 +343,7 @@ class SchedulerService:
 
         return min(score, 1.0)
 
-    def _get_scheduling_reason(self, task: Dict[str, Any], start: datetime) -> str:
+    def _get_scheduling_reason(self, task: dict[str, Any], start: datetime) -> str:
         reasons = []
         deadline = task.get("deadline")
         if deadline:
@@ -361,7 +361,7 @@ class SchedulerService:
 
         return ", ".join(reasons) if reasons else "available slot"
 
-    def _get_suggested_action(self, task: Dict[str, Any], reason: Optional[str]) -> str:
+    def _get_suggested_action(self, task: dict[str, Any], reason: str | None) -> str:
         if reason == "deadline_passed":
             return "Update deadline or mark as completed"
         elif reason == "no_available_slots":
@@ -374,9 +374,9 @@ class SchedulerService:
 
     def _calculate_scheduling_efficiency(
         self,
-        hard_constraints: List[Dict[str, Any]],
-        scheduled_tasks: List[Dict[str, Any]],
-        constraints: Dict[str, Any]
+        hard_constraints: list[dict[str, Any]],
+        scheduled_tasks: list[dict[str, Any]],
+        constraints: dict[str, Any]
     ) -> float:
         total_scheduled = sum(
             sum(wb["duration"] for wb in st["workBlocks"])

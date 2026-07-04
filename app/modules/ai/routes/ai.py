@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
-from typing import List, Dict, Any, Optional
+from typing import Any
 import httpx
 import json
 import uuid
@@ -25,10 +25,10 @@ class MessageSchema(BaseModel):
     content: str
 
 class ChatRequestSchema(BaseModel):
-    messages: List[MessageSchema]
-    task: Optional[Dict[str, Any]] = None
-    model: Optional[str] = None
-    conversationId: Optional[str] = None
+    messages: list[MessageSchema]
+    task: dict[str, Any] | None = None
+    model: str | None = None
+    conversationId: str | None = None
 
 class GeminiStreamParser:
     def __init__(self):
@@ -110,7 +110,7 @@ async def background_post_chat_tasks(user_id: str, conversation_id: str, user_me
         pass
 
 async def stream_gemini_and_save(
-    messages: List[Dict[str, str]],
+    messages: list[dict[str, str]],
     system_context: str,
     model: str,
     background_tasks: BackgroundTasks,

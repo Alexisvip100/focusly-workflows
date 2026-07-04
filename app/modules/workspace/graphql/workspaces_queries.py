@@ -1,5 +1,4 @@
 import strawberry
-from typing import List, Optional
 
 from app.graphql import types
 from app.graphql.common import get_user_id
@@ -12,9 +11,9 @@ class WorkspaceQuery:
     async def workspaces(
         self,
         info,
-        search: Optional[str] = None,
-        group_id: Optional[str] = None
-    ) -> List[types.Workspace]:
+        search: str | None = None,
+        group_id: str | None = None
+    ) -> list[types.Workspace]:
         user_id = get_user_id(info)
         db = info.context["db"]
         ws_serv = WorkspacesService(db)

@@ -1,15 +1,15 @@
 from pydantic import BaseModel, Field, field_validator, model_validator
 from datetime import datetime
-from typing import Optional, Any
+from typing import Any
 
 class NotificationCreateSchema(BaseModel):
     userId: str
-    relatedTaskId: Optional[str] = None
-    type: Optional[str] = "task_reminder"
+    relatedTaskId: str | None = None
+    type: str | None = "task_reminder"
     scheduledAt: datetime = Field(default_factory=datetime.utcnow)
-    status: Optional[str] = "pending"
-    title: Optional[str] = ""
-    body: Optional[str] = ""
+    status: str | None = "pending"
+    title: str | None = ""
+    body: str | None = ""
 
     @model_validator(mode="before")
     @classmethod

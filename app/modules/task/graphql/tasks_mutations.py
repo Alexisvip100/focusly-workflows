@@ -1,5 +1,4 @@
 import strawberry
-from typing import List
 
 from app.graphql import types
 from app.graphql.common import get_user_id
@@ -147,7 +146,7 @@ class TaskMutation:
         return True
 
     @strawberry.mutation
-    async def delete_tasks(self, info, ids: List[str]) -> bool:
+    async def delete_tasks(self, info, ids: list[str]) -> bool:
         get_user_id(info)
         db = info.context["db"]
         

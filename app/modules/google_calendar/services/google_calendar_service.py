@@ -2,7 +2,7 @@ import uuid
 import time
 import re
 from datetime import datetime, timedelta
-from typing import Dict, Any, Optional
+from typing import Any
 from urllib.parse import urlencode
 import httpx
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -19,7 +19,7 @@ class GoogleCalendarService:
         self.tasks_service = tasks_service
         self.scheduler_service = scheduler_service
 
-    async def get_events(self, user_id: str, time_min: Optional[str] = None, time_max: Optional[str] = None) -> Dict[str, Any]:
+    async def get_events(self, user_id: str, time_min: str | None = None, time_max: str | None = None) -> dict[str, Any]:
         if not self.auth_service:
             raise ValueError("AuthService is required to get events")
             
@@ -48,7 +48,7 @@ class GoogleCalendarService:
                 raise Exception(f"Failed to fetch from Google Calendar: {res.text}")
             return res.json()
 
-    async def create_event(self, user_id: str, event: Dict[str, Any]) -> Dict[str, Any]:
+    async def create_event(self, user_id: str, event: dict[str, Any]) -> dict[str, Any]:
         if not self.auth_service:
             raise ValueError("AuthService is required to create event")
             
@@ -69,7 +69,7 @@ class GoogleCalendarService:
                 raise Exception(f"Failed to create Google event: {res.text}")
             return res.json()
 
-    async def patch_event(self, user_id: str, event_id: str, event: Dict[str, Any]) -> Dict[str, Any]:
+    async def patch_event(self, user_id: str, event_id: str, event: dict[str, Any]) -> dict[str, Any]:
         if not self.auth_service:
             raise ValueError("AuthService is required to patch event")
             
@@ -399,7 +399,7 @@ class GoogleCalendarService:
         except Exception as error:
             print(f"Error stopping watch channel: {error}")
 
-    def _process_google_event(self, event: Dict[str, Any], user_email: Optional[str] = None) -> Dict[str, Any]:
+    def _process_google_event(self, event: dict[str, Any], user_email: str | None = None) -> dict[str, Any]:
         # Stage 1: Basic Mapping
         start_obj = event.get("start") or {}
         end_obj = event.get("end") or {}
@@ -429,7 +429,7 @@ class GoogleCalendarService:
             deadline = start + timedelta(minutes=30)
 
         # Color mapping to priority
-        def map_google_color_to_priority(color_id: Optional[str]) -> int:
+        def map_google_color_to_priority(color_id: str | None) -> int:
             if not color_id:
                 return 1
             priority_map = {

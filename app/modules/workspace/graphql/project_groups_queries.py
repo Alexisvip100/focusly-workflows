@@ -1,5 +1,4 @@
 import strawberry
-from typing import List
 
 from app.graphql import types
 from app.graphql.common import get_user_id
@@ -9,7 +8,7 @@ from app.modules.workspace.services.project_groups_service import ProjectGroupsS
 @strawberry.type
 class ProjectGroupQuery:
     @strawberry.field
-    async def project_groups(self, info) -> List[types.ProjectGroup]:
+    async def project_groups(self, info) -> list[types.ProjectGroup]:
         user_id = get_user_id(info)
         db = info.context["db"]
         pg_serv = ProjectGroupsService(db)

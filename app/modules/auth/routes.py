@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Response, Request, HTTPException, Depends
-from typing import Dict, Any, Optional
+from typing import Any
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -20,7 +20,7 @@ class GoogleRefreshBody(BaseModel):
 
 class MagicLinkBody(BaseModel):
     email: str
-    fullName: Optional[str] = None
+    fullName: str | None = None
 
 class VerifyMagicLinkBody(BaseModel):
     token: str
@@ -28,7 +28,7 @@ class VerifyMagicLinkBody(BaseModel):
 def get_auth_service(db: AsyncSession = Depends(get_db)) -> AuthService:
     return AuthService(db)
 
-def set_auth_cookies(response: Response, result: Dict[str, Any]):
+def set_auth_cookies(response: Response, result: dict[str, Any]):
     is_secure = settings.IS_PRODUCTION
     samesite_val = "none" if settings.IS_PRODUCTION else "lax"
     response.set_cookie(

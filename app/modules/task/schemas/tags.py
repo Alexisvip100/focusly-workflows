@@ -1,9 +1,9 @@
 from pydantic import BaseModel, model_validator
-from typing import Optional, Any
+from typing import Any
 
 class TagCreateSchema(BaseModel):
-    name: Optional[str] = ""
-    userId: Optional[str] = None
+    name: str | None = ""
+    userId: str | None = None
 
     @model_validator(mode="before")
     @classmethod

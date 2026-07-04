@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException, Depends, Header, Request, Body
-from typing import Dict, Any, List, Optional
+from typing import Any
 from sqlalchemy.ext.asyncio import AsyncSession
 import asyncio
 
@@ -32,10 +32,10 @@ def get_google_calendar_service(db: AsyncSession = Depends(get_db)) -> GoogleCal
     tasks_serv.google_calendar_service = gc_service
     return gc_service
 
-@router.get("/events", response_model=List[Dict[str, Any]])
+@router.get("/events", response_model=list[dict[str, Any]])
 async def get_events(
-    timeMin: Optional[str] = None,
-    timeMax: Optional[str] = None,
+    timeMin: str | None = None,
+    timeMax: str | None = None,
     user_id: str = Depends(get_current_user_id),
     gc_service: GoogleCalendarService = Depends(get_google_calendar_service)
 ):
@@ -84,7 +84,7 @@ async def get_events(
 
 @router.post("/events")
 async def create_event(
-    event: Dict[str, Any] = Body(...),
+    event: dict[str, Any] = Body(...),
     user_id: str = Depends(get_current_user_id),
     gc_service: GoogleCalendarService = Depends(get_google_calendar_service)
 ):
@@ -102,7 +102,7 @@ async def create_event(
 @router.patch("/events/{id}")
 async def patch_event(
     id: str,
-    event: Dict[str, Any] = Body(...),
+    event: dict[str, Any] = Body(...),
     user_id: str = Depends(get_current_user_id),
     gc_service: GoogleCalendarService = Depends(get_google_calendar_service)
 ):

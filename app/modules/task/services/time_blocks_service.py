@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from typing import List, Dict, Any, Optional
+from typing import Any
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy import delete
@@ -12,7 +12,7 @@ class TimeBlocksService:
     def __init__(self, db: AsyncSession):
         self.db = db
 
-    def _map_to_dict(self, tb: TimeBlock) -> Dict[str, Any]:
+    def _map_to_dict(self, tb: TimeBlock) -> dict[str, Any]:
         return {
             "id": tb.id,
             "userId": tb.userId,
@@ -29,7 +29,7 @@ class TimeBlocksService:
             "updatedAt": tb.updatedAt.isoformat() if tb.updatedAt else None
         }
 
-    def _parse_dt(self, val: Any) -> Optional[datetime]:
+    def _parse_dt(self, val: Any) -> datetime | None:
         if not val:
             return None
         if isinstance(val, datetime):
@@ -42,7 +42,7 @@ class TimeBlocksService:
                 return None
         return None
 
-    async def create(self, block_data: Dict[str, Any]) -> str:
+    async def create(self, block_data: dict[str, Any]) -> str:
         block_id = block_data.get("id") or str(uuid.uuid4())
         tb_input = TimeBlockCreateSchema(**block_data)
         
@@ -55,7 +55,7 @@ class TimeBlocksService:
         await self.db.commit()
         return block_id
 
-    async def create_many(self, blocks_data: List[Dict[str, Any]]) -> None:
+    async def create_many(self, blocks_data: list[dict[str, Any]]) -> None:
         if not blocks_data:
             return
             
@@ -71,22 +71,22 @@ class TimeBlocksService:
         self.db.add_all(new_blocks)
         await self.db.commit()
 
-    async def find_all(self) -> List[Dict[str, Any]]:
+    async def find_all(self) -> list[dict[str, Any]]:
         result = await self.db.execute(select(TimeBlock))
         return [self._map_to_dict(tb) for tb in result.scalars().all()]
 
-    async def find_one(self, id: str) -> Dict[str, Any]:
+    async def find_one(self, id: str) -> dict[str, Any]:
         result = await self.db.execute(select(TimeBlock).where(TimeBlock.id == id))
         tb = result.scalars().first()
         if not tb:
             raise ValueError(f"Time block with ID {id} not found")
         return self._map_to_dict(tb)
 
-    async def find_all_by_user(self, user_id: str) -> List[Dict[str, Any]]:
+    async def find_all_by_user(self, user_id: str) -> list[dict[str, Any]]:
         result = await self.db.execute(select(TimeBlock).where(TimeBlock.userId == user_id))
         return [self._map_to_dict(tb) for tb in result.scalars().all()]
 
-    async def update(self, id: str, update_data: Dict[str, Any]) -> Dict[str, Any]:
+    async def update(self, id: str, update_data: dict[str, Any]) -> dict[str, Any]:
         result = await self.db.execute(select(TimeBlock).where(TimeBlock.id == id))
         tb = result.scalars().first()
         if not tb:
@@ -106,7 +106,7 @@ class TimeBlocksService:
         await self.db.refresh(tb)
         return self._map_to_dict(tb)
 
-    async def get_synced_google_ids(self, user_id: str) -> List[str]:
+    async def get_synced_google_ids(self, user_id: str) -> list[str]:
         result = await self.db.execute(
             select(TimeBlock.externalEventId).where(
                 TimeBlock.userId == user_id,
@@ -121,7 +121,7 @@ class TimeBlocksService:
         )
         await self.db.commit()
 
-    async def delete_many_by_external_ids(self, user_id: str, external_ids: List[str]) -> None:
+    async def delete_many_by_external_ids(self, user_id: str, external_ids: list[str]) -> None:
         if not external_ids:
             return
         await self.db.execute(

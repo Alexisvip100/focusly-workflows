@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from typing import List, Dict, Any
+from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
@@ -13,7 +13,7 @@ class ProjectGroupsService:
     def __init__(self, db: AsyncSession):
         self.db = db
 
-    async def create(self, create_input: Dict[str, Any], user_id: str) -> ProjectGroup:
+    async def create(self, create_input: dict[str, Any], user_id: str) -> ProjectGroup:
         group_id = str(uuid.uuid4())
         group_data = ProjectGroupCreateSchema(**create_input)
 
@@ -28,7 +28,7 @@ class ProjectGroupsService:
         await self.db.refresh(group)
         return group
 
-    async def find_all(self, user_id: str) -> List[ProjectGroup]:
+    async def find_all(self, user_id: str) -> list[ProjectGroup]:
         result = await self.db.execute(
             select(ProjectGroup).where(ProjectGroup.userId == user_id).order_by(ProjectGroup.createdAt)
         )
@@ -41,7 +41,7 @@ class ProjectGroupsService:
             raise ValueError(f"ProjectGroup with ID {id} not found")
         return group
 
-    async def update(self, id: str, update_input: Dict[str, Any], user_id: str) -> ProjectGroup:
+    async def update(self, id: str, update_input: dict[str, Any], user_id: str) -> ProjectGroup:
         result = await self.db.execute(select(ProjectGroup).where(ProjectGroup.id == id))
         group = result.scalars().first()
         if not group or group.userId != user_id:

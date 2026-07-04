@@ -1,5 +1,5 @@
 import uuid
-from typing import List, Dict, Any, Optional
+from typing import Any
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 
@@ -10,7 +10,7 @@ class NotificationsService:
     def __init__(self, db: AsyncSession):
         self.db = db
 
-    async def create(self, notification_data: Dict[str, Any]) -> Notification:
+    async def create(self, notification_data: dict[str, Any]) -> Notification:
         notif_id = notification_data.get("id") or str(uuid.uuid4())
         parsed_notif = NotificationCreateSchema(**notification_data)
         
@@ -23,15 +23,15 @@ class NotificationsService:
         await self.db.refresh(new_notif)
         return new_notif
 
-    async def findAll(self) -> List[Notification]:
+    async def findAll(self) -> list[Notification]:
         result = await self.db.execute(select(Notification))
         return list(result.scalars().all())
 
-    async def findOne(self, id: str) -> Optional[Notification]:
+    async def findOne(self, id: str) -> Notification | None:
         result = await self.db.execute(select(Notification).where(Notification.id == id))
         return result.scalars().first()
 
-    async def findAllByUser(self, user_id: str) -> List[Notification]:
+    async def findAllByUser(self, user_id: str) -> list[Notification]:
         result = await self.db.execute(
             select(Notification).where(Notification.userId == user_id)
         )
@@ -42,7 +42,7 @@ class NotificationsService:
         token: str,
         title: str,
         body: str,
-        data: Optional[Dict[str, str]] = None
+        data: dict[str, str] | None = None
     ) -> None:
         # Mock/Simulate push notification
         pass

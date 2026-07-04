@@ -1,6 +1,6 @@
 import re
 from datetime import datetime, timedelta
-from typing import List, Dict, Any, Tuple, Optional
+from typing import Any
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 
@@ -14,7 +14,7 @@ class InsightsService:
         self.focus_sessions_service = focus_sessions_service
         self.users_service = users_service
 
-    async def getInsights(self, user_id: str, filter_type: str, timezone_offset_minutes: int = 0) -> Dict[str, Any]:
+    async def getInsights(self, user_id: str, filter_type: str, timezone_offset_minutes: int = 0) -> dict[str, Any]:
         # 1. Fetch data
         if self.tasks_service:
             all_tasks = await self.tasks_service.find_all_by_user(user_id)
@@ -112,7 +112,7 @@ class InsightsService:
             "heatmapCells": heatmap_cells,
         }
 
-    def _map_task_to_dict(self, t: Task) -> Dict[str, Any]:
+    def _map_task_to_dict(self, t: Task) -> dict[str, Any]:
         return {
             "id": t.id,
             "title": t.title,
@@ -126,7 +126,7 @@ class InsightsService:
             "category": t.category
         }
 
-    def _get_completion_datetime(self, task: Dict[str, Any]) -> Optional[datetime]:
+    def _get_completion_datetime(self, task: dict[str, Any]) -> datetime | None:
         if task.get("status") != "Done":
             return None
         for field in ("completedAt", "updatedAt", "createdAt"):
@@ -162,10 +162,10 @@ class InsightsService:
 
     def calculate_activity_map(
         self,
-        tasks: List[Dict[str, Any]],
+        tasks: list[dict[str, Any]],
         filter_type: str,
         timezone_offset_minutes: int = 0,
-    ) -> Tuple[List[int], List[str], List[Dict[str, Any]]]:
+    ) -> tuple[list[int], list[str], list[dict[str, Any]]]:
         # Convert UTC now to user's local time
         now = datetime.utcnow() - timedelta(minutes=timezone_offset_minutes)
         completed_tasks = [t for t in tasks if self._get_completion_datetime(t) is not None]
@@ -176,7 +176,7 @@ class InsightsService:
             return self._build_monthly_activity_map(completed_tasks, now, timezone_offset_minutes)
         return self._build_weekly_activity_map(completed_tasks, now, timezone_offset_minutes)
 
-    def _build_task_entry(self, task: Dict[str, Any]) -> Dict[str, Any]:
+    def _build_task_entry(self, task: dict[str, Any]) -> dict[str, Any]:
         completed_at = self._get_completion_datetime(task)
         return {
             "id": task.get("id", ""),
@@ -188,12 +188,12 @@ class InsightsService:
 
     def _build_daily_activity_map(
         self,
-        completed_tasks: List[Dict[str, Any]],
+        completed_tasks: list[dict[str, Any]],
         now: datetime,
         timezone_offset_minutes: int = 0,
-    ) -> Tuple[List[int], List[str], List[Dict[str, Any]]]:
+    ) -> tuple[list[int], list[str], list[dict[str, Any]]]:
         today = now.date()
-        bucket: Dict[int, List[Dict[str, Any]]] = {h: [] for h in range(24)}
+        bucket: dict[int, list[dict[str, Any]]] = {h: [] for h in range(24)}
 
         for task in completed_tasks:
             completed_at = self._get_completion_datetime(task)
@@ -222,10 +222,10 @@ class InsightsService:
 
     def _build_weekly_activity_map(
         self,
-        completed_tasks: List[Dict[str, Any]],
+        completed_tasks: list[dict[str, Any]],
         now: datetime,
         timezone_offset_minutes: int = 0,
-    ) -> Tuple[List[int], List[str], List[Dict[str, Any]]]:
+    ) -> tuple[list[int], list[str], list[dict[str, Any]]]:
         day_of_week = now.weekday()
         monday = (now - timedelta(days=day_of_week)).date()
         day_names = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"]
@@ -234,7 +234,7 @@ class InsightsService:
             "Friday", "Saturday", "Sunday",
         ]
         days = [monday + timedelta(days=i) for i in range(7)]
-        bucket: Dict[str, List[Dict[str, Any]]] = {d.isoformat(): [] for d in days}
+        bucket: dict[str, list[dict[str, Any]]] = {d.isoformat(): [] for d in days}
 
         for task in completed_tasks:
             completed_at = self._get_completion_datetime(task)
@@ -264,12 +264,12 @@ class InsightsService:
 
     def _build_monthly_activity_map(
         self,
-        completed_tasks: List[Dict[str, Any]],
+        completed_tasks: list[dict[str, Any]],
         now: datetime,
         timezone_offset_minutes: int = 0,
-    ) -> Tuple[List[int], List[str], List[Dict[str, Any]]]:
+    ) -> tuple[list[int], list[str], list[dict[str, Any]]]:
         month_days = [(now - timedelta(days=i)).date() for i in range(29, -1, -1)]
-        bucket: Dict[str, List[Dict[str, Any]]] = {d.isoformat(): [] for d in month_days}
+        bucket: dict[str, list[dict[str, Any]]] = {d.isoformat(): [] for d in month_days}
 
         for task in completed_tasks:
             completed_at = self._get_completion_datetime(task)
@@ -303,7 +303,7 @@ class InsightsService:
             return int(match.group(1)) * 60 + int(match.group(2))
         return 0
 
-    def calculate_energy_score(self, tasks: List[Dict[str, Any]]) -> Dict[str, Any]:
+    def calculate_energy_score(self, tasks: list[dict[str, Any]]) -> dict[str, Any]:
         if not tasks:
             return {"value": "N/A", "change": "0 pts", "trend": "neutral"}
 
@@ -332,9 +332,9 @@ class InsightsService:
 
     def calculate_golden_window(
         self,
-        sessions: List[FocusSession],
-        work_hours: Optional[Dict[str, Any]] = None
-    ) -> Dict[str, Any]:
+        sessions: list[FocusSession],
+        work_hours: dict[str, Any] | None = None
+    ) -> dict[str, Any]:
         if not sessions:
             start = work_hours.get("startTime") if work_hours else "09:00"
             end = work_hours.get("endTime") if work_hours else "11:00"
@@ -373,7 +373,7 @@ class InsightsService:
             "trend": "neutral"
         }
 
-    def calculate_break_hours(self, sessions: List[FocusSession]) -> Dict[str, Any]:
+    def calculate_break_hours(self, sessions: list[FocusSession]) -> dict[str, Any]:
         if len(sessions) < 2:
             return {"value": "0h 0m", "change": "0%", "trend": "neutral"}
 
@@ -414,17 +414,17 @@ class InsightsService:
 
     def calculate_productivity_trends(
         self,
-        tasks: List[Dict[str, Any]],
-        sessions: List[FocusSession],
+        tasks: list[dict[str, Any]],
+        sessions: list[FocusSession],
         filter_type: str
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         if filter_type == "Daily":
             return self.build_daily_trends(tasks, sessions)
         elif filter_type == "Monthly":
             return self.build_monthly_trends(tasks, sessions)
         return self.build_weekly_trends(tasks, sessions)
 
-    def build_daily_trends(self, tasks: List[Dict[str, Any]], sessions: List[FocusSession]) -> List[Dict[str, Any]]:
+    def build_daily_trends(self, tasks: list[dict[str, Any]], sessions: list[FocusSession]) -> list[dict[str, Any]]:
         today = datetime.utcnow().date()
         trends = []
         for hour in range(8, 23):
@@ -463,7 +463,7 @@ class InsightsService:
             })
         return trends
 
-    def build_weekly_trends(self, tasks: List[Dict[str, Any]], sessions: List[FocusSession]) -> List[Dict[str, Any]]:
+    def build_weekly_trends(self, tasks: list[dict[str, Any]], sessions: list[FocusSession]) -> list[dict[str, Any]]:
         now = datetime.utcnow()
         day_of_week = now.weekday()
         monday = (now - timedelta(days=day_of_week)).date()
@@ -505,7 +505,7 @@ class InsightsService:
             })
         return trends
 
-    def build_monthly_trends(self, tasks: List[Dict[str, Any]], sessions: List[FocusSession]) -> List[Dict[str, Any]]:
+    def build_monthly_trends(self, tasks: list[dict[str, Any]], sessions: list[FocusSession]) -> list[dict[str, Any]]:
         now = datetime.utcnow()
         year = now.year
         month = now.month
@@ -560,7 +560,7 @@ class InsightsService:
 
         return trends
 
-    def calculate_time_distribution(self, tasks: List[Dict[str, Any]], break_minutes: int) -> List[Dict[str, Any]]:
+    def calculate_time_distribution(self, tasks: list[dict[str, Any]], break_minutes: int) -> list[dict[str, Any]]:
         category_map = {"Deep Work": 0, "Meetings": 0, "Admin/Misc": 0}
 
         for t in tasks:

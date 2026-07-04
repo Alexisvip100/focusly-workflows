@@ -2,7 +2,7 @@
 python_interpreter = ".venv/bin/python"
 
 [tool.ruff.lint]
-select = ["E", "F", "W"]
+select = ["E", "F", "W", "UP"]
 ignore = [
     "E711", # SQLAlchemy comparison to None (e.g. == None)
     "E712", # SQLAlchemy comparison to False (e.g. == False)

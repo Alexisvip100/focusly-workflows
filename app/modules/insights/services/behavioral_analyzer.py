@@ -6,7 +6,7 @@ into hourly statistics. These aggregated (never raw) stats are used as input
 for the AI pattern analysis — keeping user data private.
 """
 from datetime import datetime, timedelta
-from typing import List, Dict, Any, Optional
+from typing import Any
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy import or_
@@ -18,7 +18,7 @@ class BehavioralAnalyzer:
     def __init__(self, db: AsyncSession):
         self.db = db
 
-    async def collect_signals(self, user_id: str) -> Dict[str, Any]:
+    async def collect_signals(self, user_id: str) -> dict[str, Any]:
         """
         Fetch and aggregate behavioral signals for the given user.
 
@@ -46,7 +46,7 @@ class BehavioralAnalyzer:
 
     # ── Private Helpers ──────────────────────────────────────────────────────
 
-    async def _fetch_tasks(self, user_id: str) -> List[Task]:
+    async def _fetch_tasks(self, user_id: str) -> list[Task]:
         result = await self.db.execute(
             select(Task).where(
                 Task.userId == user_id,
@@ -56,19 +56,19 @@ class BehavioralAnalyzer:
         )
         return list(result.scalars().all())
 
-    async def _fetch_sessions(self, user_id: str) -> List[FocusSession]:
+    async def _fetch_sessions(self, user_id: str) -> list[FocusSession]:
         result = await self.db.execute(
             select(FocusSession).where(FocusSession.userId == user_id)
         )
         return list(result.scalars().all())
 
-    async def _fetch_workspaces(self, user_id: str) -> List[Workspace]:
+    async def _fetch_workspaces(self, user_id: str) -> list[Workspace]:
         result = await self.db.execute(
             select(Workspace).where(Workspace.userId == user_id)
         )
         return list(result.scalars().all())
 
-    def _to_dt(self, value) -> Optional[datetime]:
+    def _to_dt(self, value) -> datetime | None:
         if value is None:
             return None
         if isinstance(value, datetime):
@@ -82,10 +82,10 @@ class BehavioralAnalyzer:
 
     def _build_hour_buckets(
         self,
-        tasks: List[Task],
-        sessions: List[FocusSession],
-        workspaces: List[Workspace],
-    ) -> Dict[str, Dict[str, Any]]:
+        tasks: list[Task],
+        sessions: list[FocusSession],
+        workspaces: list[Workspace],
+    ) -> dict[str, dict[str, Any]]:
         """
         For each hour (0-23) aggregate:
           - tasks_completed: tasks marked Done in that hour
@@ -95,7 +95,7 @@ class BehavioralAnalyzer:
           - workspace_edits: workspace saves in that hour
           - efficiency_sum / efficiency_count: ratio real_timer / estimate_timer
         """
-        buckets: Dict[str, Dict[str, Any]] = {
+        buckets: dict[str, dict[str, Any]] = {
             str(h): {
                 "tasks_completed": 0,
                 "tasks_started": 0,
@@ -166,7 +166,7 @@ class BehavioralAnalyzer:
 
         return buckets
 
-    def _compute_task_stats(self, tasks: List[Task]) -> Dict[str, Any]:
+    def _compute_task_stats(self, tasks: list[Task]) -> dict[str, Any]:
         total = len(tasks)
         if total == 0:
             return {
@@ -204,7 +204,7 @@ class BehavioralAnalyzer:
             "avg_real_minutes": avg_real,
         }
 
-    def _compute_session_stats(self, sessions: List[FocusSession]) -> Dict[str, Any]:
+    def _compute_session_stats(self, sessions: list[FocusSession]) -> dict[str, Any]:
         if not sessions:
             return {"total_sessions": 0, "total_focus_minutes": 0, "avg_session_minutes": 0}
 
@@ -216,8 +216,8 @@ class BehavioralAnalyzer:
         }
 
     def _top_productive_hours(
-        self, buckets: Dict[str, Dict[str, Any]]
-    ) -> List[int]:
+        self, buckets: dict[str, dict[str, Any]]
+    ) -> list[int]:
         """
         Score each hour using a weighted formula:
           score = tasks_completed*3 + high_priority_completed*2 + focus_minutes*0.05 + workspace_edits*0.5
@@ -238,9 +238,9 @@ class BehavioralAnalyzer:
 
     def _infer_work_style(
         self,
-        buckets: Dict[str, Dict[str, Any]],
-        task_stats: Dict[str, Any],
-        session_stats: Dict[str, Any],
+        buckets: dict[str, dict[str, Any]],
+        task_stats: dict[str, Any],
+        session_stats: dict[str, Any],
     ) -> str:
         """
         Heuristic classification of work style to give Gemini extra context.

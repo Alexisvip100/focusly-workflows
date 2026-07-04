@@ -1,5 +1,5 @@
 import uuid
-from typing import List, Dict, Any
+from typing import Any
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 
@@ -10,7 +10,7 @@ class TagsService:
     def __init__(self, db: AsyncSession):
         self.db = db
 
-    async def create(self, tag_data: Dict[str, Any]) -> str:
+    async def create(self, tag_data: dict[str, Any]) -> str:
         tag_id = str(uuid.uuid4())
         parsed_tag = TagCreateSchema(**tag_data)
         
@@ -23,7 +23,7 @@ class TagsService:
         await self.db.commit()
         return tag_id
 
-    async def find_all(self) -> List[Tag]:
+    async def find_all(self) -> list[Tag]:
         result = await self.db.execute(select(Tag))
         return list(result.scalars().all())
 
@@ -40,6 +40,6 @@ class TagsService:
             raise ValueError(f"Tag {name} not found")
         return tag
 
-    async def find_all_by_user(self, user_id: str) -> List[Tag]:
+    async def find_all_by_user(self, user_id: str) -> list[Tag]:
         result = await self.db.execute(select(Tag).where(Tag.userId == user_id))
         return list(result.scalars().all())

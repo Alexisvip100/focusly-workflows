@@ -1,6 +1,6 @@
 import httpx
 from fastapi import APIRouter, Depends, HTTPException
-from typing import List, Dict, Any, Optional
+from typing import Any
 from pydantic import BaseModel
 
 from app.routes.common import get_current_user_id
@@ -11,19 +11,19 @@ router = APIRouter(prefix="/ai/planner", tags=["ai-planner"])
 # ─── Request/Response Schemas ───────────────────────────────────────────────────
 
 class OrganizeTasksRequest(BaseModel):
-    tasks: List[Dict[str, Any]]
+    tasks: list[dict[str, Any]]
 
 class CalendarPlannerRequest(BaseModel):
-    tasks: List[Dict[str, Any]]
-    free_slots: List[Dict[str, Any]]
+    tasks: list[dict[str, Any]]
+    free_slots: list[dict[str, Any]]
 
 class WeeklyPlannerRequest(BaseModel):
-    tasks: List[Dict[str, Any]]
-    availability: Optional[Dict[str, Any]] = None
+    tasks: list[dict[str, Any]]
+    availability: dict[str, Any] | None = None
 
 class TaskImproveRequest(BaseModel):
     title: str
-    description: Optional[str] = ""
+    description: str | None = ""
     mode: str  # subtasks, estimate, priority, all
 
 # ─── Endpoints ─────────────────────────────────────────────────────────────────

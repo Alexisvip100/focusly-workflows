@@ -1,9 +1,9 @@
 from datetime import datetime
-from typing import Dict, Any, List, Optional
+from typing import Any
 # pyrefly: ignore [missing-import]
 import numpy as np
 class MigrationService:
-    def migrate_task(self, task: Dict[str, Any]) -> Dict[str, Any]:
+    def migrate_task(self, task: dict[str, Any]) -> dict[str, Any]:
         result = {}
 
         # 1. If task has google_event_id and source is 'google', migrate to ExternalCalendarEvent
@@ -25,7 +25,7 @@ class MigrationService:
         result["task"] = self._migrate_to_new_task(task)
         return result
 
-    def migrate_time_block(self, time_block: Dict[str, Any]) -> Dict[str, Any]:
+    def migrate_time_block(self, time_block: dict[str, Any]) -> dict[str, Any]:
         start = self._parse_date(time_block.get("startTime"))
         end = self._parse_date(time_block.get("endTime"))
         duration = (np.subtract(end, start)).total_seconds() / 60.0
@@ -43,7 +43,7 @@ class MigrationService:
             "updatedAt": datetime.now()
         }
 
-    def _migrate_to_external_event(self, task: Dict[str, Any]) -> Dict[str, Any]:
+    def _migrate_to_external_event(self, task: dict[str, Any]) -> dict[str, Any]:
         collaborators = task.get("collaborators") or []
         links = task.get("links") or []
         conference_data = self._extract_conference_data(links)
@@ -77,7 +77,7 @@ class MigrationService:
             "updatedAt": self._parse_date(task.get("updatedAt"))
         }
 
-    def _migrate_to_meeting(self, task: Dict[str, Any]) -> Dict[str, Any]:
+    def _migrate_to_meeting(self, task: dict[str, Any]) -> dict[str, Any]:
         collaborators = task.get("collaborators") or []
         links = task.get("links") or []
         meeting_url = self._extract_meeting_url(links)
@@ -109,7 +109,7 @@ class MigrationService:
             "updatedAt": self._parse_date(task.get("updatedAt"))
         }
 
-    def _migrate_to_new_task(self, task: Dict[str, Any]) -> Dict[str, Any]:
+    def _migrate_to_new_task(self, task: dict[str, Any]) -> dict[str, Any]:
         tags = task.get("tags") or []
         deadline = self._parse_date(task.get("deadline"))
 
@@ -136,7 +136,7 @@ class MigrationService:
             "completedAt": self._parse_date(task.get("completedAt"))
         }
 
-    def _migrate_to_work_block(self, task: Dict[str, Any]) -> Dict[str, Any]:
+    def _migrate_to_work_block(self, task: dict[str, Any]) -> dict[str, Any]:
         return {
             "id": f"wb_{task.get('id')}",
             "userId": task.get("userId"),
@@ -150,7 +150,7 @@ class MigrationService:
             "updatedAt": self._parse_date(task.get("updatedAt"))    
         }
 
-    def _is_meeting(self, task: Dict[str, Any]) -> bool:
+    def _is_meeting(self, task: dict[str, Any]) -> bool:
         if task.get("collaborators") and len(task.get("collaborators")) > 0:
             return True
         links = task.get("links") or []
@@ -169,7 +169,7 @@ class MigrationService:
         ]
         return any(domain in url for domain in meeting_domains)
 
-    def _extract_conference_data(self, links: List[Dict[str, str]]) -> Optional[Dict[str, Any]]:
+    def _extract_conference_data(self, links: list[dict[str, str]]) -> dict[str, Any] | None:
         for link in links:
             url = link.get("url", "")
             if "meet.google.com" in url:
@@ -180,14 +180,14 @@ class MigrationService:
                 return {"type": "teams", "uri": url}
         return None
 
-    def _extract_meeting_url(self, links: List[Dict[str, str]]) -> Optional[str]:
+    def _extract_meeting_url(self, links: list[dict[str, str]]) -> str | None:
         for link in links:
             url = link.get("url", "")
             if self._is_meeting_link(url):
                 return url
         return None
 
-    def _map_response_status(self, status: Optional[str]) -> str:
+    def _map_response_status(self, status: str | None) -> str:
         if not status:
             return "needsAction"
         status_lower = status.lower()
@@ -204,7 +204,7 @@ class MigrationService:
             return "medium"
         return "low"
 
-    def _map_urgency(self, deadline: Optional[datetime]) -> str:
+    def _map_urgency(self, deadline: datetime | None) -> str:
         if not deadline:
             return "flexible"
         # Always compare naive datetimes (deadline is stored without tzinfo)
@@ -222,7 +222,7 @@ class MigrationService:
             return "this_month"
         return "flexible"
 
-    def _map_status(self, status: Optional[str]) -> str:
+    def _map_status(self, status: str | None) -> str:
         if not status:
             return "backlog"
         mapping = {
@@ -238,12 +238,12 @@ class MigrationService:
         }
         return mapping.get(status, "backlog")
 
-    def _map_block_type(self, block_type: Optional[str]) -> str:
+    def _map_block_type(self, block_type: str | None) -> str:
         if block_type in ["Focus_Block", "Break"]:
             return "focus" if block_type == "Focus_Block" else "break"
         return "focus"
 
-    def _parse_date(self, val: Any) -> Optional[datetime]:
+    def _parse_date(self, val: Any) -> datetime | None:
         if not val:
             return None
         if isinstance(val, datetime):
@@ -258,7 +258,7 @@ class MigrationService:
                 return None
         return None
 
-    def create_default_scheduling_constraints(self, user_id: str) -> Dict[str, Any]:
+    def create_default_scheduling_constraints(self, user_id: str) -> dict[str, Any]:
         return {
             "userId": user_id,
             "workingDays": ["mon", "tue", "wed", "thu", "fri"],

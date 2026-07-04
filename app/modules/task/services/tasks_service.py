@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime, timedelta
-from typing import List, Dict, Any, Optional, Tuple
+from typing import Any
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy import or_
@@ -16,7 +16,7 @@ class TasksService:
         self.scheduler_service = SchedulerService()
         self.socket_server = socket_server
 
-    def _map_to_dict(self, t: Task) -> Dict[str, Any]:
+    def _map_to_dict(self, t: Task) -> dict[str, Any]:
         return {
             "id": t.id,
             "userId": t.userId,
@@ -52,11 +52,11 @@ class TasksService:
 
     async def create(
         self,
-        task_data: Dict[str, Any],
+        task_data: dict[str, Any],
         skip_scheduling: bool = False,
         skip_google_sync: bool = False,
         skip_existing_check: bool = False
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         user_id = task_data.get("userId")
         google_event_id = task_data.get("google_event_id")
 
@@ -118,7 +118,7 @@ class TasksService:
 
         return self._map_to_dict(new_task)
 
-    async def get_synced_google_ids(self, user_id: str) -> List[str]:
+    async def get_synced_google_ids(self, user_id: str) -> list[str]:
         result = await self.db.execute(
             select(Task.google_event_id).where(
                 Task.userId == user_id,
@@ -128,23 +128,23 @@ class TasksService:
         )
         return [r for r in result.scalars().all() if r]
 
-    async def find_one(self, id: str) -> Dict[str, Any]:
+    async def find_one(self, id: str) -> dict[str, Any]:
         result = await self.db.execute(select(Task).where(Task.id == id))
         task = result.scalars().first()
         if not task:
             raise ValueError(f"Task with ID {id} not found")
         return self._map_to_dict(task)
 
-    async def find_all(self) -> List[Dict[str, Any]]:
+    async def find_all(self) -> list[dict[str, Any]]:
         result = await self.db.execute(select(Task).where(Task.deletedAt == None, or_(Task.source != "google", Task.source == None)))
         return [self._map_to_dict(t) for t in result.scalars().all()]
 
     async def find_all_by_user(
         self,
         user_id: str,
-        filters: Optional[Dict[str, Any]] = None,
-        sort: Optional[Dict[str, Any]] = None
-    ) -> List[Dict[str, Any]]:
+        filters: dict[str, Any] | None = None,
+        sort: dict[str, Any] | None = None
+    ) -> list[dict[str, Any]]:
         result = await self.db.execute(
             select(Task).where(Task.userId == user_id, Task.deletedAt == None, or_(Task.source != "google", Task.source == None))
         )
@@ -154,11 +154,11 @@ class TasksService:
     async def find_paginated_by_user(
         self,
         user_id: str,
-        filters: Optional[Dict[str, Any]] = None,
-        sort: Optional[Dict[str, Any]] = None,
+        filters: dict[str, Any] | None = None,
+        sort: dict[str, Any] | None = None,
         offset: int = 0,
-        limit: Optional[int] = None
-    ) -> Tuple[List[Dict[str, Any]], int]:
+        limit: int | None = None
+    ) -> tuple[list[dict[str, Any]], int]:
         tasks = await self.find_all_by_user(user_id, filters, sort)
         total_count = len(tasks)
         end_idx = (offset + limit) if limit is not None else total_count
@@ -167,14 +167,14 @@ class TasksService:
 
     async def filter_by_status(
         self,
-        filters: Dict[str, Any],
-        sort: Optional[Dict[str, Any]] = None
-    ) -> List[Dict[str, Any]]:
+        filters: dict[str, Any],
+        sort: dict[str, Any] | None = None
+    ) -> list[dict[str, Any]]:
         result = await self.db.execute(select(Task).where(Task.deletedAt == None, or_(Task.source != "google", Task.source == None)))
         tasks = [self._map_to_dict(t) for t in result.scalars().all()]
         return self._apply_filters_and_sorting(tasks, filters, sort)
 
-    async def find_upcoming_tasks(self, start_date: datetime, end_date: datetime) -> List[Dict[str, Any]]:
+    async def find_upcoming_tasks(self, start_date: datetime, end_date: datetime) -> list[dict[str, Any]]:
         result = await self.db.execute(
             select(Task).where(
                 Task.deadline >= start_date,
@@ -186,7 +186,7 @@ class TasksService:
         )
         return [self._map_to_dict(t) for t in result.scalars().all()]
 
-    async def find_last_minute_tasks(self, start_date: datetime, end_date: datetime) -> List[Dict[str, Any]]:
+    async def find_last_minute_tasks(self, start_date: datetime, end_date: datetime) -> list[dict[str, Any]]:
         result = await self.db.execute(
             select(Task).where(
                 Task.deadline >= start_date,
@@ -215,10 +215,10 @@ class TasksService:
     async def update(
         self,
         id: str,
-        update_data: Dict[str, Any],
+        update_data: dict[str, Any],
         skip_scheduling: bool = False,
         skip_google_sync: bool = False
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         result = await self.db.execute(select(Task).where(Task.id == id))
         task = result.scalars().first()
         if not task:
@@ -329,7 +329,7 @@ class TasksService:
         if task.userId and not skip_scheduling:
             await self.scheduler_service.run_scheduling_pipeline(task.userId, self.db, self.socket_server)
 
-    async def delete_many(self, ids: List[str]) -> None:
+    async def delete_many(self, ids: list[str]) -> None:
         user_ids = set()
         for id in ids:
             result = await self.db.execute(select(Task).where(Task.id == id))
@@ -357,10 +357,10 @@ class TasksService:
 
     def _apply_filters_and_sorting(
         self,
-        tasks: List[Dict[str, Any]],
-        filters: Optional[Dict[str, Any]] = None,
-        sort: Optional[Dict[str, Any]] = None
-    ) -> List[Dict[str, Any]]:
+        tasks: list[dict[str, Any]],
+        filters: dict[str, Any] | None = None,
+        sort: dict[str, Any] | None = None
+    ) -> list[dict[str, Any]]:
         mapped = list(tasks)
 
         if filters:
@@ -439,7 +439,7 @@ class TasksService:
 
         return mapped
 
-    def _map_task_to_google_event(self, task: Dict[str, Any]) -> Dict[str, Any]:
+    def _map_task_to_google_event(self, task: dict[str, Any]) -> dict[str, Any]:
         def parse_naive(val):
             """Parse a datetime string or object and always return a naive (offset-free) datetime."""
             if not val:

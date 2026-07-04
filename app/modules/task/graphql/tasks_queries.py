@@ -1,5 +1,4 @@
 import strawberry
-from typing import List, Optional
 
 from app.graphql import types
 from app.graphql.common import get_user_id
@@ -9,7 +8,7 @@ from app.modules.task.services.tasks_service import TasksService
 @strawberry.type
 class TaskQuery:
     @strawberry.field
-    async def get_tasks(self, info) -> List[types.Task]:
+    async def get_tasks(self, info) -> list[types.Task]:
         get_user_id(info)
         db = info.context["db"]
         tasks_serv = TasksService(db)
@@ -21,9 +20,9 @@ class TaskQuery:
         self,
         info,
         user_id: str,
-        filters: Optional[types.TaskFilterInput] = None,
-        sort: Optional[types.TaskSortInput] = None
-    ) -> List[types.Task]:
+        filters: types.TaskFilterInput | None = None,
+        sort: types.TaskSortInput | None = None
+    ) -> list[types.Task]:
         get_user_id(info)
         db = info.context["db"]
         tasks_serv = TasksService(db)
@@ -60,10 +59,10 @@ class TaskQuery:
         self,
         info,
         user_id: str,
-        filters: Optional[types.TaskFilterInput] = None,
-        sort: Optional[types.TaskSortInput] = None,
-        offset: Optional[int] = 0,
-        limit: Optional[int] = None
+        filters: types.TaskFilterInput | None = None,
+        sort: types.TaskSortInput | None = None,
+        offset: int | None = 0,
+        limit: int | None = None
     ) -> types.PaginatedTasks:
         get_user_id(info)
         db = info.context["db"]
@@ -118,7 +117,7 @@ class TaskQuery:
         self,
         info,
         filters: types.TaskFilterInput
-    ) -> List[types.Task]:
+    ) -> list[types.Task]:
         get_user_id(info)
         db = info.context["db"]
         tasks_serv = TasksService(db)

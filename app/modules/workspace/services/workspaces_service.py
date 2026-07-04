@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from typing import List, Dict, Any, Optional
+from typing import Any
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy import update
@@ -12,7 +12,7 @@ class WorkspacesService:
     def __init__(self, db: AsyncSession):
         self.db = db
 
-    async def create(self, create_input: Dict[str, Any], user_id: str) -> Workspace:
+    async def create(self, create_input: dict[str, Any], user_id: str) -> Workspace:
         workspace_id = str(uuid.uuid4())
         group_id = create_input.pop("groupId", None)
 
@@ -30,7 +30,7 @@ class WorkspacesService:
         await self.db.refresh(workspace)
         return workspace
 
-    async def find_all(self, user_id: str, search: Optional[str] = None, group_id: Optional[str] = None) -> List[Workspace]:
+    async def find_all(self, user_id: str, search: str | None = None, group_id: str | None = None) -> list[Workspace]:
         query = select(Workspace).where(Workspace.userId == user_id)
         if group_id is not None:
             query = query.where(Workspace.groupId == group_id)
@@ -59,7 +59,7 @@ class WorkspacesService:
         result = await self.db.execute(select(func.count(Workspace.id)).where(Workspace.userId == user_id))
         return result.scalar() or 0
 
-    async def update(self, id: str, update_input: Dict[str, Any], user_id: str) -> Workspace:
+    async def update(self, id: str, update_input: dict[str, Any], user_id: str) -> Workspace:
         result = await self.db.execute(select(Workspace).where(Workspace.id == id))
         workspace = result.scalars().first()
         if not workspace or workspace.userId != user_id:
@@ -121,6 +121,6 @@ class WorkspacesService:
         await self.db.commit()
         return True
 
-    async def find_by_task_id(self, task_id: str) -> Optional[Workspace]:
+    async def find_by_task_id(self, task_id: str) -> Workspace | None:
         result = await self.db.execute(select(Workspace).where(Workspace.taskId == task_id))
         return result.scalars().first()

@@ -1,14 +1,14 @@
 from pydantic import BaseModel, model_validator
-from typing import Optional, Any
+from typing import Any
 
 class WorkspaceCreateSchema(BaseModel):
-    title: Optional[str] = None
-    emoji: Optional[str] = None
-    background_color: Optional[str] = None
-    card_show_background: Optional[bool] = None
-    content: Optional[str] = ""
-    taskId: Optional[str] = None
-    saveStatus: Optional[bool] = False
+    title: str | None = None
+    emoji: str | None = None
+    background_color: str | None = None
+    card_show_background: bool | None = None
+    content: str | None = ""
+    taskId: str | None = None
+    saveStatus: bool | None = False
 
     @model_validator(mode="before")
     @classmethod
