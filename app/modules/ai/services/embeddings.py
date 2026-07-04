@@ -16,5 +16,5 @@ def generate_embedding(text: str) -> list[float]:
             contents=text,
         )
         return response.embeddings[0].values
-    except Exception as e:
+    except Exception:
         return []

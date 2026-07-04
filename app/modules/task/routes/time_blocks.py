@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Depends, Body
+from fastapi import APIRouter, HTTPException, Depends
 from typing import List, Dict, Any, Optional
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -49,7 +49,7 @@ async def find_time_block(
         return await tb_service.find_one(id)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
-    except Exception as e:
+    except Exception:
         raise HTTPException(status_code=500, detail="Internal server error")
 
 @router.get("/user/{userId}", response_model=List[Dict[str, Any]])

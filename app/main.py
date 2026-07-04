@@ -1,12 +1,10 @@
 import asyncio
-import strawberry
 import jwt
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, Request, Response
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from strawberry.fastapi import GraphQLRouter
 import socketio
-from typing import Any
 
 from app.config import settings
 from app.database import async_session_local
@@ -21,7 +19,6 @@ from app.modules.notification.services.task_notifier_service import run_task_not
 
 
 from app.database import engine, Base
-from app.models import Conversation, Message
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -38,7 +35,6 @@ async def lifespan(app: FastAPI):
         pass
 
 from fastapi.responses import JSONResponse
-import traceback
 
 # 1. Initialize FastAPI
 fastapi_app = FastAPI(title="Focusly Backend", version="1.0.0", lifespan=lifespan)
@@ -108,7 +104,7 @@ async def get_context(request: Request):
         try:
             payload = jwt.decode(token, settings.JWT_SECRET, algorithms=["HS256"])
             user_id = payload.get("sub")
-        except Exception as e:
+        except Exception:
             pass # Invalid token, keep user_id = None
 
     return {

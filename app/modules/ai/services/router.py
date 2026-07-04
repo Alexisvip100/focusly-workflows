@@ -36,5 +36,5 @@ User Query: {user_query}
         if "simple" in result:
             return "simple"
         return "complex"
-    except Exception as e:
+    except Exception:
         return "complex" # Default to complex on failure

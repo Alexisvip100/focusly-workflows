@@ -94,5 +94,5 @@ async def extract_and_save_memory(user_id: str, message: str, db: AsyncSession):
             db.add(new_memory)
             
         await db.commit()
-    except Exception as e:
+    except Exception:
         pass

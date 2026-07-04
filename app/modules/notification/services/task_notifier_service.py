@@ -118,7 +118,7 @@ async def _emit_notification(
     }
     try:
         await sio.emit("task_upcoming", payload, room=room, namespace="/realtime")
-    except Exception as exc:
+    except Exception:
         pass
 
 
@@ -130,6 +130,6 @@ async def run_task_notifier_loop() -> None:
     while True:
         try:
             await _check_and_notify_once()
-        except Exception as exc:
+        except Exception:
             pass
         await asyncio.sleep(60)

@@ -79,7 +79,7 @@ async def get_events(
             })
 
         return mapped_events
-    except Exception as e:
+    except Exception:
         raise HTTPException(status_code=500, detail="Failed to retrieve Google Calendar events")
 
 @router.post("/events")
@@ -96,7 +96,7 @@ async def create_event(
         # Notify client via WebSocket
         await realtime_gateway.emitScheduleUpdate(user_id, {"source": "google_calendar_create"})
         return google_event
-    except Exception as e:
+    except Exception:
         raise HTTPException(status_code=500, detail="Failed to create Google Calendar event")
 
 @router.patch("/events/{id}")
@@ -114,7 +114,7 @@ async def patch_event(
         # Notify client via WebSocket
         await realtime_gateway.emitScheduleUpdate(user_id, {"source": "google_calendar_patch"})
         return google_event
-    except Exception as e:
+    except Exception:
         raise HTTPException(status_code=500, detail="Failed to patch Google Calendar event")
 
 @router.delete("/events/{id}")
@@ -131,7 +131,7 @@ async def remove_event(
         # Notify client via WebSocket
         await realtime_gateway.emitScheduleUpdate(user_id, {"source": "google_calendar_delete"})
         return {"success": True}
-    except Exception as e:
+    except Exception:
         raise HTTPException(status_code=500, detail="Failed to delete Google Calendar event")
 
 @router.post("/webhook")
@@ -177,7 +177,7 @@ async def handle_google_webhook(
                     await gc_service_bg.sync_calendar(userId)
                     # Notify frontend via WebSocket so it re-fetches Google events in real-time
                     await realtime_gateway.emitScheduleUpdate(userId, {"source": "google_calendar_webhook"})
-                except Exception as err:
+                except Exception:
                     pass
 
         # Start background task

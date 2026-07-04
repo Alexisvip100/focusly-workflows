@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Depends, Request, BackgroundTasks
+from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from typing import List, Dict, Any, Optional
@@ -106,7 +106,7 @@ async def background_post_chat_tasks(user_id: str, conversation_id: str, user_me
         # Summarizer Check
         await check_and_summarize(conversation_id, db)
         
-    except Exception as e:
+    except Exception:
         pass
 
 async def stream_gemini_and_save(

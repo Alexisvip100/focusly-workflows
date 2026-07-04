@@ -2,7 +2,7 @@ import uuid
 import time
 import re
 from datetime import datetime, timedelta
-from typing import List, Dict, Any, Optional
+from typing import Dict, Any, Optional
 from urllib.parse import urlencode
 import httpx
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -313,7 +313,7 @@ class GoogleCalendarService:
             if user.googleChannelId and user.googleResourceId:
                 try:
                     await self.stop_watching_calendar(user_id)
-                except Exception as e:
+                except Exception:
                     pass
 
             token_info = await self.auth_service.refresh_google_access_token(user_id)
@@ -355,7 +355,7 @@ class GoogleCalendarService:
 
             pass
 
-        except Exception as error:
+        except Exception:
             pass
 
     async def stop_watching_calendar(self, user_id: str) -> None:

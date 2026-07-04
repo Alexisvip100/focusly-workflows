@@ -1,4 +1,3 @@
-import math
 import uuid
 from datetime import datetime, timedelta
 from typing import Dict, Any, List, Optional, Tuple
@@ -555,5 +554,5 @@ class SchedulerService:
                     room=f"user_{user_id}",
                     namespace="/realtime"
                 )
-            except Exception as e:
+            except Exception:
                 pass

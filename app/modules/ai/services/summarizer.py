@@ -61,5 +61,5 @@ async def check_and_summarize(conversation_id: str, db: AsyncSession, threshold:
             await db.delete(m)
             
         await db.commit()
-    except Exception as e:
+    except Exception:
         pass

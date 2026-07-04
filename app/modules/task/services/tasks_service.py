@@ -3,7 +3,7 @@ from datetime import datetime, timedelta
 from typing import List, Dict, Any, Optional, Tuple
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
-from sqlalchemy import delete, and_, or_
+from sqlalchemy import or_
 
 from app.models import Task, User, Workspace
 from app.modules.task.services.scheduler_service import SchedulerService
@@ -82,7 +82,7 @@ class TasksService:
                     if google_event and google_event.get("id"):
                         task_data["google_event_id"] = google_event["id"]
                         task_data["task_type"] = "GoogleTask"
-            except Exception as e:
+            except Exception:
                 pass
 
         task_id = task_data.get("id") or str(uuid.uuid4())
@@ -286,7 +286,7 @@ class TasksService:
                     await self.google_calendar_service.patch_event(
                         task.userId, task.google_event_id, google_event_body
                     )
-                except Exception as e:
+                except Exception:
                     pass
 
             await self.db.commit()
@@ -313,7 +313,7 @@ class TasksService:
             if self.google_calendar_service:
                 try:
                     await self.google_calendar_service.delete_event(task.userId, task.google_event_id)
-                except Exception as e:
+                except Exception:
                     pass
 
         # Release task references from workspaces

@@ -1,14 +1,12 @@
 import time
-from typing import Dict, Any, Tuple, Optional
+from typing import Dict, Any, Optional
 import jwt
 import httpx
-from cryptography.x509 import load_pem_x509_certificate
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 
 from app.config import settings
 from app.models import User
-from app.database import async_session_local
 
 
 class AuthService:
@@ -199,7 +197,7 @@ class AuthService:
                     )
                     if response.status_code in (200, 201):
                         return
-                except Exception as err:
+                except Exception:
                     pass
 
     async def verify_magic_link_token(self, token: str) -> Dict[str, Any]:

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Response, Request, HTTPException, Depends, Body
+from fastapi import APIRouter, Response, Request, HTTPException, Depends
 from typing import Dict, Any, Optional
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -63,7 +63,7 @@ async def google_login(
         return {"user": result["user"]}
     except ValueError as e:
         raise HTTPException(status_code=401, detail=str(e))
-    except Exception as e:
+    except Exception:
         raise HTTPException(status_code=500, detail="Internal server error")
 
 @router.post("/refresh")
@@ -90,7 +90,7 @@ async def refresh(
         return {"success": True}
     except ValueError as e:
         raise HTTPException(status_code=401, detail=str(e))
-    except Exception as e:
+    except Exception:
         raise HTTPException(status_code=500, detail="Internal server error")
 
 @router.post("/google/refresh")
@@ -102,7 +102,7 @@ async def refresh_google_token(
         return await auth_service.refresh_google_access_token(body.userId)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
+    except Exception:
         raise HTTPException(status_code=500, detail="Internal server error")
 
 @router.post("/logout")
@@ -121,7 +121,7 @@ async def request_magic_link(
         token = auth_service.generate_magic_link_token(body.email, body.fullName)
         await auth_service.send_magic_link(body.email, token)
         return {"success": True, "message": "Magic link sent successfully"}
-    except Exception as e:
+    except Exception:
         raise HTTPException(status_code=500, detail="Internal server error")
 
 @router.post("/magic-link/verify")
@@ -136,5 +136,5 @@ async def verify_magic_link(
         return {"user": result["user"]}
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
+    except Exception:
         raise HTTPException(status_code=500, detail="Internal server error")

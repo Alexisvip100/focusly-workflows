@@ -105,7 +105,7 @@ async def build_context(user_id: str, conversation_id: str, query: str, db: Asyn
                 for t in trends:
                     context += f"  * {t.get('label')}: Planned {t.get('planned')}h, Actual {t.get('actual')}h\n"
             context += "\n"
-    except Exception as e:
+    except Exception:
         pass
 
     # 4. Fetch conversation summary
