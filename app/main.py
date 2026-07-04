@@ -1,27 +1,24 @@
 import asyncio
-import strawberry
 import jwt
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, Request, Response
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from strawberry.fastapi import GraphQLRouter
 import socketio
-from typing import Any
 
 from app.config import settings
 from app.database import async_session_local
 from app.sockets.realtime import sio
-from app.routes.auth.auth import router as auth_router
-from app.routes.users.users import router as users_router
-from app.routes.google_calendar.google_calendar import router as google_calendar_router
-from app.routes.time_blocks.time_blocks import router as time_blocks_router
-from app.routes.ai.ai import router as ai_router
-from app.routes.ai.planner import router as planner_router
-from app.services.notifications.task_notifier_service import run_task_notifier_loop
+from app.modules.auth.routes import router as auth_router
+from app.modules.user.routes import router as users_router
+from app.modules.google_calendar.routes import router as google_calendar_router
+from app.modules.task.routes.time_blocks import router as time_blocks_router
+from app.modules.ai.routes.ai import router as ai_router
+from app.modules.ai.routes.planner import router as planner_router
+from app.modules.notification.services.task_notifier_service import run_task_notifier_loop
 
 
 from app.database import engine, Base
-from app.models import Conversation, Message
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -38,7 +35,6 @@ async def lifespan(app: FastAPI):
         pass
 
 from fastapi.responses import JSONResponse
-import traceback
 
 # 1. Initialize FastAPI
 fastapi_app = FastAPI(title="Focusly Backend", version="1.0.0", lifespan=lifespan)
@@ -108,7 +104,7 @@ async def get_context(request: Request):
         try:
             payload = jwt.decode(token, settings.JWT_SECRET, algorithms=["HS256"])
             user_id = payload.get("sub")
-        except Exception as e:
+        except Exception:
             pass # Invalid token, keep user_id = None
 
     return {

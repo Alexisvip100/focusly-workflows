@@ -1,10 +1,13 @@
 import strawberry
-from app.graphql.tasks import TaskQuery, TaskMutation
-from app.graphql.workspaces import WorkspaceQuery, WorkspaceMutation
-from app.graphql.auth import AuthMutation
-from app.graphql.tags import TagQuery
-from app.graphql.insights import InsightsQuery
-from app.graphql.project_groups import ProjectGroupQuery, ProjectGroupMutation
+from app.modules.task.graphql.tasks_queries import TaskQuery
+from app.modules.task.graphql.tasks_mutations import TaskMutation
+from app.modules.workspace.graphql.workspaces_queries import WorkspaceQuery
+from app.modules.workspace.graphql.workspaces_mutations import WorkspaceMutation
+from app.modules.auth.graphql.mutations import AuthMutation
+from app.modules.task.graphql.tags_queries import TagQuery
+from app.modules.insights.graphql.queries import InsightsQuery
+from app.modules.workspace.graphql.project_groups_queries import ProjectGroupQuery
+from app.modules.workspace.graphql.project_groups_mutations import ProjectGroupMutation
 
 
 @strawberry.type
