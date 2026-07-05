@@ -14,7 +14,7 @@ class InsightsService:
         self.focus_sessions_service = focus_sessions_service
         self.users_service = users_service
 
-    async def getInsights(self, user_id: str, filter_type: str, timezone_offset_minutes: int = 0) -> dict[str, Any]:
+    async def getInsights(self, user_id: str, filter_type: str, timezone_offset_minutes: int = 0, base_date: str | None = None) -> dict[str, Any]:
         # 1. Fetch data
         if self.tasks_service:
             all_tasks = await self.tasks_service.find_all_by_user(user_id)
@@ -37,7 +37,14 @@ class InsightsService:
         # 2. Determine Date Range based on filter
         # timezone_offset_minutes: JS getTimezoneOffset() value (e.g. 360 for UTC-6)
         # Subtract offset to convert UTC → local time
-        now = datetime.utcnow() - timedelta(minutes=timezone_offset_minutes)
+        if base_date:
+            try:
+                now = datetime.strptime(base_date.split('T')[0], "%Y-%m-%d")
+            except ValueError:
+                now = datetime.utcnow() - timedelta(minutes=timezone_offset_minutes)
+        else:
+            now = datetime.utcnow() - timedelta(minutes=timezone_offset_minutes)
+            
         start_date = datetime(now.year, now.month, now.day)
 
         if filter_type == "Daily":
@@ -47,17 +54,37 @@ class InsightsService:
             start_date = start_date - timedelta(days=day_of_week)
         elif filter_type == "Monthly":
             start_date = datetime(start_date.year, start_date.month, 1)
+        elif filter_type == "Yearly":
+            y = start_date.year
+            m = start_date.month - 11
+            while m <= 0:
+                m += 12
+                y -= 1
+            start_date = datetime(y, m, 1)
         else:
             day_of_week = start_date.weekday()
             start_date = start_date - timedelta(days=day_of_week)
 
-        # 3. Filter Tasks
+        # 3. Filter Tasks and Sessions
         filtered_tasks = []
+        end_date = now.replace(hour=23, minute=59, second=59)
         for t in all_tasks:
             updated_str = t.get("updatedAt") or t.get("createdAt")
             task_date = datetime.fromisoformat(updated_str.replace("Z", "+00:00")).replace(tzinfo=None) if updated_str else now
-            if task_date >= start_date or t.get("status") != "Done":
+            if (start_date <= task_date <= end_date) or t.get("status") != "Done":
                 filtered_tasks.append(t)
+
+        filtered_sessions = []
+        for s in all_focus_sessions:
+            s_dt = s.startedAt
+            if not s_dt:
+                continue
+            if isinstance(s_dt, str):
+                s_dt = datetime.fromisoformat(s_dt.replace("Z", "+00:00")).replace(tzinfo=None)
+            elif hasattr(s_dt, "replace"):
+                s_dt = s_dt.replace(tzinfo=None)
+            if start_date <= s_dt <= end_date:
+                filtered_sessions.append(s)
 
         # 4. Calculate Metrics
         
@@ -86,18 +113,18 @@ class InsightsService:
         user_settings = user.settings if user else None
         work_hours_config = user_settings.get("workHoursConfig") if isinstance(user_settings, dict) else None
         
-        golden_window = self.calculate_golden_window(all_focus_sessions, work_hours_config)
-        break_stats = self.calculate_break_hours(all_focus_sessions)
+        golden_window = self.calculate_golden_window(filtered_sessions, work_hours_config)
+        break_stats = self.calculate_break_hours(filtered_sessions)
 
         # 5. Productivity Trends
-        productivity_trends = self.calculate_productivity_trends(all_tasks, all_focus_sessions, filter_type)
+        productivity_trends = self.calculate_productivity_trends(all_tasks, filtered_sessions, filter_type, now)
 
         # 6. Time Distribution
         break_minutes = self.extract_break_minutes(break_stats["value"])
         time_distribution = self.calculate_time_distribution(filtered_tasks, break_minutes)
 
         # 7. Activity Map (completed tasks)
-        heatmap_data, heatmap_labels, heatmap_cells = self.calculate_activity_map(all_tasks, filter_type, timezone_offset_minutes)
+        heatmap_data, heatmap_labels, heatmap_cells = self.calculate_activity_map(all_tasks, filter_type, timezone_offset_minutes, now)
 
         return {
             "totalFocusHours": total_focus_hours,
@@ -165,15 +192,18 @@ class InsightsService:
         tasks: list[dict[str, Any]],
         filter_type: str,
         timezone_offset_minutes: int = 0,
+        ref_now: datetime | None = None,
     ) -> tuple[list[int], list[str], list[dict[str, Any]]]:
         # Convert UTC now to user's local time
-        now = datetime.utcnow() - timedelta(minutes=timezone_offset_minutes)
+        now = ref_now if ref_now is not None else (datetime.utcnow() - timedelta(minutes=timezone_offset_minutes))
         completed_tasks = [t for t in tasks if self._get_completion_datetime(t) is not None]
 
         if filter_type == "Daily":
             return self._build_daily_activity_map(completed_tasks, now, timezone_offset_minutes)
         if filter_type == "Monthly":
             return self._build_monthly_activity_map(completed_tasks, now, timezone_offset_minutes)
+        if filter_type == "Yearly":
+            return self._build_yearly_activity_map(completed_tasks, now, timezone_offset_minutes)
         return self._build_weekly_activity_map(completed_tasks, now, timezone_offset_minutes)
 
     def _build_task_entry(self, task: dict[str, Any]) -> dict[str, Any]:
@@ -297,6 +327,60 @@ class InsightsService:
 
         return intensities, ["Start", "Middle", "End"], cells
 
+    def _build_yearly_activity_map(
+        self,
+        completed_tasks: list[dict[str, Any]],
+        now: datetime,
+        timezone_offset_minutes: int = 0,
+    ) -> tuple[list[int], list[str], list[dict[str, Any]]]:
+        # Align to Sunday of 52 weeks ago
+        start_day = now - timedelta(days=364)
+        days_to_sunday = (start_day.weekday() + 1) % 7
+        aligned_start = (start_day - timedelta(days=days_to_sunday)).date()
+
+        total_days = 53 * 7
+        days_list = [aligned_start + timedelta(days=i) for i in range(total_days)]
+
+        bucket: dict[str, list[dict[str, Any]]] = {d.isoformat(): [] for d in days_list}
+
+        for task in completed_tasks:
+            completed_at = self._get_completion_datetime(task)
+            if completed_at:
+                local_completed_at = completed_at - timedelta(minutes=timezone_offset_minutes)
+                date_key = local_completed_at.date().isoformat()
+                if date_key in bucket:
+                    bucket[date_key].append(self._build_task_entry(task))
+
+        cells = []
+        intensities = []
+        month_names = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+
+        for day in days_list:
+            date_key = day.isoformat()
+            tasks_on_day = bucket[date_key]
+            count = len(tasks_on_day)
+            intensity = self._intensity_from_count(count, "Yearly")
+            intensities.append(intensity)
+            cells.append({
+                "key": date_key,
+                "label": day.strftime("%A, %b %d, %Y"),
+                "intensity": intensity,
+                "count": count,
+                "tasks": tasks_on_day,
+            })
+
+        # Generate month names above columns (aligned to week starts)
+        labels = []
+        last_month = -1
+        for i, day in enumerate(days_list):
+            if i % 7 == 0:
+                m = day.month
+                if m != last_month:
+                    labels.append(month_names[m - 1])
+                    last_month = m
+
+        return intensities, labels, cells
+
     def extract_break_minutes(self, break_value: str) -> int:
         match = re.match(r"(\d+)h\s+(\d+)m", break_value)
         if match:
@@ -416,16 +500,20 @@ class InsightsService:
         self,
         tasks: list[dict[str, Any]],
         sessions: list[FocusSession],
-        filter_type: str
+        filter_type: str,
+        ref_now: datetime | None = None,
     ) -> list[dict[str, Any]]:
+        now = ref_now if ref_now is not None else datetime.utcnow()
         if filter_type == "Daily":
-            return self.build_daily_trends(tasks, sessions)
+            return self.build_daily_trends(tasks, sessions, now)
         elif filter_type == "Monthly":
-            return self.build_monthly_trends(tasks, sessions)
-        return self.build_weekly_trends(tasks, sessions)
+            return self.build_monthly_trends(tasks, sessions, now)
+        elif filter_type == "Yearly":
+            return self.build_yearly_trends(tasks, sessions, now)
+        return self.build_weekly_trends(tasks, sessions, now)
 
-    def build_daily_trends(self, tasks: list[dict[str, Any]], sessions: list[FocusSession]) -> list[dict[str, Any]]:
-        today = datetime.utcnow().date()
+    def build_daily_trends(self, tasks: list[dict[str, Any]], sessions: list[FocusSession], now: datetime) -> list[dict[str, Any]]:
+        today = now.date()
         trends = []
         for hour in range(8, 23):
             label = "12PM" if hour == 12 else (f"{hour - 12}PM" if hour > 12 else f"{hour}AM")
@@ -463,8 +551,7 @@ class InsightsService:
             })
         return trends
 
-    def build_weekly_trends(self, tasks: list[dict[str, Any]], sessions: list[FocusSession]) -> list[dict[str, Any]]:
-        now = datetime.utcnow()
+    def build_weekly_trends(self, tasks: list[dict[str, Any]], sessions: list[FocusSession], now: datetime) -> list[dict[str, Any]]:
         day_of_week = now.weekday()
         monday = (now - timedelta(days=day_of_week)).date()
 
@@ -505,8 +592,7 @@ class InsightsService:
             })
         return trends
 
-    def build_monthly_trends(self, tasks: list[dict[str, Any]], sessions: list[FocusSession]) -> list[dict[str, Any]]:
-        now = datetime.utcnow()
+    def build_monthly_trends(self, tasks: list[dict[str, Any]], sessions: list[FocusSession], now: datetime) -> list[dict[str, Any]]:
         year = now.year
         month = now.month
         
@@ -557,6 +643,57 @@ class InsightsService:
 
             week_start = week_end + timedelta(days=1)
             week_num += 1
+
+        return trends
+
+    def build_yearly_trends(self, tasks: list[dict[str, Any]], sessions: list[FocusSession], now: datetime) -> list[dict[str, Any]]:
+        curr_year = now.year
+        curr_month = now.month
+
+        months = []
+        for i in range(11, -1, -1):
+            y = curr_year
+            m = curr_month - i
+            while m <= 0:
+                m += 12
+                y -= 1
+            months.append((y, m))
+
+        month_names = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+        trends = []
+
+        for y, m in months:
+            label = f"{month_names[m - 1]}"
+
+            planned_mins = 0.0
+            for t in tasks:
+                dl_str = t.get("deadline") or t.get("createdAt")
+                if dl_str:
+                    dl_dt = datetime.fromisoformat(dl_str.replace("Z", "+00:00"))
+                    if dl_dt.year == y and dl_dt.month == m:
+                        planned_mins += t.get("estimateTimer") or 0
+
+            actual_mins = 0.0
+            for s in sessions:
+                s_dt = s.startedAt
+                if isinstance(s_dt, str):
+                    s_dt = datetime.fromisoformat(s_dt.replace("Z", "+00:00"))
+                if s_dt.year == y and s_dt.month == m:
+                    actual_mins += s.durationMinutes or 0
+
+            if actual_mins == 0.0:
+                for t in tasks:
+                    u_str = t.get("updatedAt") or t.get("createdAt")
+                    if u_str:
+                        u_dt = datetime.fromisoformat(u_str.replace("Z", "+00:00"))
+                        if u_dt.year == y and u_dt.month == m:
+                            actual_mins += t.get("realTimer") or 0
+
+            trends.append({
+                "label": label,
+                "actual": round(actual_mins / 60.0, 1),
+                "planned": round(planned_mins / 60.0, 1)
+            })
 
         return trends
 

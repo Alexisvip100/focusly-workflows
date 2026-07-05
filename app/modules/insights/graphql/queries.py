@@ -15,6 +15,7 @@ class InsightsQuery:
         user_id: str,
         filter: str | None = "Weekly",
         timezone_offset: int | None = 0,
+        base_date: str | None = None,
     ) -> types.InsightsResponse:
         get_user_id(info)
         db = info.context["db"]
@@ -34,7 +35,7 @@ class InsightsQuery:
             users_service=users_serv
         )
         
-        res = await insights_serv.getInsights(user_id, filter or "Weekly", timezone_offset or 0)
+        res = await insights_serv.getInsights(user_id, filter or "Weekly", timezone_offset or 0, base_date)
         
         # Map ProductivityTrend
         trends = []
