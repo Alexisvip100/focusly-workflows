@@ -16,6 +16,7 @@ class TasksService:
         self.scheduler_service = SchedulerService()
         self.socket_server = socket_server
 
+    
     def _map_to_dict(self, t: Task) -> dict[str, Any]:
         return {
             "id": t.id,
@@ -143,13 +144,33 @@ class TasksService:
         self,
         user_id: str,
         filters: dict[str, Any] | None = None,
-        sort: dict[str, Any] | None = None
-    ) -> list[dict[str, Any]]:
+        sort: dict[str, Any] | None = None,
+        offset: int = 0,
+        limit: int = 24,
+    ) -> dict[str, Any]:
         result = await self.db.execute(
-            select(Task).where(Task.userId == user_id, Task.deletedAt == None, or_(Task.source != "google", Task.source == None))
+            select(Task).where(
+                Task.userId == user_id,
+                Task.deletedAt == None,
+                or_(Task.source != "google", Task.source == None),
+            )
         )
+
         tasks = [self._map_to_dict(t) for t in result.scalars().all()]
-        return self._apply_filters_and_sorting(tasks, filters, sort)
+
+        # Aplicar filtros y orden
+        tasks = self._apply_filters_and_sorting(tasks, filters, sort)
+
+        # Total después de filtrar
+        total = len(tasks)
+
+        # Paginación
+        items = tasks[offset: offset + limit]
+
+        return {
+            "items": items,
+            "total": total,
+        }
 
     async def find_paginated_by_user(
         self,
@@ -159,8 +180,9 @@ class TasksService:
         offset: int = 0,
         limit: int | None = None
     ) -> tuple[list[dict[str, Any]], int]:
-        tasks = await self.find_all_by_user(user_id, filters, sort)
-        total_count = len(tasks)
+        res = await self.find_all_by_user(user_id, filters, sort)
+        tasks = res["items"] if isinstance(res, dict) else res
+        total_count = res["total"] if isinstance(res, dict) else len(tasks)
         end_idx = (offset + limit) if limit is not None else total_count
         paginated_tasks = tasks[offset:end_idx]
         return paginated_tasks, total_count

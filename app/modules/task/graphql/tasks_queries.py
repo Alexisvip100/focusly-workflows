@@ -20,8 +20,10 @@ class TaskQuery:
         self,
         info,
         user_id: str,
+        limit: int = 24,
+        offset: int = 0,  
         filters: types.TaskFilterInput | None = None,
-        sort: types.TaskSortInput | None = None
+        sort: types.TaskSortInput | None = None,
     ) -> list[types.Task]:
         get_user_id(info)
         db = info.context["db"]
@@ -51,8 +53,9 @@ class TaskQuery:
                 "order": sort.order or "asc"
             }
 
-        res = await tasks_serv.find_all_by_user(user_id, filters_dict, sort_dict)
-        return [types.map_dict_to_strawberry_task(t) for t in res]
+        res = await tasks_serv.find_all_by_user(user_id, filters_dict, sort_dict, limit=limit, offset=offset)
+        items = res["items"] if isinstance(res, dict) else res
+        return [types.map_dict_to_strawberry_task(t) for t in items]
 
     @strawberry.field
     async def get_tasks_by_user_paginated(
