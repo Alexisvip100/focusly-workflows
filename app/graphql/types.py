@@ -295,6 +295,7 @@ class TaskFilterInput:
     startDate: str | None = None
     endDate: str | None = None
     searchTerm: str | None = None
+    tags: list[str] | None = None
 
 @strawberry.input
 class TaskSortInput:

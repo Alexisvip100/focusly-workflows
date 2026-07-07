@@ -400,6 +400,17 @@ class TasksService:
             if filters.get("category") and len(filters["category"]) > 0:
                 mapped = [t for t in mapped if t.get("category") in filters["category"]]
 
+            if filters.get("tags") and len(filters["tags"]) > 0:
+                target_tags = set(t_tag.lower() for t_tag in filters["tags"])
+                def has_matching_tag(task):
+                    task_tags = task.get("tags") or []
+                    for tag in task_tags:
+                        tag_name = tag if isinstance(tag, str) else tag.get("name", "")
+                        if tag_name.lower() in target_tags:
+                            return True
+                    return False
+                mapped = [t for t in mapped if has_matching_tag(t)]
+
             if filters.get("startDate") or filters.get("endDate"):
                 def parse_date(d_str):
                     if not d_str: return None
@@ -410,7 +421,13 @@ class TasksService:
 
                 filtered_by_date = []
                 for t in mapped:
-                    date_to_use_str = t.get("createdAt") if (t.get("status") == "Done" or not t.get("deadline")) else t.get("deadline")
+                    # Prioritize the task's scheduled start date, deadline, completion date, and finally creation date.
+                    date_to_use_str = (
+                        t.get("estimated_start_date") or
+                        t.get("deadline") or
+                        t.get("completedAt") or
+                        t.get("createdAt")
+                    )
                     if not date_to_use_str:
                         continue
                     date_to_use = datetime.fromisoformat(date_to_use_str)

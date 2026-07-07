@@ -35,12 +35,24 @@ class BehavioralAnalyzer:
         top_hours = self._top_productive_hours(hour_buckets)
         work_style = self._infer_work_style(hour_buckets, task_stats, session_stats)
 
+        # Collect high-priority pending tasks to allow AI rescheduling recommendations
+        pending_tasks = [
+            {
+                "id": t.id,
+                "title": t.title,
+                "priority_level": t.priorityLevel or 1,
+                "estimate_timer": t.estimateTimer or 30
+            }
+            for t in tasks if t.status not in ["Done"] and (t.priorityLevel or 0) >= 2
+        ]
+
         return {
             "hour_buckets": hour_buckets,
             "task_stats": task_stats,
             "session_stats": session_stats,
             "top_productive_hours": top_hours,
             "work_style_hint": work_style,
+            "pending_tasks": pending_tasks,
             "data_points": len(tasks) + len(sessions),
         }
 

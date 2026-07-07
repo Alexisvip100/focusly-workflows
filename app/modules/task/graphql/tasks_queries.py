@@ -45,6 +45,8 @@ class TaskQuery:
                 filters_dict["endDate"] = filters.endDate
             if filters.searchTerm is not None:
                 filters_dict["searchTerm"] = filters.searchTerm
+            if filters.tags is not None:
+                filters_dict["tags"] = filters.tags
 
         sort_dict = None
         if sort:
