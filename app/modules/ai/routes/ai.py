@@ -29,6 +29,8 @@ class ChatRequestSchema(BaseModel):
     task: dict[str, Any] | None = None
     model: str | None = None
     conversationId: str | None = None
+    contextType: str | None = None
+    contextId: str | None = None
 
 class GeminiStreamParser:
     def __init__(self):
@@ -170,7 +172,8 @@ async def analyze_patterns_endpoint(
         "task_stats": signals['task_stats'],
         "session_stats": signals['session_stats'],
         "top_productive_hours": signals['top_productive_hours'],
-        "work_style_hint": signals['work_style_hint']
+        "work_style_hint": signals['work_style_hint'],
+        "pending_tasks": signals.get('pending_tasks')
     }
 
     async with httpx.AsyncClient() as client:
@@ -235,6 +238,36 @@ async def chat_endpoint(
 
     # 4. Context Builder
     system_context = await build_context(current_user_id, conversation.id, latest_user_message, db)
+
+    # Apply selected context instructions
+    if body.contextType == "tasks":
+        system_context += "\n\nCRITICAL CONTEXT MODE: The user has selected the 'Tasks' context. Focus your answer primarily on analyzing, organizing, or answering questions about their tasks list."
+    elif body.contextType == "workspaces":
+        system_context += "\n\nCRITICAL CONTEXT MODE: The user has selected the 'Workspaces' context. Focus your answer primarily on their workspaces, document notes, and organizing projects."
+    elif body.contextType == "task" and body.contextId:
+        from app.models import Task
+        t_res = await db.execute(select(Task).filter(Task.id == body.contextId).filter(Task.userId == current_user_id))
+        task_obj = t_res.scalars().first()
+        if task_obj:
+            system_context += (
+                f"\n\nCRITICAL CONTEXT MODE: The user has selected this specific Task as context:\n"
+                f"- Title: {task_obj.title}\n"
+                f"- Notes/Description: {task_obj.notesEncrypted or 'No description'}\n"
+                f"- Status: {task_obj.status}\n"
+                f"- Priority: {task_obj.priorityLevel}\n"
+                f"Please focus your response primarily on helping the user with this specific task."
+            )
+    elif body.contextType == "workspace" and body.contextId:
+        from app.models import Workspace
+        w_res = await db.execute(select(Workspace).filter(Workspace.id == body.contextId).filter(Workspace.userId == current_user_id))
+        ws_obj = w_res.scalars().first()
+        if ws_obj:
+            system_context += (
+                f"\n\nCRITICAL CONTEXT MODE: The user has selected this specific Workspace/Document as context:\n"
+                f"- Title: {ws_obj.title}\n"
+                f"- Content/Notes: {ws_obj.content or 'No content'}\n"
+                f"Please focus your response primarily on discussing, explaining, or formatting the information in this specific workspace document."
+            )
 
     task = body.task
     if task:
