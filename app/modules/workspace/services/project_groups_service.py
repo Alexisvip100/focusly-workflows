@@ -4,7 +4,7 @@ from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
-from sqlalchemy import update
+from sqlalchemy import delete
 
 from app.models import ProjectGroup, Workspace
 from app.modules.workspace.schemas.project_groups import ProjectGroupCreateSchema
@@ -67,9 +67,9 @@ class ProjectGroupsService:
 
 
 
-        # Disassociate workspaces from this group
+        # Delete workspaces belonging to this group
         await self.db.execute(
-            update(Workspace).where(Workspace.groupId == id).values(groupId=None, updatedAt=datetime.utcnow())
+            delete(Workspace).where(Workspace.groupId == id)
         )
 
         await self.db.delete(group)
