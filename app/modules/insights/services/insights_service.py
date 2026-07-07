@@ -17,7 +17,8 @@ class InsightsService:
     async def getInsights(self, user_id: str, filter_type: str, timezone_offset_minutes: int = 0, base_date: str | None = None) -> dict[str, Any]:
         # 1. Fetch data
         if self.tasks_service:
-            all_tasks = await self.tasks_service.find_all_by_user(user_id)
+            tasks_res = await self.tasks_service.find_all_by_user(user_id)
+            all_tasks = tasks_res.get("items", []) if isinstance(tasks_res, dict) else tasks_res
         else:
             result = await self.db.execute(select(Task).where(Task.userId == user_id, Task.deletedAt == None, or_(Task.source != "google", Task.source == None)))
             all_tasks = [self._map_task_to_dict(t) for t in result.scalars().all()]

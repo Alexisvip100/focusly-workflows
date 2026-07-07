@@ -12,12 +12,16 @@ class WorkspaceQuery:
         self,
         info,
         search: str | None = None,
-        group_id: str | None = None
+        groupId: str | None = None,
+        limit: int | None = None,
+        offset: int | None = None
     ) -> list[types.Workspace]:
         user_id = get_user_id(info)
         db = info.context["db"]
         ws_serv = WorkspacesService(db)
-        res = await ws_serv.find_all(user_id, search, group_id=group_id)
+        group_id = groupId
+        res = await ws_serv.find_all(user_id, search, group_id=group_id, limit=limit, offset=offset)
+        workspaces_list = res.get("items", []) if isinstance(res, dict) else res
         return [
             types.Workspace(
                 id=strawberry.ID(w.id),
@@ -32,7 +36,7 @@ class WorkspaceQuery:
                 saveStatus=w.saveStatus,
                 createdAt=w.createdAt,
                 updatedAt=w.updatedAt
-            ) for w in res
+            ) for w in workspaces_list
         ]
 
     @strawberry.field

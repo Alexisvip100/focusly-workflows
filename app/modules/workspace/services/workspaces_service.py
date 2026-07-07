@@ -3,7 +3,7 @@ from datetime import datetime
 from typing import Any
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
-from sqlalchemy import update
+from sqlalchemy import update, func
 
 from app.models import Workspace
 from app.modules.workspace.schemas.workspaces import WorkspaceCreateSchema
@@ -30,22 +30,35 @@ class WorkspacesService:
         await self.db.refresh(workspace)
         return workspace
 
-    async def find_all(self, user_id: str, search: str | None = None, group_id: str | None = None) -> list[Workspace]:
+    async def find_all(self, user_id: str, search: str | None = None, group_id: str | None = None, limit: int | None = None, offset: int | None = None) -> list[Workspace]:
         query = select(Workspace).where(Workspace.userId == user_id)
         if group_id is not None:
-            query = query.where(Workspace.groupId == group_id)
+            if group_id == 'ungrouped':
+                query = query.where(Workspace.groupId.is_(None))
+            else:
+                query = query.where(Workspace.groupId == group_id)
+        if search:
+            search_pattern = f"%{search}%"
+            query = query.where(
+                (Workspace.title.ilike(search_pattern)) | 
+                (Workspace.content.ilike(search_pattern))
+            )
+            
+        # Order by updatedAt desc for stable pagination
+        query = query.order_by(Workspace.updatedAt.desc())
+        
+        if limit is not None:
+            query = query.limit(limit)
+        if offset is not None:
+            query = query.offset(offset)
             
         result = await self.db.execute(query)
-        workspaces = list(result.scalars().all())
-        
-        if search:
-            search_lower = search.lower()
-            workspaces = [
-                w for w in workspaces
-                if search_lower in (w.title or "").lower() or search_lower in (w.content or "").lower()
-            ]
-            
-        return workspaces
+        # get total count
+        total_res = await self.db.execute(select(func.count(Workspace.id)).where(Workspace.userId == user_id))
+        total = total_res.scalar() or 0
+        return {"items":list(result.scalars().all()),
+                "total":total
+            }
 
     async def find_one(self, id: str, user_id: str) -> Workspace:
         result = await self.db.execute(select(Workspace).where(Workspace.id == id))

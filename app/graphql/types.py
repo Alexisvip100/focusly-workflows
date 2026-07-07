@@ -96,7 +96,8 @@ class ProjectGroup:
         db = info.context["db"]
         from app.modules.workspace.services.workspaces_service import WorkspacesService
         ws_serv = WorkspacesService(db)
-        all_ws = await ws_serv.find_all(self.user_id, group_id=str(self.id))
+        all_ws_res = await ws_serv.find_all(self.user_id, group_id=str(self.id))
+        all_ws = all_ws_res.get("items", []) if isinstance(all_ws_res, dict) else all_ws_res
         return [
             Workspace(
                 id=strawberry.ID(w.id),
