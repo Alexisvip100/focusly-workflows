@@ -2,7 +2,6 @@ import strawberry
 
 from app.graphql import types
 from app.graphql.common import get_user_id
-from app.modules.task.services.tags_service import TagsService
 
 
 @strawberry.type
