@@ -13,11 +13,11 @@ import asyncio
 import uuid
 from datetime import datetime, timedelta
 
-from sqlalchemy import func, select, and_, or_, cast, Date
+from sqlalchemy import func, select, cast, Date
 from sqlalchemy.sql import extract
 
 from app.database import async_session_local
-from app.models import Task, User, FocusSession, Notification, Workspace
+from app.models import Task, User, FocusSession, Notification
 
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
