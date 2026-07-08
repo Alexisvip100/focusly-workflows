@@ -16,6 +16,7 @@ from app.modules.task.routes.time_blocks import router as time_blocks_router
 from app.modules.ai.routes.ai import router as ai_router
 from app.modules.ai.routes.planner import router as planner_router
 from app.modules.notification.services.task_notifier_service import run_task_notifier_loop
+from app.modules.notification.services.smart_notifier_service import run_smart_notifier_loop
 
 
 from app.database import engine, Base
@@ -27,10 +28,16 @@ async def lifespan(app: FastAPI):
         await conn.run_sync(Base.metadata.create_all)
 
     notifier_task = asyncio.create_task(run_task_notifier_loop())
+    smart_notifier_task = asyncio.create_task(run_smart_notifier_loop())
     yield
     notifier_task.cancel()
+    smart_notifier_task.cancel()
     try:
         await notifier_task
+    except asyncio.CancelledError:
+        pass
+    try:
+        await smart_notifier_task
     except asyncio.CancelledError:
         pass
 
