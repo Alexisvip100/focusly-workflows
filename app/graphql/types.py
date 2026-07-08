@@ -419,3 +419,33 @@ def map_dict_to_strawberry_task(t: dict[str, Any]) -> Task:
         is_owner=t.get("is_owner", True),
         source=t.get("source", "platform")
     )
+
+
+@strawberry.type
+class NotificationType:
+    id: strawberry.ID
+    userId: str = strawberry.field(name="userId")
+    relatedTaskId: str | None = strawberry.field(name="relatedTaskId", default=None)
+    type: str
+    scheduledAt: datetime = strawberry.field(name="scheduledAt")
+    status: str
+    title: str
+    body: str
+    createdAt: datetime = strawberry.field(name="createdAt")
+    updatedAt: datetime = strawberry.field(name="updatedAt")
+
+
+def map_model_to_strawberry_notification(n) -> NotificationType:
+    return NotificationType(
+        id=strawberry.ID(n.id),
+        userId=n.userId,
+        relatedTaskId=n.relatedTaskId,
+        type=n.type,
+        scheduledAt=n.scheduledAt,
+        status=n.status,
+        title=n.title,
+        body=n.body,
+        createdAt=n.createdAt,
+        updatedAt=n.updatedAt,
+    )
+

@@ -15,12 +15,13 @@ Payload: { taskId, title, deadline, minutesLeft, type: "5min" | "1min" }
 """
 
 import asyncio
+import uuid
 from datetime import datetime, timedelta
 
 from sqlalchemy import func, or_, select, update
 
 from app.database import async_session_local
-from app.models import Task, User
+from app.models import Task, User, Notification
 from app.sockets.realtime import sio
 
 _ACTIVE_STATUSES = ["completed", "cancelled", "Completed"]
@@ -63,6 +64,20 @@ async def _check_and_notify_once() -> None:
                 minutes_left=minutes_left,
                 notif_type="5min",
             )
+            
+            # Save notification in the database
+            notif_item = Notification(
+                id=str(uuid.uuid4()),
+                userId=task.userId,
+                relatedTaskId=task.id,
+                type="info",
+                scheduledAt=start_at,
+                status="unread",
+                title="Tarea próxima",
+                body=f"Tu tarea {task.title}, está a punto de comenzar.",
+            )
+            db.add(notif_item)
+
             await db.execute(
                 update(Task).where(Task.id == task.id).values(notified=True)
             )
@@ -92,6 +107,20 @@ async def _check_and_notify_once() -> None:
                 minutes_left=minutes_left,
                 notif_type="1min",
             )
+            
+            # Save notification in the database
+            notif_item = Notification(
+                id=str(uuid.uuid4()),
+                userId=task.userId,
+                relatedTaskId=task.id,
+                type="warning",
+                scheduledAt=start_at,
+                status="unread",
+                title="¡Tarea urgente!",
+                body=f"Tu tarea {task.title}, está a punto de comenzar.",
+            )
+            db.add(notif_item)
+
             await db.execute(
                 update(Task).where(Task.id == task.id).values(lastMinuteNotified=True)
             )
