@@ -31,7 +31,7 @@ class NotificationMutation:
         user_id = get_user_id(info)
         db = info.context["db"]
         
-        await db.execute(
+        results = await db.execute(
             update(Notification)
             .where(
                 Notification.userId == user_id,
@@ -39,22 +39,23 @@ class NotificationMutation:
             )
             .values(status="read")
         )
+        
         await db.commit()
-        return True
+        return result.rowcount > 0
 
     @strawberry.mutation
     async def delete_notification(self, info, id: str) -> bool:
         user_id = get_user_id(info)
         db = info.context["db"]
         
-        await db.execute(
+        result = await db.execute(
             delete(Notification).where(
                 Notification.id == id,
                 Notification.userId == user_id
             )
         )
         await db.commit()
-        return True
+        return result.rowcount > 0
 
     @strawberry.mutation
     async def delete_all_notifications(self, info) -> bool:
