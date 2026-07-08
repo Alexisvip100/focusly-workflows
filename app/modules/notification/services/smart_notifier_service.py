@@ -18,9 +18,12 @@ from sqlalchemy.sql import extract
 
 from app.database import async_session_local
 from app.models import Task, User, FocusSession, Notification
+import logging
 
+logger = logging.getLogger(__name__)
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
+
 
 async def _already_notified(db, user_id: str, notif_type: str, since: datetime) -> bool:
     """Check if a notification of this type was already created for this user since a given time."""
@@ -36,7 +39,9 @@ async def _already_notified(db, user_id: str, notif_type: str, since: datetime) 
     return result.scalars().first() is not None
 
 
-async def _already_notified_for_task(db, user_id: str, task_id: str, notif_type: str) -> bool:
+async def _already_notified_for_task(
+    db, user_id: str, task_id: str, notif_type: str
+) -> bool:
     """Check if a notification was already created for a specific task + type."""
     result = await db.execute(
         select(Notification.id)
@@ -50,8 +55,15 @@ async def _already_notified_for_task(db, user_id: str, task_id: str, notif_type:
     return result.scalars().first() is not None
 
 
-def _save_notif(db, user_id: str, title: str, body: str, notif_type: str,
-                scheduled_at: datetime | None = None, task_id: str | None = None):
+def _save_notif(
+    db,
+    user_id: str,
+    title: str,
+    body: str,
+    notif_type: str,
+    scheduled_at: datetime | None = None,
+    task_id: str | None = None,
+):
     """Add a Notification object to the session (caller must commit)."""
     item = Notification(
         id=str(uuid.uuid4()),
@@ -68,11 +80,11 @@ def _save_notif(db, user_id: str, title: str, body: str, notif_type: str,
 
 # ─── 1. Tareas vencidas sin completar ────────────────────────────────────────
 
+
 async def _check_overdue_tasks(db, now: datetime) -> None:
     """Notify users about tasks past their deadline that are not completed."""
     result = await db.execute(
-        select(Task)
-        .where(
+        select(Task).where(
             Task.deletedAt == None,
             Task.status.notin_(["completed", "Completed", "cancelled"]),
             Task.deadline < now,
@@ -87,9 +99,10 @@ async def _check_overdue_tasks(db, now: datetime) -> None:
         hours_ago = int((now - task.deadline).total_seconds() / 3600)
         time_str = f"hace {hours_ago}h" if hours_ago > 0 else "recientemente"
         _save_notif(
-            db, task.userId,
+            db,
+            task.userId,
             title="⚠️ Tarea vencida",
-            body=f"Tu tarea \"{task.title}\" venció {time_str} y sigue pendiente.",
+            body=f'Tu tarea "{task.title}" venció {time_str} y sigue pendiente.',
             notif_type="overdue",
             scheduled_at=task.deadline,
             task_id=task.id,
@@ -98,25 +111,29 @@ async def _check_overdue_tasks(db, now: datetime) -> None:
 
 # ─── 2. Racha de productividad ───────────────────────────────────────────────
 
+
 async def _check_productivity_streak(db, now: datetime) -> None:
     """Notify users who completed all tasks for 3+ consecutive days."""
     today = now.date()
-    if await _already_notified(db, "__all__", "streak_check", datetime.combine(today, datetime.min.time())):
+    if await _already_notified(
+        db, "__all__", "streak_check", datetime.combine(today, datetime.min.time())
+    ):
         return
 
     users_result = await db.execute(select(User.id))
     user_ids = [uid for (uid,) in users_result.all()]
 
     for user_id in user_ids:
-        if await _already_notified(db, user_id, "streak", datetime.combine(today, datetime.min.time())):
+        if await _already_notified(
+            db, user_id, "streak", datetime.combine(today, datetime.min.time())
+        ):
             continue
 
         streak = 0
         for days_back in range(1, 8):
             check_date = today - timedelta(days=days_back)
             total_result = await db.execute(
-                select(func.count(Task.id))
-                .where(
+                select(func.count(Task.id)).where(
                     Task.userId == user_id,
                     Task.deletedAt == None,
                     cast(Task.deadline, Date) == check_date,
@@ -127,8 +144,7 @@ async def _check_productivity_streak(db, now: datetime) -> None:
                 break
 
             completed_result = await db.execute(
-                select(func.count(Task.id))
-                .where(
+                select(func.count(Task.id)).where(
                     Task.userId == user_id,
                     Task.deletedAt == None,
                     Task.status.in_(["completed", "Completed"]),
@@ -143,7 +159,8 @@ async def _check_productivity_streak(db, now: datetime) -> None:
 
         if streak >= 3:
             _save_notif(
-                db, user_id,
+                db,
+                user_id,
                 title="🔥 ¡Racha de productividad!",
                 body=f"¡Llevas {streak} días consecutivos completando todas tus tareas!",
                 notif_type="streak",
@@ -151,6 +168,7 @@ async def _check_productivity_streak(db, now: datetime) -> None:
 
 
 # ─── 3. Resumen diario matutino ──────────────────────────────────────────────
+
 
 async def _check_daily_summary(db, now: datetime) -> None:
     """Send a morning summary between 7:00-8:00 AM."""
@@ -162,12 +180,13 @@ async def _check_daily_summary(db, now: datetime) -> None:
     user_ids = [uid for (uid,) in users_result.all()]
 
     for user_id in user_ids:
-        if await _already_notified(db, user_id, "daily_summary", datetime.combine(today, datetime.min.time())):
+        if await _already_notified(
+            db, user_id, "daily_summary", datetime.combine(today, datetime.min.time())
+        ):
             continue
 
         pending_result = await db.execute(
-            select(func.count(Task.id))
-            .where(
+            select(func.count(Task.id)).where(
                 Task.userId == user_id,
                 Task.deletedAt == None,
                 Task.status.notin_(["completed", "Completed", "cancelled"]),
@@ -177,8 +196,7 @@ async def _check_daily_summary(db, now: datetime) -> None:
         pending = pending_result.scalar() or 0
 
         high_priority_result = await db.execute(
-            select(func.count(Task.id))
-            .where(
+            select(func.count(Task.id)).where(
                 Task.userId == user_id,
                 Task.deletedAt == None,
                 Task.status.notin_(["completed", "Completed", "cancelled"]),
@@ -189,9 +207,12 @@ async def _check_daily_summary(db, now: datetime) -> None:
         high_priority = high_priority_result.scalar() or 0
 
         if pending > 0:
-            hp_text = f", {high_priority} de prioridad alta" if high_priority > 0 else ""
+            hp_text = (
+                f", {high_priority} de prioridad alta" if high_priority > 0 else ""
+            )
             _save_notif(
-                db, user_id,
+                db,
+                user_id,
                 title="📋 Buenos días",
                 body=f"Hoy tienes {pending} tareas pendientes{hp_text}. ¡A por todas!",
                 notif_type="daily_summary",
@@ -199,6 +220,7 @@ async def _check_daily_summary(db, now: datetime) -> None:
 
 
 # ─── 4. Horas doradas detectadas ─────────────────────────────────────────────
+
 
 async def _check_golden_hours(db, now: datetime) -> None:
     """Detect peak productivity hours based on task completion patterns (weekly)."""
@@ -210,12 +232,17 @@ async def _check_golden_hours(db, now: datetime) -> None:
     user_ids = [uid for (uid,) in users_result.all()]
 
     for user_id in user_ids:
-        if await _already_notified(db, user_id, "golden_hours", datetime.combine(today, datetime.min.time())):
+        if await _already_notified(
+            db, user_id, "golden_hours", datetime.combine(today, datetime.min.time())
+        ):
             continue
 
         week_ago = now - timedelta(days=7)
         result = await db.execute(
-            select(extract("hour", Task.completedAt).label("hour"), func.count(Task.id).label("cnt"))
+            select(
+                extract("hour", Task.completedAt).label("hour"),
+                func.count(Task.id).label("cnt"),
+            )
             .where(
                 Task.userId == user_id,
                 Task.completedAt != None,
@@ -230,7 +257,8 @@ async def _check_golden_hours(db, now: datetime) -> None:
             peak_hour = int(row.hour)
             end_hour = (peak_hour + 2) % 24
             _save_notif(
-                db, user_id,
+                db,
+                user_id,
                 title="🧠 Horas doradas detectadas",
                 body=f"Tu mayor productividad fue entre {peak_hour}:00 y {end_hour}:00. Programa aquí tus tareas más complejas.",
                 notif_type="golden_hours",
@@ -238,6 +266,7 @@ async def _check_golden_hours(db, now: datetime) -> None:
 
 
 # ─── 5. Baja productividad semanal ───────────────────────────────────────────
+
 
 async def _check_weekly_low_productivity(db, now: datetime) -> None:
     """Compare this week's completions vs last week (Mondays only)."""
@@ -249,30 +278,36 @@ async def _check_weekly_low_productivity(db, now: datetime) -> None:
     user_ids = [uid for (uid,) in users_result.all()]
 
     for user_id in user_ids:
-        if await _already_notified(db, user_id, "low_productivity", datetime.combine(today, datetime.min.time())):
+        if await _already_notified(
+            db,
+            user_id,
+            "low_productivity",
+            datetime.combine(today, datetime.min.time()),
+        ):
             continue
 
         this_week_start = today - timedelta(days=7)
         last_week_start = today - timedelta(days=14)
 
         this_week_result = await db.execute(
-            select(func.count(Task.id))
-            .where(
+            select(func.count(Task.id)).where(
                 Task.userId == user_id,
                 Task.status.in_(["completed", "Completed"]),
-                Task.completedAt >= datetime.combine(this_week_start, datetime.min.time()),
+                Task.completedAt
+                >= datetime.combine(this_week_start, datetime.min.time()),
                 Task.completedAt < datetime.combine(today, datetime.min.time()),
             )
         )
         this_week = this_week_result.scalar() or 0
 
         last_week_result = await db.execute(
-            select(func.count(Task.id))
-            .where(
+            select(func.count(Task.id)).where(
                 Task.userId == user_id,
                 Task.status.in_(["completed", "Completed"]),
-                Task.completedAt >= datetime.combine(last_week_start, datetime.min.time()),
-                Task.completedAt < datetime.combine(this_week_start, datetime.min.time()),
+                Task.completedAt
+                >= datetime.combine(last_week_start, datetime.min.time()),
+                Task.completedAt
+                < datetime.combine(this_week_start, datetime.min.time()),
             )
         )
         last_week = last_week_result.scalar() or 0
@@ -280,7 +315,8 @@ async def _check_weekly_low_productivity(db, now: datetime) -> None:
         if last_week > 0 and this_week < last_week * 0.6:
             pct = int((1 - this_week / last_week) * 100)
             _save_notif(
-                db, user_id,
+                db,
+                user_id,
                 title="📉 Productividad baja esta semana",
                 body=f"Completaste {pct}% menos tareas que la semana anterior. ¿Necesitas reorganizar tu agenda?",
                 notif_type="low_productivity",
@@ -288,6 +324,7 @@ async def _check_weekly_low_productivity(db, now: datetime) -> None:
 
 
 # ─── 6. Meta semanal alcanzada ────────────────────────────────────────────────
+
 
 async def _check_weekly_goal(db, now: datetime) -> None:
     """Congratulate user when they complete 15+ tasks this week."""
@@ -298,12 +335,16 @@ async def _check_weekly_goal(db, now: datetime) -> None:
     user_ids = [uid for (uid,) in users_result.all()]
 
     for user_id in user_ids:
-        if await _already_notified(db, user_id, "weekly_goal", datetime.combine(week_start, datetime.min.time())):
+        if await _already_notified(
+            db,
+            user_id,
+            "weekly_goal",
+            datetime.combine(week_start, datetime.min.time()),
+        ):
             continue
 
         result = await db.execute(
-            select(func.count(Task.id))
-            .where(
+            select(func.count(Task.id)).where(
                 Task.userId == user_id,
                 Task.status.in_(["completed", "Completed"]),
                 Task.completedAt >= datetime.combine(week_start, datetime.min.time()),
@@ -313,7 +354,8 @@ async def _check_weekly_goal(db, now: datetime) -> None:
 
         if completed >= 15:
             _save_notif(
-                db, user_id,
+                db,
+                user_id,
                 title="🏆 ¡Meta semanal alcanzada!",
                 body=f"¡Increíble! Completaste {completed} tareas esta semana. ¡Sigue así!",
                 notif_type="weekly_goal",
@@ -322,12 +364,12 @@ async def _check_weekly_goal(db, now: datetime) -> None:
 
 # ─── 7. Sesión de enfoque completada ─────────────────────────────────────────
 
+
 async def _check_completed_focus_sessions(db, now: datetime) -> None:
     """Notify about successfully completed focus sessions not yet notified."""
     one_hour_ago = now - timedelta(hours=1)
     result = await db.execute(
-        select(FocusSession)
-        .where(
+        select(FocusSession).where(
             FocusSession.wasSuccessful == True,
             FocusSession.endedAt >= one_hour_ago,
             FocusSession.endedAt <= now,
@@ -349,7 +391,8 @@ async def _check_completed_focus_sessions(db, now: datetime) -> None:
             continue
 
         _save_notif(
-            db, session.userId,
+            db,
+            session.userId,
             title="🎯 Sesión de enfoque completada",
             body=f"¡Buen trabajo! Completaste una sesión de enfoque de {session.durationMinutes} minutos.",
             notif_type="success",
@@ -358,6 +401,7 @@ async def _check_completed_focus_sessions(db, now: datetime) -> None:
 
 
 # ─── 8. Recordatorio de descanso ─────────────────────────────────────────────
+
 
 async def _check_break_reminder(db, now: datetime) -> None:
     """Remind user to take a break after 120+ minutes of focus sessions today."""
@@ -371,8 +415,7 @@ async def _check_break_reminder(db, now: datetime) -> None:
             continue
 
         result = await db.execute(
-            select(func.sum(FocusSession.durationMinutes))
-            .where(
+            select(func.sum(FocusSession.durationMinutes)).where(
                 FocusSession.userId == user_id,
                 FocusSession.endedAt >= today_start,
             )
@@ -393,14 +436,17 @@ async def _check_break_reminder(db, now: datetime) -> None:
 
             had_break = False
             for i in range(1, len(sessions)):
-                gap = (sessions[i].startedAt - sessions[i - 1].endedAt).total_seconds() / 60
+                gap = (
+                    sessions[i].startedAt - sessions[i - 1].endedAt
+                ).total_seconds() / 60
                 if gap >= 30:
                     had_break = True
                     break
 
             if not had_break:
                 _save_notif(
-                    db, user_id,
+                    db,
+                    user_id,
                     title="🧘 Hora de un descanso",
                     body=f"Llevas {int(total_minutes)} minutos de enfoque hoy sin una pausa larga. Te recomendamos 10 minutos de descanso.",
                     notif_type="break_reminder",
@@ -408,6 +454,7 @@ async def _check_break_reminder(db, now: datetime) -> None:
 
 
 # ─── 9. Focus Shield activado ────────────────────────────────────────────────
+
 
 async def _check_focus_shield(db, now: datetime) -> None:
     """Summarize distraction blocks for the day if count > 5."""
@@ -421,8 +468,7 @@ async def _check_focus_shield(db, now: datetime) -> None:
             continue
 
         result = await db.execute(
-            select(func.sum(FocusSession.distractionCount))
-            .where(
+            select(func.sum(FocusSession.distractionCount)).where(
                 FocusSession.userId == user_id,
                 FocusSession.endedAt >= today_start,
             )
@@ -431,12 +477,12 @@ async def _check_focus_shield(db, now: datetime) -> None:
 
         if total_distractions > 5:
             _save_notif(
-                db, user_id,
+                db,
+                user_id,
                 title="🛡️ Focus Shield activado",
                 body=f"Tu escudo de enfoque bloqueó {total_distractions} intentos de distracción hoy. ¡Mantén el enfoque!",
                 notif_type="focus_shield",
             )
-
 
 
 # ─── 12. Logros desbloqueados ─────────────────────────────────────────────────
@@ -504,8 +550,7 @@ async def _check_achievements(db, now: datetime) -> None:
 
             if check == "early_completions":
                 r = await db.execute(
-                    select(func.count(Task.id))
-                    .where(
+                    select(func.count(Task.id)).where(
                         Task.userId == user_id,
                         Task.status.in_(["completed", "Completed"]),
                         Task.completedAt != None,
@@ -516,8 +561,7 @@ async def _check_achievements(db, now: datetime) -> None:
 
             elif check == "focus_sessions":
                 r = await db.execute(
-                    select(func.count(FocusSession.id))
-                    .where(
+                    select(func.count(FocusSession.id)).where(
                         FocusSession.userId == user_id,
                         FocusSession.wasSuccessful == True,
                     )
@@ -526,8 +570,7 @@ async def _check_achievements(db, now: datetime) -> None:
 
             elif check == "total_completed":
                 r = await db.execute(
-                    select(func.count(Task.id))
-                    .where(
+                    select(func.count(Task.id)).where(
                         Task.userId == user_id,
                         Task.status.in_(["completed", "Completed"]),
                     )
@@ -536,8 +579,7 @@ async def _check_achievements(db, now: datetime) -> None:
 
             elif check == "zero_distraction_sessions":
                 r = await db.execute(
-                    select(func.count(FocusSession.id))
-                    .where(
+                    select(func.count(FocusSession.id)).where(
                         FocusSession.userId == user_id,
                         FocusSession.wasSuccessful == True,
                         FocusSession.distractionCount == 0,
@@ -549,18 +591,19 @@ async def _check_achievements(db, now: datetime) -> None:
                 today = now.date()
                 week_start = today - timedelta(days=today.weekday())
                 r = await db.execute(
-                    select(func.count(Task.id))
-                    .where(
+                    select(func.count(Task.id)).where(
                         Task.userId == user_id,
                         Task.status.in_(["completed", "Completed"]),
-                        Task.completedAt >= datetime.combine(week_start, datetime.min.time()),
+                        Task.completedAt
+                        >= datetime.combine(week_start, datetime.min.time()),
                     )
                 )
                 count = r.scalar() or 0
 
             if count >= achievement["threshold"]:
                 _save_notif(
-                    db, user_id,
+                    db,
+                    user_id,
                     title=achievement["title"],
                     body=achievement["body"],
                     notif_type="achievement",
@@ -570,24 +613,38 @@ async def _check_achievements(db, now: datetime) -> None:
 
 # ─── Main Loop ────────────────────────────────────────────────────────────────
 
+
 async def _run_smart_checks_once() -> None:
     """Execute all smart notification checks in a single sweep."""
     now = datetime.utcnow()
 
+    checks = [
+        ("overdue_tasks", _check_overdue_tasks),
+        ("productivity_streak", _check_productivity_streak),
+        ("daily_summary", _check_daily_summary),
+        ("golden_hours", _check_golden_hours),
+        ("weekly_low_productivity", _check_weekly_low_productivity),
+        ("weekly_goal", _check_weekly_goal),
+        ("completed_focus_sessions", _check_completed_focus_sessions),
+        ("break_reminder", _check_break_reminder),
+        ("focus_shield", _check_focus_shield),
+        ("achievements", _check_achievements),
+    ]
+
     async with async_session_local() as db:
+        for check_name, check in checks:
+            try:
+                await check(db, now)
+            except Exception:
+                logger.exception(
+                    "Smart notifier check '%s' failed",
+                    check_name,
+                )
+
         try:
-            await _check_overdue_tasks(db, now)
-            await _check_productivity_streak(db, now)
-            await _check_daily_summary(db, now)
-            await _check_golden_hours(db, now)
-            await _check_weekly_low_productivity(db, now)
-            await _check_weekly_goal(db, now)
-            await _check_completed_focus_sessions(db, now)
-            await _check_break_reminder(db, now)
-            await _check_focus_shield(db, now)
-            await _check_achievements(db, now)
             await db.commit()
         except Exception:
+            logger.exception("Failed to commit smart notification sweep")
             await db.rollback()
 
 
