@@ -41,7 +41,7 @@ class NotificationMutation:
         )
         
         await db.commit()
-        return result.rowcount > 0
+        return results.rowcount > 0
 
     @strawberry.mutation
     async def delete_notification(self, info, id: str) -> bool:
