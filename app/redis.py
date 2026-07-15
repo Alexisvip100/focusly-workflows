@@ -1,5 +1,6 @@
 import json
 import logging
+import time
 from typing import Any
 import redis.asyncio as aioredis
 from app.config import settings
@@ -10,14 +11,28 @@ class ResilientRedisCache:
     def __init__(self, redis_url: str):
         self.redis_url = redis_url
         self.client: aioredis.Redis | None = None
+        self.last_connect_attempt = 0.0
+        self.connect_cooldown = 30.0  # seconds
 
     async def connect(self):
+        self.last_connect_attempt = time.time()
         try:
+            from redis.backoff import ExponentialBackoff
+            from redis.asyncio.retry import Retry
+            from redis.exceptions import ConnectionError, TimeoutError
+
+            # Use ExponentialBackoff retry logic
+            backoff = ExponentialBackoff()
+            retry = Retry(backoff, retries=3)
+
             self.client = aioredis.from_url(
                 self.redis_url, 
                 encoding="utf-8", 
                 decode_responses=True,
-                socket_timeout=2.0
+                socket_timeout=2.0,
+                retry=retry,
+                retry_on_timeout=True,
+                retry_on_error=[ConnectionError, TimeoutError]
             )
             # Ping to verify connection
             await self.client.ping()
@@ -32,8 +47,17 @@ class ResilientRedisCache:
             logger.info("Closed Redis connection.")
             self.client = None
 
+    async def _ensure_connected(self) -> bool:
+        if self.client:
+            return True
+        now = time.time()
+        if now - self.last_connect_attempt >= self.connect_cooldown:
+            logger.info("Attempting lazy reconnect to Redis cache...")
+            await self.connect()
+        return self.client is not None
+
     async def get(self, key: str) -> Any | None:
-        if not self.client:
+        if not await self._ensure_connected():
             return None
         try:
             val = await self.client.get(key)
@@ -44,7 +68,7 @@ class ResilientRedisCache:
         return None
 
     async def set(self, key: str, value: Any, expire_seconds: int = 3600) -> bool:
-        if not self.client:
+        if not await self._ensure_connected():
             return False
         try:
             serialized = json.dumps(value)
@@ -55,7 +79,7 @@ class ResilientRedisCache:
         return False
 
     async def delete(self, key: str) -> bool:
-        if not self.client:
+        if not await self._ensure_connected():
             return False
         try:
             await self.client.delete(key)
@@ -65,7 +89,7 @@ class ResilientRedisCache:
         return False
 
     async def delete_pattern(self, pattern: str) -> bool:
-        if not self.client:
+        if not await self._ensure_connected():
             return False
         try:
             keys = await self.client.keys(pattern)

@@ -14,6 +14,10 @@ def serialize_workspace(w: Workspace) -> dict:
         "taskId": w.taskId,
         "title": w.title,
         "content": w.content,
+        "emoji": w.emoji,
+        "background_color": w.background_color,
+        "card_show_background": w.card_show_background,
+        "saveStatus": w.saveStatus,
         "createdAt": w.createdAt.isoformat() if w.createdAt else None,
         "updatedAt": w.updatedAt.isoformat() if w.updatedAt else None
     }
@@ -29,6 +33,10 @@ def deserialize_workspace(data: dict) -> Workspace:
         title=data["title"],
         content=data["content"]
     )
+    w.emoji = data.get("emoji")
+    w.background_color = data.get("background_color")
+    w.card_show_background = data.get("card_show_background")
+    w.saveStatus = data.get("saveStatus")
     w.createdAt = created_at
     w.updatedAt = updated_at
     return w
@@ -144,6 +152,7 @@ class WorkspacesRepository:
             .where(Workspace.taskId == task_id, Workspace.id != exclude_workspace_id)
             .values(taskId=None, updatedAt=now)
         )
+        await self.db.commit()
         await cache.delete_pattern("workspaces:user:*")
         await cache.delete_pattern("workspace:id:*")
         await cache.delete_pattern("signals:user:*")
@@ -215,6 +224,7 @@ class ProjectGroupsRepository:
         await self.db.execute(
             delete(Workspace).where(Workspace.groupId == group_id)
         )
+        await self.db.commit()
         await cache.delete_pattern("workspaces:user:*")
         await cache.delete_pattern("workspace:id:*")
 

@@ -45,7 +45,6 @@ class BehavioralAnalyzer:
         pending_tasks = [
             {
                 "id": t.id,
-                "title": t.title,
                 "priority_level": t.priorityLevel or 1,
                 "estimate_timer": t.estimateTimer or 30
             }

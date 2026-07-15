@@ -172,13 +172,15 @@ class TasksRepository:
             delete(Task).where(
                 Task.userId == user_id,
                 Task.source == "google"
-            )
+            ).returning(Task.id)
         )
+        deleted_ids = list(result.scalars().all())
         await self.db.commit()
         await cache.delete(f"tasks:active:user:{user_id}")
-        await cache.delete_pattern("task:id:*")
+        for t_id in deleted_ids:
+            await cache.delete(f"task:id:{t_id}")
         await cache.delete(f"signals:user:{user_id}")
-        return result.rowcount
+        return len(deleted_ids)
 
     async def get_tasks_for_warning(self, start_min: float, end_min: float, is_last_minute: bool = False) -> list[tuple[Task, User]]:
         from sqlalchemy import func

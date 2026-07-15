@@ -18,6 +18,12 @@ def serialize_user(user: User) -> dict:
         "settings": user.settings,
         "externalId": user.externalId,
         "fcmToken": user.fcmToken,
+        "passwordHash": user.passwordHash,
+        "lastSyncAt": user.lastSyncAt.isoformat() if user.lastSyncAt else None,
+        "googleCalendarSyncToken": user.googleCalendarSyncToken,
+        "googleChannelId": user.googleChannelId,
+        "googleResourceId": user.googleResourceId,
+        "googleChannelExpiration": user.googleChannelExpiration.isoformat() if user.googleChannelExpiration else None,
         "createdAt": user.createdAt.isoformat() if user.createdAt else None,
         "updatedAt": user.updatedAt.isoformat() if user.updatedAt else None
     }
@@ -25,6 +31,8 @@ def serialize_user(user: User) -> dict:
 def deserialize_user(data: dict) -> User:
     created_at = datetime.fromisoformat(data["createdAt"]) if data.get("createdAt") else None
     updated_at = datetime.fromisoformat(data["updatedAt"]) if data.get("updatedAt") else None
+    last_sync_at = datetime.fromisoformat(data["lastSyncAt"]) if data.get("lastSyncAt") else None
+    google_channel_exp = datetime.fromisoformat(data["googleChannelExpiration"]) if data.get("googleChannelExpiration") else None
     user = User(
         id=data["id"],
         email=data["email"],
@@ -39,6 +47,12 @@ def deserialize_user(data: dict) -> User:
         externalId=data["externalId"],
         fcmToken=data["fcmToken"]
     )
+    user.passwordHash = data.get("passwordHash")
+    user.lastSyncAt = last_sync_at
+    user.googleCalendarSyncToken = data.get("googleCalendarSyncToken")
+    user.googleChannelId = data.get("googleChannelId")
+    user.googleResourceId = data.get("googleResourceId")
+    user.googleChannelExpiration = google_channel_exp
     user.createdAt = created_at
     user.updatedAt = updated_at
     return user
