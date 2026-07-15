@@ -8,7 +8,7 @@ import httpx
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
-from app.models import User, Task
+
 from app.modules.user.repository import UsersRepository
 from app.modules.task.repository import TasksRepository
 

@@ -1,7 +1,6 @@
-from typing import Any
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
-from sqlalchemy import func
+from sqlalchemy import func, delete
 from app.models import Notification
 
 class NotificationsRepository:

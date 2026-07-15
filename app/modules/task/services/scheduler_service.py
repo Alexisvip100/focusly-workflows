@@ -4,7 +4,7 @@ from typing import Any
 from sqlalchemy import delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import User, Task, TimeBlock
+from app.models import TimeBlock
 from app.modules.user.repository import UsersRepository
 from app.modules.task.repository import TasksRepository, TimeBlocksRepository
 

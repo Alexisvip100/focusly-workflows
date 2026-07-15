@@ -5,7 +5,7 @@ from typing import Any
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 
-from app.models import Task, User, Workspace
+from app.models import Task, Workspace
 from app.modules.task.services.scheduler_service import SchedulerService
 from app.modules.task.schemas.tasks import TaskCreateSchema
 from app.modules.task.repository import TasksRepository

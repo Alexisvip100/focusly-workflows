@@ -16,10 +16,10 @@ Payload: { taskId, title, deadline, minutesLeft, type: "5min" | "1min" }
 
 import asyncio
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime
 
 from app.database import async_session_local
-from app.models import Task, User, Notification
+from app.models import Task, Notification
 from app.sockets.realtime import sio
 from app.modules.task.repository import TasksRepository
 from app.modules.notification.repository import NotificationsRepository

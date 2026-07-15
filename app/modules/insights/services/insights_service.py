@@ -3,7 +3,7 @@ from datetime import datetime, timedelta
 from typing import Any
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Task, FocusSession, User
+from app.models import Task, FocusSession
 from app.modules.task.repository import TasksRepository, FocusSessionsRepository
 from app.modules.user.repository import UsersRepository
 

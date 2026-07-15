@@ -1,9 +1,8 @@
 from datetime import datetime
-from typing import Any
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy import or_, delete
-from app.models import Task, Tag, TimeBlock, FocusSession
+from app.models import Task, Tag, TimeBlock, FocusSession, User
 
 class TasksRepository:
     def __init__(self, db: AsyncSession):
@@ -94,7 +93,6 @@ class TasksRepository:
 
     async def get_tasks_for_warning(self, start_min: float, end_min: float, is_last_minute: bool = False) -> list[tuple[Task, User]]:
         from sqlalchemy import func
-        from app.models import User
         from datetime import datetime, timedelta
         now = datetime.utcnow()
         notif_time = func.coalesce(Task.estimated_start_date, Task.deadline)
