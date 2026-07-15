@@ -11,7 +11,7 @@ class TagQuery:
         get_user_id(info)
         db = info.context["db"]
         from app.modules.task.repository import TasksRepository
-        tasks = await TasksRepository(db).get_all_active_by_user(user_id)
+        tasks = await TasksRepository(db).get_all_non_deleted_by_user(user_id)
         
         unique_tags = set()
         for t in tasks:

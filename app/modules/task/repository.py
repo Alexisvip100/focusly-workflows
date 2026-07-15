@@ -5,6 +5,8 @@ from sqlalchemy import or_, delete
 from app.models import Task, Tag, TimeBlock, FocusSession, User
 from app.redis import cache
 
+INACTIVE_STATUSES = ["completed", "cancelled", "Completed"]
+
 def serialize_task(t: Task) -> dict:
     return {
         "id": t.id,
@@ -70,10 +72,13 @@ class TasksRepository:
     def __init__(self, db: AsyncSession):
         self.db = db
 
-    async def create(self, task: Task) -> Task:
+    async def create(self, task: Task, commit: bool = True) -> Task:
         self.db.add(task)
-        await self.db.commit()
-        await self.db.refresh(task)
+        if commit:
+            await self.db.commit()
+            await self.db.refresh(task)
+        else:
+            await self.db.flush()
         await cache.set(f"task:id:{task.id}", serialize_task(task))
         await cache.delete(f"tasks:active:user:{task.userId}")
         await cache.delete(f"signals:user:{task.userId}")
@@ -114,6 +119,25 @@ class TasksRepository:
         await cache.set(f"tasks:active:user:{user_id}", [serialize_task(t) for t in tasks])
         return tasks
 
+    async def get_all_non_deleted_by_user(self, user_id: str) -> list[Task]:
+        result = await self.db.execute(
+            select(Task).where(
+                Task.userId == user_id,
+                Task.deletedAt == None
+            )
+        )
+        return list(result.scalars().all())
+
+    async def get_synced_google_tasks_by_user(self, user_id: str) -> list[Task]:
+        result = await self.db.execute(
+            select(Task).where(
+                Task.userId == user_id,
+                Task.deletedAt == None,
+                Task.google_event_id != None
+            )
+        )
+        return list(result.scalars().all())
+
     async def get_active_non_google_tasks(self, user_id: str | None = None) -> list[Task]:
         query = select(Task).where(
             Task.deletedAt == None,
@@ -148,21 +172,27 @@ class TasksRepository:
         )
         return list(result.scalars().all())
 
-    async def save(self, task: Task) -> Task:
+    async def save(self, task: Task, commit: bool = True) -> Task:
         if task not in self.db:
             task = await self.db.merge(task)
-        await self.db.commit()
-        await self.db.refresh(task)
+        if commit:
+            await self.db.commit()
+            await self.db.refresh(task)
+        else:
+            await self.db.flush()
         await cache.set(f"task:id:{task.id}", serialize_task(task))
         await cache.delete(f"tasks:active:user:{task.userId}")
         await cache.delete(f"signals:user:{task.userId}")
         return task
 
-    async def delete(self, task: Task) -> None:
+    async def delete(self, task: Task, commit: bool = True) -> None:
         if task not in self.db:
             task = await self.db.merge(task)
         await self.db.delete(task)
-        await self.db.commit()
+        if commit:
+            await self.db.commit()
+        else:
+            await self.db.flush()
         await cache.delete(f"task:id:{task.id}")
         await cache.delete(f"tasks:active:user:{task.userId}")
         await cache.delete(f"signals:user:{task.userId}")
@@ -188,11 +218,9 @@ class TasksRepository:
         now = datetime.utcnow()
         notif_time = func.coalesce(Task.estimated_start_date, Task.deadline)
         
-        status_filter = ["completed", "cancelled", "Completed"]
-        
         query = select(Task, User).join(User, User.id == Task.userId).where(
             Task.deletedAt == None,
-            Task.status.notin_(status_filter)
+            Task.status.notin_(INACTIVE_STATUSES)
         )
         
         if is_last_minute:
@@ -223,12 +251,10 @@ class TagsRepository:
         return tag
 
     async def get_by_id_or_name(self, name: str) -> Tag | None:
-        result = await self.db.execute(select(Tag).where(Tag.id == name))
-        tag = result.scalars().first()
-        if not tag:
-            result = await self.db.execute(select(Tag).where(Tag.name == name))
-            tag = result.scalars().first()
-        return tag
+        result = await self.db.execute(
+            select(Tag).where(or_(Tag.id == name, Tag.name == name))
+        )
+        return result.scalars().first()
 
     async def get_all(self) -> list[Tag]:
         result = await self.db.execute(select(Tag))
@@ -251,6 +277,14 @@ class TimeBlocksRepository:
 
     async def create_many(self, time_blocks: list[TimeBlock]) -> None:
         self.db.add_all(time_blocks)
+        await self.db.commit()
+
+    async def replace_focus_blocks(self, user_id: str, new_blocks: list[TimeBlock]) -> None:
+        await self.db.execute(
+            delete(TimeBlock).where(TimeBlock.userId == user_id, TimeBlock.blockType == "Focus_Block")
+        )
+        if new_blocks:
+            self.db.add_all(new_blocks)
         await self.db.commit()
 
     async def get_by_id(self, block_id: str) -> TimeBlock | None:

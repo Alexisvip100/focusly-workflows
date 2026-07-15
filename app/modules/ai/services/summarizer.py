@@ -48,14 +48,17 @@ async def check_and_summarize(conversation_id: str, db: AsyncSession, threshold:
         
         # 4. Update Conversation summary
         conversation.summary = new_summary
-        await conv_repo.save(conversation)
         
-        # 5. Delete summarized messages
-        for m in messages_to_summarize:
-            # Delete without manual commit in the loop to save roundtrips
-            # But the MessageRepository.delete commits immediately.
-            # So let's call it.
-            await msg_repo.delete(m)
+        try:
+            await conv_repo.save(conversation)
+            
+            # 5. Delete summarized messages using batch delete
+            await msg_repo.delete_many(messages_to_summarize)
+            
+            await db.commit()
+        except Exception as e:
+            await db.rollback()
+            raise e
             
     except Exception:
         pass

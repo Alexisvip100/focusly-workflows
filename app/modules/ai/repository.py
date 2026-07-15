@@ -56,7 +56,7 @@ class ConversationRepository:
 
     async def create(self, conversation: Conversation) -> Conversation:
         self.db.add(conversation)
-        await self.db.commit()
+        await self.db.flush()
         await self.db.refresh(conversation)
         await cache.set(f"conversation:id:{conversation.id}", serialize_conversation(conversation))
         await cache.delete(f"conversations:user:{conversation.userId}")
@@ -88,7 +88,7 @@ class ConversationRepository:
     async def save(self, conversation: Conversation) -> Conversation:
         if conversation not in self.db:
             conversation = await self.db.merge(conversation)
-        await self.db.commit()
+        await self.db.flush()
         await self.db.refresh(conversation)
         await cache.set(f"conversation:id:{conversation.id}", serialize_conversation(conversation))
         await cache.delete(f"conversations:user:{conversation.userId}")
@@ -98,7 +98,7 @@ class ConversationRepository:
         if conversation not in self.db:
             conversation = await self.db.merge(conversation)
         await self.db.delete(conversation)
-        await self.db.commit()
+        await self.db.flush()
         await cache.delete(f"conversation:id:{conversation.id}")
         await cache.delete(f"conversations:user:{conversation.userId}")
         await cache.delete(f"conversation:messages:{conversation.id}")
@@ -110,7 +110,7 @@ class MessageRepository:
 
     async def create(self, message: Message) -> Message:
         self.db.add(message)
-        await self.db.commit()
+        await self.db.flush()
         await self.db.refresh(message)
         await cache.delete(f"conversation:messages:{message.conversationId}")
         return message
@@ -136,8 +136,19 @@ class MessageRepository:
         await self.db.execute(
             delete(Message).where(Message.conversationId == conversation_id)
         )
-        await self.db.commit()
+        await self.db.flush()
         await cache.delete(f"conversation:messages:{conversation_id}")
+
+    async def delete_many(self, messages: list[Message]) -> None:
+        if not messages:
+            return
+        ids = [m.id for m in messages]
+        await self.db.execute(
+            delete(Message).where(Message.id.in_(ids))
+        )
+        await self.db.flush()
+        conv_id = messages[0].conversationId
+        await cache.delete(f"conversation:messages:{conv_id}")
 
     async def delete(self, message: Message) -> None:
         conversation_id = message.conversationId
@@ -154,7 +165,7 @@ class UserMemoryRepository:
 
     async def create(self, memory: UserMemory) -> UserMemory:
         self.db.add(memory)
-        await self.db.commit()
+        await self.db.flush()
         await self.db.refresh(memory)
         return memory
 
@@ -169,7 +180,7 @@ class UserMemoryRepository:
     async def save(self, memory: UserMemory) -> UserMemory:
         if memory not in self.db:
             memory = await self.db.merge(memory)
-        await self.db.commit()
+        await self.db.flush()
         await self.db.refresh(memory)
         return memory
 
@@ -177,4 +188,4 @@ class UserMemoryRepository:
         if memory not in self.db:
             memory = await self.db.merge(memory)
         await self.db.delete(memory)
-        await self.db.commit()
+        await self.db.flush()

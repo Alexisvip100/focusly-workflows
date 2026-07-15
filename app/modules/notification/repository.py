@@ -7,10 +7,13 @@ class NotificationsRepository:
     def __init__(self, db: AsyncSession):
         self.db = db
 
-    async def create(self, notification: Notification) -> Notification:
+    async def create(self, notification: Notification, commit: bool = True) -> Notification:
         self.db.add(notification)
-        await self.db.commit()
-        await self.db.refresh(notification)
+        if commit:
+            await self.db.commit()
+            await self.db.refresh(notification)
+        else:
+            await self.db.flush()
         return notification
 
     async def get_by_id(self, notification_id: str) -> Notification | None:
@@ -71,3 +74,18 @@ class NotificationsRepository:
             delete(Notification).where(Notification.userId == user_id)
         )
         await self.db.commit()
+
+    async def update_status_by_id_and_user(self, notification_id: str, user_id: str, status: str) -> Notification | None:
+        result = await self.db.execute(
+            select(Notification).where(
+                Notification.id == notification_id,
+                Notification.userId == user_id
+            )
+        )
+        notification = result.scalars().first()
+        if notification:
+            notification.status = status
+            await self.db.commit()
+            await self.db.refresh(notification)
+            return notification
+        return None

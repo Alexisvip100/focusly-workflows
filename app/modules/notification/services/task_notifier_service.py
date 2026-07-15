@@ -24,8 +24,6 @@ from app.sockets.realtime import sio
 from app.modules.task.repository import TasksRepository
 from app.modules.notification.repository import NotificationsRepository
 
-_ACTIVE_STATUSES = ["completed", "cancelled", "Completed"]
-
 
 def _task_start_at(task: Task) -> datetime:
     return task.estimated_start_date or task.deadline
@@ -67,10 +65,10 @@ async def _check_and_notify_once() -> None:
                 title="Tarea próxima",
                 body=f"Tu tarea {task.title}, está a punto de comenzar.",
             )
-            await notif_repo.create(notif_item)
+            await notif_repo.create(notif_item, commit=False)
 
             task.notified = True
-            await tasks_repo.save(task)
+            await tasks_repo.save(task, commit=False)
 
         # ── 1-minute warning ──────────────────────────────────────────────
         tasks_1min = await tasks_repo.get_tasks_for_warning(0.0, 2.0, is_last_minute=True)
@@ -98,10 +96,14 @@ async def _check_and_notify_once() -> None:
                 title="¡Tarea urgente!",
                 body=f"Tu tarea {task.title}, está a punto de comenzar.",
             )
-            await notif_repo.create(notif_item)
+            await notif_repo.create(notif_item, commit=False)
 
             task.lastMinuteNotified = True
-            await tasks_repo.save(task)
+            await tasks_repo.save(task, commit=False)
+
+        # Commit all notifications and task status changes atomically
+        if tasks_5min or tasks_1min:
+            await db.commit()
 
 
 async def _emit_notification(

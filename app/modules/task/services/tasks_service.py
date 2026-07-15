@@ -117,8 +117,8 @@ class TasksService:
         return self._map_to_dict(new_task)
 
     async def get_synced_google_ids(self, user_id: str) -> list[str]:
-        active_tasks = await self.repository.get_all_active_by_user(user_id)
-        return [t.google_event_id for t in active_tasks if t.google_event_id]
+        google_tasks = await self.repository.get_synced_google_tasks_by_user(user_id)
+        return [t.google_event_id for t in google_tasks if t.google_event_id]
 
     async def find_one(self, id: str) -> dict[str, Any]:
         task = await self.repository.get_by_id(id)
@@ -296,16 +296,21 @@ class TasksService:
                 except Exception:
                     pass
 
-        # Release task references from workspaces
-        workspaces_res = await self.db.execute(select(Workspace).where(Workspace.taskId == id))
-        workspaces_repo = WorkspacesRepository(self.db)
-        for w in workspaces_res.scalars().all():
-            w.taskId = None
-            w.updatedAt = datetime.utcnow()
-            await workspaces_repo.save(w)
+        # Release task references from workspaces and delete task atomically
+        try:
+            workspaces_res = await self.db.execute(select(Workspace).where(Workspace.taskId == id))
+            workspaces_repo = WorkspacesRepository(self.db)
+            for w in workspaces_res.scalars().all():
+                w.taskId = None
+                w.updatedAt = datetime.utcnow()
+                await workspaces_repo.save(w, commit=False)
 
-        # Hard delete (Físico)
-        await self.repository.delete(task)
+            # Hard delete (Físico)
+            await self.repository.delete(task, commit=False)
+            await self.db.commit()
+        except Exception as e:
+            await self.db.rollback()
+            raise e
 
         if task.userId and not skip_scheduling:
             await self.scheduler_service.run_scheduling_pipeline(task.userId, self.db, self.socket_server)

@@ -76,23 +76,28 @@ async def extract_and_save_memory(user_id: str, message: str, db: AsyncSession):
             return
             
         repo = UserMemoryRepository(db)
-        for m in memories:
-            category = m.get("type", "fact")
-            content = m.get("content", "")
-            if not content:
-                continue
+        try:
+            for m in memories:
+                category = m.get("type", "fact")
+                content = m.get("content", "")
+                if not content:
+                    continue
+                    
+                emb = generate_embedding(content)
                 
-            emb = generate_embedding(content)
-            
-            new_memory = UserMemory(
-                id=str(uuid.uuid4()),
-                userId=user_id,
-                memory=content,
-                category=category,
-                importance=1,
-                embedding=emb
-            )
-            await repo.create(new_memory)
+                new_memory = UserMemory(
+                    id=str(uuid.uuid4()),
+                    userId=user_id,
+                    memory=content,
+                    category=category,
+                    importance=1,
+                    embedding=emb
+                )
+                await repo.create(new_memory)
+            await db.commit()
+        except Exception as e:
+            await db.rollback()
+            raise e
             
     except Exception:
         pass

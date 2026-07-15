@@ -119,17 +119,19 @@ class WorkspacesRepository:
         offset: int | None = None
     ) -> dict[str, Any]:
         query = select(Workspace).where(Workspace.userId == user_id)
+        count_query = select(func.count(Workspace.id)).where(Workspace.userId == user_id)
         if group_id is not None:
             if group_id == 'ungrouped':
                 query = query.where(Workspace.groupId.is_(None))
+                count_query = count_query.where(Workspace.groupId.is_(None))
             else:
                 query = query.where(Workspace.groupId == group_id)
+                count_query = count_query.where(Workspace.groupId == group_id)
         if search:
             search_pattern = f"%{search}%"
-            query = query.where(
-                (Workspace.title.ilike(search_pattern)) | 
-                (Workspace.content.ilike(search_pattern))
-            )
+            filter_cond = (Workspace.title.ilike(search_pattern)) | (Workspace.content.ilike(search_pattern))
+            query = query.where(filter_cond)
+            count_query = count_query.where(filter_cond)
             
         query = query.order_by(Workspace.updatedAt.desc())
         
@@ -139,7 +141,7 @@ class WorkspacesRepository:
             query = query.offset(offset)
             
         result = await self.db.execute(query)
-        total_res = await self.db.execute(select(func.count(Workspace.id)).where(Workspace.userId == user_id))
+        total_res = await self.db.execute(count_query)
         total = total_res.scalar() or 0
         return {
             "items": list(result.scalars().all()),
@@ -147,21 +149,25 @@ class WorkspacesRepository:
         }
 
     async def release_taskId_for_other_workspaces(self, task_id: str, exclude_workspace_id: str, now: datetime) -> None:
+        """Releases taskId from other workspaces. Defers database commit to the caller."""
         await self.db.execute(
             update(Workspace)
             .where(Workspace.taskId == task_id, Workspace.id != exclude_workspace_id)
             .values(taskId=None, updatedAt=now)
         )
-        await self.db.commit()
+        await self.db.flush()
         await cache.delete_pattern("workspaces:user:*")
         await cache.delete_pattern("workspace:id:*")
         await cache.delete_pattern("signals:user:*")
 
-    async def save(self, workspace: Workspace) -> Workspace:
+    async def save(self, workspace: Workspace, commit: bool = True) -> Workspace:
         if workspace not in self.db:
             workspace = await self.db.merge(workspace)
-        await self.db.commit()
-        await self.db.refresh(workspace)
+        if commit:
+            await self.db.commit()
+            await self.db.refresh(workspace)
+        else:
+            await self.db.flush()
         await cache.set(f"workspace:id:{workspace.id}", serialize_workspace(workspace))
         await cache.delete(f"workspaces:user:{workspace.userId}")
         await cache.delete(f"signals:user:{workspace.userId}")
@@ -221,10 +227,11 @@ class ProjectGroupsRepository:
         return result.scalar() or 0
 
     async def delete_workspaces_by_group_id(self, group_id: str) -> None:
+        """Deletes all workspaces belonging to a group. Defers database commit to the caller."""
         await self.db.execute(
             delete(Workspace).where(Workspace.groupId == group_id)
         )
-        await self.db.commit()
+        await self.db.flush()
         await cache.delete_pattern("workspaces:user:*")
         await cache.delete_pattern("workspace:id:*")
 

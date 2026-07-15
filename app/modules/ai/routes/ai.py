@@ -105,6 +105,7 @@ async def background_post_chat_tasks(user_id: str, conversation_id: str, user_me
         )
         msg_repo = MessageRepository(db)
         await msg_repo.create(ast_msg)
+        await db.commit()
         
         # Memory Extraction
         await extract_and_save_memory(user_id, user_message, db)
@@ -228,6 +229,7 @@ async def chat_endpoint(
     )
     msg_repo = MessageRepository(db)
     await msg_repo.create(user_msg)
+    await db.commit()
 
     # 3. Router logic
     complexity = classify_query(latest_user_message)
@@ -349,6 +351,11 @@ async def delete_conversation(
         raise HTTPException(status_code=404, detail="Conversation not found")
         
     msg_repo = MessageRepository(db)
-    await msg_repo.delete_by_conversation_id(conversation_id)
-    await conv_repo.delete(conversation)
+    try:
+        await msg_repo.delete_by_conversation_id(conversation_id)
+        await conv_repo.delete(conversation)
+        await db.commit()
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to delete conversation: {e}")
     return {"status": "success", "message": "Conversation deleted"}

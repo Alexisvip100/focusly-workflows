@@ -14,10 +14,8 @@ class NotificationMutation:
         db = info.context["db"]
 
         repo = NotificationsRepository(db)
-        n = await repo.get_by_id(id)
-        if n and n.userId == user_id:
-            n.status = "read"
-            await repo.save(n)
+        n = await repo.update_status_by_id_and_user(id, user_id, "read")
+        if n:
             return types.map_model_to_strawberry_notification(n)
         return None
 

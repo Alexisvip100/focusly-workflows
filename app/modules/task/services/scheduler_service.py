@@ -1,7 +1,6 @@
 import uuid
 from datetime import datetime, timedelta
 from typing import Any
-from sqlalchemy import delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import TimeBlock
@@ -502,11 +501,6 @@ class SchedulerService:
         )
 
         # 6. Apply scheduling results to database
-        # Deleting old Focus Blocks
-        await db.execute(
-            delete(TimeBlock).where(TimeBlock.userId == user_id, TimeBlock.blockType == "Focus_Block")
-        )
-        
         # Insert new time blocks
         new_time_blocks = []
         for st in res["scheduledTasks"]:
@@ -521,8 +515,8 @@ class SchedulerService:
                     source="App",
                     title="Focus Block"
                 ))
-        if new_time_blocks:
-            await time_blocks_repo.create_many(new_time_blocks)
+        # Replace old Focus Blocks with new ones under a single committed transaction (even if list is empty)
+        await time_blocks_repo.replace_focus_blocks(user_id, new_time_blocks)
             
         # Update tasks with start/end estimates
         for st in res["scheduledTasks"]:
