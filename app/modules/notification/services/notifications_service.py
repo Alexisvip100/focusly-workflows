@@ -1,14 +1,15 @@
 import uuid
 from typing import Any
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.future import select
 
 from app.models import Notification
 from app.modules.notification.schemas.notifications import NotificationCreateSchema
+from app.modules.notification.repository import NotificationsRepository
 
 class NotificationsService:
     def __init__(self, db: AsyncSession):
         self.db = db
+        self.repository = NotificationsRepository(db)
 
     async def create(self, notification_data: dict[str, Any]) -> Notification:
         notif_id = notification_data.get("id") or str(uuid.uuid4())
@@ -18,24 +19,16 @@ class NotificationsService:
             id=notif_id,
             **parsed_notif.model_dump()
         )
-        self.db.add(new_notif)
-        await self.db.commit()
-        await self.db.refresh(new_notif)
-        return new_notif
+        return await self.repository.create(new_notif)
 
     async def findAll(self) -> list[Notification]:
-        result = await self.db.execute(select(Notification))
-        return list(result.scalars().all())
+        return await self.repository.get_all()
 
     async def findOne(self, id: str) -> Notification | None:
-        result = await self.db.execute(select(Notification).where(Notification.id == id))
-        return result.scalars().first()
+        return await self.repository.get_by_id(id)
 
     async def findAllByUser(self, user_id: str) -> list[Notification]:
-        result = await self.db.execute(
-            select(Notification).where(Notification.userId == user_id)
-        )
-        return list(result.scalars().all())
+        return await self.repository.get_all_by_user(user_id)
 
     async def sendPushNotification(
         self,

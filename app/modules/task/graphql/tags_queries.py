@@ -10,13 +10,8 @@ class TagQuery:
     async def get_tags_by_user(self, info, user_id: str, search_term: str | None = None) -> list[types.Tag]:
         get_user_id(info)
         db = info.context["db"]
-        from app.models import Task
-        from sqlalchemy import select
-        
-        result = await db.execute(
-            select(Task).where(Task.userId == user_id, Task.deletedAt == None)
-        )
-        tasks = result.scalars().all()
+        from app.modules.task.repository import TasksRepository
+        tasks = await TasksRepository(db).get_all_non_deleted_by_user(user_id)
         
         unique_tags = set()
         for t in tasks:

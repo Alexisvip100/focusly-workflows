@@ -2,15 +2,15 @@ import uuid
 from datetime import datetime
 from typing import Any
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.future import select
-from sqlalchemy import delete
 
 from app.models import TimeBlock
 from app.modules.task.schemas.time_blocks import TimeBlockCreateSchema
+from app.modules.task.repository import TimeBlocksRepository
 
 class TimeBlocksService:
     def __init__(self, db: AsyncSession):
         self.db = db
+        self.repository = TimeBlocksRepository(db)
 
     def _map_to_dict(self, tb: TimeBlock) -> dict[str, Any]:
         return {
@@ -50,9 +50,7 @@ class TimeBlocksService:
             id=block_id,
             **tb_input.model_dump()
         )
-        
-        self.db.add(time_block)
-        await self.db.commit()
+        await self.repository.create(time_block)
         return block_id
 
     async def create_many(self, blocks_data: list[dict[str, Any]]) -> None:
@@ -67,28 +65,24 @@ class TimeBlocksService:
                 id=block_id,
                 **tb_input.model_dump()
             ))
-            
-        self.db.add_all(new_blocks)
-        await self.db.commit()
+        await self.repository.create_many(new_blocks)
 
     async def find_all(self) -> list[dict[str, Any]]:
-        result = await self.db.execute(select(TimeBlock))
-        return [self._map_to_dict(tb) for tb in result.scalars().all()]
+        blocks = await self.repository.get_all()
+        return [self._map_to_dict(tb) for tb in blocks]
 
     async def find_one(self, id: str) -> dict[str, Any]:
-        result = await self.db.execute(select(TimeBlock).where(TimeBlock.id == id))
-        tb = result.scalars().first()
+        tb = await self.repository.get_by_id(id)
         if not tb:
             raise ValueError(f"Time block with ID {id} not found")
         return self._map_to_dict(tb)
 
     async def find_all_by_user(self, user_id: str) -> list[dict[str, Any]]:
-        result = await self.db.execute(select(TimeBlock).where(TimeBlock.userId == user_id))
-        return [self._map_to_dict(tb) for tb in result.scalars().all()]
+        blocks = await self.repository.get_all_by_user(user_id)
+        return [self._map_to_dict(tb) for tb in blocks]
 
     async def update(self, id: str, update_data: dict[str, Any]) -> dict[str, Any]:
-        result = await self.db.execute(select(TimeBlock).where(TimeBlock.id == id))
-        tb = result.scalars().first()
+        tb = await self.repository.get_by_id(id)
         if not tb:
             raise ValueError(f"Time block with ID {id} not found")
 
@@ -102,29 +96,14 @@ class TimeBlocksService:
                     setattr(tb, key, value)
 
         tb.updatedAt = datetime.utcnow()
-        await self.db.commit()
-        await self.db.refresh(tb)
+        await self.repository.save(tb)
         return self._map_to_dict(tb)
 
     async def get_synced_google_ids(self, user_id: str) -> list[str]:
-        result = await self.db.execute(
-            select(TimeBlock.externalEventId).where(
-                TimeBlock.userId == user_id,
-                TimeBlock.source == "Google"
-            )
-        )
-        return [r for r in result.scalars().all() if r]
+        return await self.repository.get_synced_google_ids(user_id)
 
     async def delete_many_focus_blocks(self, user_id: str) -> None:
-        await self.db.execute(
-            delete(TimeBlock).where(TimeBlock.userId == user_id, TimeBlock.blockType == "Focus_Block")
-        )
-        await self.db.commit()
+        await self.repository.delete_many_focus_blocks(user_id)
 
     async def delete_many_by_external_ids(self, user_id: str, external_ids: list[str]) -> None:
-        if not external_ids:
-            return
-        await self.db.execute(
-            delete(TimeBlock).where(TimeBlock.userId == user_id, TimeBlock.externalEventId.in_(external_ids))
-        )
-        await self.db.commit()
+        await self.repository.delete_many_by_external_ids(user_id, external_ids)

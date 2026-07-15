@@ -1,8 +1,7 @@
 import os
-from sqlalchemy.future import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from google import genai
-from app.models import Conversation, Message
+from app.modules.ai.repository import ConversationRepository, MessageRepository
 from .prompts import SUMMARIZATION_PROMPT
 
 async def check_and_summarize(conversation_id: str, db: AsyncSession, threshold: int = 20):
@@ -10,27 +9,21 @@ async def check_and_summarize(conversation_id: str, db: AsyncSession, threshold:
     Checks if conversation length exceeds threshold. If so, summarizes older messages,
     updates conversation summary, and keeps only the most recent messages.
     """
+    msg_repo = MessageRepository(db)
+    conv_repo = ConversationRepository(db)
+
     # 1. Count messages
-    result = await db.execute(
-        select(Message)
-        .filter(Message.conversationId == conversation_id)
-        .order_by(Message.createdAt.asc())
-    )
-    messages = result.scalars().all()
+    messages = await msg_repo.get_by_conversation_id(conversation_id)
     
     if len(messages) <= threshold:
         return
         
     # 2. Get conversation
-    conv_result = await db.execute(
-        select(Conversation).filter(Conversation.id == conversation_id)
-    )
-    conversation = conv_result.scalar_one_or_none()
+    conversation = await conv_repo.get_by_id(conversation_id)
     if not conversation:
         return
         
     # 3. Build text to summarize
-    # Include existing summary if any
     text_to_summarize = ""
     if conversation.summary:
         text_to_summarize += f"Previous Summary: {conversation.summary}\n\n"
@@ -56,10 +49,16 @@ async def check_and_summarize(conversation_id: str, db: AsyncSession, threshold:
         # 4. Update Conversation summary
         conversation.summary = new_summary
         
-        # 5. Delete summarized messages
-        for m in messages_to_summarize:
-            await db.delete(m)
+        try:
+            await conv_repo.save(conversation)
             
-        await db.commit()
+            # 5. Delete summarized messages using batch delete
+            await msg_repo.delete_many(messages_to_summarize)
+            
+            await db.commit()
+        except Exception as e:
+            await db.rollback()
+            raise e
+            
     except Exception:
         pass

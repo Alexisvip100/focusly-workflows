@@ -16,16 +16,13 @@ Payload: { taskId, title, deadline, minutesLeft, type: "5min" | "1min" }
 
 import asyncio
 import uuid
-from datetime import datetime, timedelta
-
-from sqlalchemy import func, or_, select, update
+from datetime import datetime
 
 from app.database import async_session_local
-from app.models import Task, User, Notification
+from app.models import Task, Notification
 from app.sockets.realtime import sio
-
-_ACTIVE_STATUSES = ["completed", "cancelled", "Completed"]
-_notification_time = func.coalesce(Task.estimated_start_date, Task.deadline)
+from app.modules.task.repository import TasksRepository
+from app.modules.notification.repository import NotificationsRepository
 
 
 def _task_start_at(task: Task) -> datetime:
@@ -37,21 +34,13 @@ async def _check_and_notify_once() -> None:
     now = datetime.utcnow()
 
     async with async_session_local() as db:
+        tasks_repo = TasksRepository(db)
+        notif_repo = NotificationsRepository(db)
+
         # ── 5-minute warning ──────────────────────────────────────────────
         # Tasks whose start time falls in [now+4min, now+6min] and haven't
         # been notified yet for the 5-min window.
-        result = await db.execute(
-            select(Task, User)
-            .join(User, User.id == Task.userId)
-            .where(
-                Task.deletedAt == None,
-                Task.status.notin_(_ACTIVE_STATUSES),
-                or_(Task.notified == False, Task.notified.is_(None)),
-                _notification_time >= now + timedelta(minutes=4),
-                _notification_time <= now + timedelta(minutes=6),
-            )
-        )
-        tasks_5min = result.all()
+        tasks_5min = await tasks_repo.get_tasks_for_warning(4.0, 6.0, is_last_minute=False)
 
         for task, user in tasks_5min:
             start_at = _task_start_at(task)
@@ -76,25 +65,13 @@ async def _check_and_notify_once() -> None:
                 title="Tarea próxima",
                 body=f"Tu tarea {task.title}, está a punto de comenzar.",
             )
-            db.add(notif_item)
+            await notif_repo.create(notif_item, commit=False)
 
-            await db.execute(
-                update(Task).where(Task.id == task.id).values(notified=True)
-            )
+            task.notified = True
+            await tasks_repo.save(task, commit=False)
 
         # ── 1-minute warning ──────────────────────────────────────────────
-        result = await db.execute(
-            select(Task, User)
-            .join(User, User.id == Task.userId)
-            .where(
-                Task.deletedAt == None,
-                Task.status.notin_(_ACTIVE_STATUSES),
-                or_(Task.lastMinuteNotified == False, Task.lastMinuteNotified.is_(None)),
-                _notification_time >= now,
-                _notification_time <= now + timedelta(minutes=2),
-            )
-        )
-        tasks_1min = result.all()
+        tasks_1min = await tasks_repo.get_tasks_for_warning(0.0, 2.0, is_last_minute=True)
 
         for task, user in tasks_1min:
             start_at = _task_start_at(task)
@@ -119,13 +96,14 @@ async def _check_and_notify_once() -> None:
                 title="¡Tarea urgente!",
                 body=f"Tu tarea {task.title}, está a punto de comenzar.",
             )
-            db.add(notif_item)
+            await notif_repo.create(notif_item, commit=False)
 
-            await db.execute(
-                update(Task).where(Task.id == task.id).values(lastMinuteNotified=True)
-            )
+            task.lastMinuteNotified = True
+            await tasks_repo.save(task, commit=False)
 
-        await db.commit()
+        # Commit all notifications and task status changes atomically
+        if tasks_5min or tasks_1min:
+            await db.commit()
 
 
 async def _emit_notification(

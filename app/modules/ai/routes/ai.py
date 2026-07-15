@@ -6,12 +6,16 @@ import httpx
 import json
 import uuid
 
-from sqlalchemy.future import select
 from app.config import settings
 from app.database import get_db
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.routes.common import get_current_user_id
 from app.models import Conversation, Message
+
+from app.modules.user.repository import UsersRepository
+from app.modules.task.repository import TasksRepository
+from app.modules.workspace.repository import WorkspacesRepository
+from app.modules.ai.repository import ConversationRepository, MessageRepository
 
 from app.modules.ai.services.context_builder import build_context
 from app.modules.ai.services.router import classify_query
@@ -99,7 +103,8 @@ async def background_post_chat_tasks(user_id: str, conversation_id: str, user_me
             content=assistant_message,
             tokenUsage=0
         )
-        db.add(ast_msg)
+        msg_repo = MessageRepository(db)
+        await msg_repo.create(ast_msg)
         await db.commit()
         
         # Memory Extraction
@@ -160,9 +165,8 @@ async def analyze_patterns_endpoint(
     analyzer = BehavioralAnalyzer(db)
     signals = await analyzer.collect_signals(current_user_id)
 
-    from app.models import User
-    user_result = await db.execute(select(User).where(User.id == current_user_id))
-    user_record = user_result.scalars().first()
+    user_repo = UsersRepository(db)
+    user_record = await user_repo.get_by_id(current_user_id)
     user_name = user_record.name if user_record and user_record.name else "ahí"
 
     url = f"{settings.FOCUSLY_AI_URL}/ai/analyze-patterns"
@@ -199,15 +203,11 @@ async def chat_endpoint(
     latest_user_message = body.messages[-1].content
     
     # 1. Get or create conversation for user
+    conv_repo = ConversationRepository(db)
     conversation_id = body.conversationId
     if conversation_id:
-        conv_result = await db.execute(
-            select(Conversation)
-            .filter(Conversation.id == conversation_id)
-            .filter(Conversation.userId == current_user_id)
-        )
-        conversation = conv_result.scalar_one_or_none()
-        if not conversation:
+        conversation = await conv_repo.get_by_id(conversation_id)
+        if not conversation or conversation.userId != current_user_id:
             raise HTTPException(status_code=404, detail="Conversation not found")
     else:
         title_snippet = latest_user_message[:30] + ("..." if len(latest_user_message) > 30 else "")
@@ -217,9 +217,7 @@ async def chat_endpoint(
             title=title_snippet,
             summary=""
         )
-        db.add(conversation)
-        await db.commit()
-        await db.refresh(conversation)
+        await conv_repo.create(conversation)
         
     # 2. Save user message
     user_msg = Message(
@@ -229,7 +227,8 @@ async def chat_endpoint(
         content=latest_user_message,
         tokenUsage=0
     )
-    db.add(user_msg)
+    msg_repo = MessageRepository(db)
+    await msg_repo.create(user_msg)
     await db.commit()
 
     # 3. Router logic
@@ -245,10 +244,9 @@ async def chat_endpoint(
     elif body.contextType == "workspaces":
         system_context += "\n\nCRITICAL CONTEXT MODE: The user has selected the 'Workspaces' context. Focus your answer primarily on their workspaces, document notes, and organizing projects."
     elif body.contextType == "task" and body.contextId:
-        from app.models import Task
-        t_res = await db.execute(select(Task).filter(Task.id == body.contextId).filter(Task.userId == current_user_id))
-        task_obj = t_res.scalars().first()
-        if task_obj:
+        task_repo = TasksRepository(db)
+        task_obj = await task_repo.get_by_id(body.contextId)
+        if task_obj and task_obj.userId == current_user_id:
             system_context += (
                 f"\n\nCRITICAL CONTEXT MODE: The user has selected this specific Task as context:\n"
                 f"- Title: {task_obj.title}\n"
@@ -258,9 +256,8 @@ async def chat_endpoint(
                 f"Please focus your response primarily on helping the user with this specific task."
             )
     elif body.contextType == "workspace" and body.contextId:
-        from app.models import Workspace
-        w_res = await db.execute(select(Workspace).filter(Workspace.id == body.contextId).filter(Workspace.userId == current_user_id))
-        ws_obj = w_res.scalars().first()
+        workspace_repo = WorkspacesRepository(db)
+        ws_obj = await workspace_repo.get_by_id_and_user(body.contextId, current_user_id)
         if ws_obj:
             system_context += (
                 f"\n\nCRITICAL CONTEXT MODE: The user has selected this specific Workspace/Document as context:\n"
@@ -305,12 +302,8 @@ async def get_conversations(
     current_user_id: str = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db)
 ):
-    result = await db.execute(
-        select(Conversation)
-        .filter(Conversation.userId == current_user_id)
-        .order_by(Conversation.updatedAt.desc())
-    )
-    conversations = result.scalars().all()
+    conv_repo = ConversationRepository(db)
+    conversations = await conv_repo.get_all_by_user(current_user_id)
     return [
         {
             "id": c.id,
@@ -329,21 +322,13 @@ async def get_conversation_messages(
     db: AsyncSession = Depends(get_db)
 ):
     # Verify ownership
-    conv_result = await db.execute(
-        select(Conversation)
-        .filter(Conversation.id == conversation_id)
-        .filter(Conversation.userId == current_user_id)
-    )
-    conversation = conv_result.scalar_one_or_none()
-    if not conversation:
+    conv_repo = ConversationRepository(db)
+    conversation = await conv_repo.get_by_id(conversation_id)
+    if not conversation or conversation.userId != current_user_id:
         raise HTTPException(status_code=404, detail="Conversation not found")
         
-    result = await db.execute(
-        select(Message)
-        .filter(Message.conversationId == conversation_id)
-        .order_by(Message.createdAt.asc())
-    )
-    messages = result.scalars().all()
+    msg_repo = MessageRepository(db)
+    messages = await msg_repo.get_by_conversation_id(conversation_id)
     return [
         {
             "id": m.id,
@@ -360,17 +345,17 @@ async def delete_conversation(
     current_user_id: str = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db)
 ):
-    conv_result = await db.execute(
-        select(Conversation)
-        .filter(Conversation.id == conversation_id)
-        .filter(Conversation.userId == current_user_id)
-    )
-    conversation = conv_result.scalar_one_or_none()
-    if not conversation:
+    conv_repo = ConversationRepository(db)
+    conversation = await conv_repo.get_by_id(conversation_id)
+    if not conversation or conversation.userId != current_user_id:
         raise HTTPException(status_code=404, detail="Conversation not found")
         
-    from sqlalchemy import delete
-    await db.execute(delete(Message).where(Message.conversationId == conversation_id))
-    await db.execute(delete(Conversation).where(Conversation.id == conversation_id))
-    await db.commit()
+    msg_repo = MessageRepository(db)
+    try:
+        await msg_repo.delete_by_conversation_id(conversation_id)
+        await conv_repo.delete(conversation)
+        await db.commit()
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to delete conversation: {e}")
     return {"status": "success", "message": "Conversation deleted"}

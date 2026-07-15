@@ -1,10 +1,11 @@
 import uuid
 from datetime import datetime, timedelta
 from typing import Any
-from sqlalchemy import select, delete, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import User, Task, TimeBlock
+from app.models import TimeBlock
+from app.modules.user.repository import UsersRepository
+from app.modules.task.repository import TasksRepository, TimeBlocksRepository
 
 class SchedulerService:
     async def schedule(
@@ -387,8 +388,11 @@ class SchedulerService:
 
     async def run_scheduling_pipeline(self, user_id: str, db: AsyncSession, socket_server=None) -> None:
         # 1. Fetch user settings
-        result = await db.execute(select(User).where(User.id == user_id))
-        user = result.scalars().first()
+        user_repo = UsersRepository(db)
+        tasks_repo = TasksRepository(db)
+        time_blocks_repo = TimeBlocksRepository(db)
+
+        user = await user_repo.get_by_id(user_id)
         if not user:
             return
 
@@ -423,8 +427,7 @@ class SchedulerService:
         }
 
         # 2. Fetch all tasks
-        result = await db.execute(select(Task).where(Task.userId == user_id, Task.deletedAt == None, or_(Task.source != "google", Task.source == None)))
-        tasks = result.scalars().all()
+        tasks = await tasks_repo.get_all_active_by_user(user_id)
         tasks_list = []
         for t in tasks:
             tasks_list.append({
@@ -452,8 +455,7 @@ class SchedulerService:
             })
 
         # 3. Fetch all time blocks
-        result = await db.execute(select(TimeBlock).where(TimeBlock.userId == user_id))
-        time_blocks = result.scalars().all()
+        time_blocks = await time_blocks_repo.get_all_by_user(user_id)
         
         # 4. Migrate tasks & timeblocks using MigrationService
         from app.modules.task.services.migration_service import MigrationService
@@ -499,11 +501,6 @@ class SchedulerService:
         )
 
         # 6. Apply scheduling results to database
-        # Deleting old Focus Blocks
-        await db.execute(
-            delete(TimeBlock).where(TimeBlock.userId == user_id, TimeBlock.blockType == "Focus_Block")
-        )
-        
         # Insert new time blocks
         new_time_blocks = []
         for st in res["scheduledTasks"]:
@@ -518,8 +515,8 @@ class SchedulerService:
                     source="App",
                     title="Focus Block"
                 ))
-        if new_time_blocks:
-            db.add_all(new_time_blocks)
+        # Replace old Focus Blocks with new ones under a single committed transaction (even if list is empty)
+        await time_blocks_repo.replace_focus_blocks(user_id, new_time_blocks)
             
         # Update tasks with start/end estimates
         for st in res["scheduledTasks"]:
@@ -531,8 +528,7 @@ class SchedulerService:
                 last_wb = sorted_wbs[-1]
                 
                 # Fetch task and update
-                task_res = await db.execute(select(Task).where(Task.id == t_id))
-                t_obj = task_res.scalars().first()
+                t_obj = await tasks_repo.get_by_id(t_id)
                 if t_obj:
                     new_start = first_wb["start"]
                     if t_obj.estimated_start_date != new_start:
@@ -542,8 +538,7 @@ class SchedulerService:
                     t_obj.estimated_end_date = last_wb["end"]
                     t_obj.status = "Scheduled"
                     t_obj.updatedAt = datetime.utcnow()
-                    
-        await db.commit()
+                    await tasks_repo.save(t_obj)
         
         # 7. Notify client via WebSockets
         if socket_server:

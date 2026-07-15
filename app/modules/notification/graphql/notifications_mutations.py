@@ -1,9 +1,7 @@
 import strawberry
-from sqlalchemy.future import select
-from sqlalchemy import update, delete
 from app.graphql import types
 from app.graphql.common import get_user_id
-from app.models import Notification
+from app.modules.notification.repository import NotificationsRepository
 
 
 @strawberry.type
@@ -15,16 +13,9 @@ class NotificationMutation:
         user_id = get_user_id(info)
         db = info.context["db"]
 
-        result = await db.execute(
-            select(Notification).where(
-                Notification.id == id, Notification.userId == user_id
-            )
-        )
-        n = result.scalars().first()
+        repo = NotificationsRepository(db)
+        n = await repo.update_status_by_id_and_user(id, user_id, "read")
         if n:
-            n.status = "read"
-            await db.commit()
-            await db.refresh(n)
             return types.map_model_to_strawberry_notification(n)
         return None
 
@@ -33,33 +24,24 @@ class NotificationMutation:
         user_id = get_user_id(info)
         db = info.context["db"]
 
-        results = await db.execute(
-            update(Notification)
-            .where(Notification.userId == user_id, Notification.status != "read")
-            .values(status="read")
-        )
-
-        await db.commit()
-        return results.rowcount > 0
+        repo = NotificationsRepository(db)
+        rowcount = await repo.mark_all_read(user_id)
+        return rowcount > 0
 
     @strawberry.mutation
     async def delete_notification(self, info, id: str) -> bool:
         user_id = get_user_id(info)
         db = info.context["db"]
 
-        result = await db.execute(
-            delete(Notification).where(
-                Notification.id == id, Notification.userId == user_id
-            )
-        )
-        await db.commit()
-        return result.rowcount > 0
+        repo = NotificationsRepository(db)
+        rowcount = await repo.delete_by_id_and_user(id, user_id)
+        return rowcount > 0
 
     @strawberry.mutation
     async def delete_all_notifications(self, info) -> bool:
         user_id = get_user_id(info)
         db = info.context["db"]
 
-        await db.execute(delete(Notification).where(Notification.userId == user_id))
-        await db.commit()
+        repo = NotificationsRepository(db)
+        await repo.delete_all_by_user(user_id)
         return True

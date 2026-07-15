@@ -2,10 +2,10 @@ import os
 import uuid
 import json
 import numpy as np
-from sqlalchemy.future import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from google import genai
 from app.models import UserMemory
+from app.modules.ai.repository import UserMemoryRepository
 from .embeddings import generate_embedding
 from .prompts import MEMORY_EXTRACTION_PROMPT
 
@@ -28,8 +28,8 @@ async def search_memories(user_id: str, query: str, db: AsyncSession, top_k: int
     if not query_emb:
         return ""
         
-    result = await db.execute(select(UserMemory).filter(UserMemory.userId == user_id))
-    all_memories = result.scalars().all()
+    repo = UserMemoryRepository(db)
+    all_memories = await repo.get_all_by_user(user_id)
     
     scored_memories = []
     for m in all_memories:
@@ -75,24 +75,29 @@ async def extract_and_save_memory(user_id: str, message: str, db: AsyncSession):
         if not isinstance(memories, list):
             return
             
-        for m in memories:
-            category = m.get("type", "fact")
-            content = m.get("content", "")
-            if not content:
-                continue
+        repo = UserMemoryRepository(db)
+        try:
+            for m in memories:
+                category = m.get("type", "fact")
+                content = m.get("content", "")
+                if not content:
+                    continue
+                    
+                emb = generate_embedding(content)
                 
-            emb = generate_embedding(content)
+                new_memory = UserMemory(
+                    id=str(uuid.uuid4()),
+                    userId=user_id,
+                    memory=content,
+                    category=category,
+                    importance=1,
+                    embedding=emb
+                )
+                await repo.create(new_memory)
+            await db.commit()
+        except Exception as e:
+            await db.rollback()
+            raise e
             
-            new_memory = UserMemory(
-                id=str(uuid.uuid4()),
-                userId=user_id,
-                memory=content,
-                category=category,
-                importance=1,
-                embedding=emb
-            )
-            db.add(new_memory)
-            
-        await db.commit()
     except Exception:
         pass
