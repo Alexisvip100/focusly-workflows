@@ -25,6 +25,12 @@ class BehavioralAnalyzer:
         Returns a privacy-safe dict of aggregated statistics — no raw task
         titles, notes, or workspace content are included.
         """
+        from app.redis import cache
+        cache_key = f"signals:user:{user_id}"
+        cached = await cache.get(cache_key)
+        if cached is not None:
+            return cached
+
         tasks = await self._fetch_tasks(user_id)
         sessions = await self._fetch_sessions(user_id)
         workspaces = await self._fetch_workspaces(user_id)
@@ -46,7 +52,7 @@ class BehavioralAnalyzer:
             for t in tasks if t.status not in ["Done"] and (t.priorityLevel or 0) >= 2
         ]
 
-        return {
+        res = {
             "hour_buckets": hour_buckets,
             "task_stats": task_stats,
             "session_stats": session_stats,
@@ -55,6 +61,8 @@ class BehavioralAnalyzer:
             "pending_tasks": pending_tasks,
             "data_points": len(tasks) + len(sessions),
         }
+        await cache.set(cache_key, res, expire_seconds=300)
+        return res
 
     # ── Private Helpers ──────────────────────────────────────────────────────
 

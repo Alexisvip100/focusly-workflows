@@ -24,6 +24,9 @@ from app.database import engine, Base
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Start background tasks on startup, clean up on shutdown."""
+    from app.redis import cache
+    await cache.connect()
+
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 
@@ -40,6 +43,7 @@ async def lifespan(app: FastAPI):
         await smart_notifier_task
     except asyncio.CancelledError:
         pass
+    await cache.disconnect()
 
 from fastapi.responses import JSONResponse
 

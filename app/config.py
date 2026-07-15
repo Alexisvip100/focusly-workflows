@@ -30,5 +30,6 @@ class Settings:
     RESEND_API_KEY: str = os.getenv("RESEND_API_KEY", "")
     IS_PRODUCTION: bool = os.getenv("ENV", "development") == "production"
     FOCUSLY_AI_URL: str = _normalized_ai_url
+    REDIS_URL: str = os.getenv("REDIS_URL", "redis://localhost:6379/0").strip()
 
 settings = Settings()
