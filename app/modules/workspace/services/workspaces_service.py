@@ -2,15 +2,15 @@ import uuid
 from datetime import datetime
 from typing import Any
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.future import select
-from sqlalchemy import update, func
 
 from app.models import Workspace
 from app.modules.workspace.schemas.workspaces import WorkspaceCreateSchema
+from app.modules.workspace.repository import WorkspacesRepository
 
 class WorkspacesService:
     def __init__(self, db: AsyncSession):
         self.db = db
+        self.repository = WorkspacesRepository(db)
 
     async def create(self, create_input: dict[str, Any], user_id: str) -> Workspace:
         workspace_id = str(uuid.uuid4())
@@ -24,58 +24,29 @@ class WorkspacesService:
             groupId=group_id,
             **workspace_data.model_dump()
         )
-        
-        self.db.add(workspace)
-        await self.db.commit()
-        await self.db.refresh(workspace)
-        return workspace
+        return await self.repository.create(workspace)
 
-    async def find_all(self, user_id: str, search: str | None = None, group_id: str | None = None, limit: int | None = None, offset: int | None = None) -> list[Workspace]:
-        query = select(Workspace).where(Workspace.userId == user_id)
-        if group_id is not None:
-            if group_id == 'ungrouped':
-                query = query.where(Workspace.groupId.is_(None))
-            else:
-                query = query.where(Workspace.groupId == group_id)
-        if search:
-            search_pattern = f"%{search}%"
-            query = query.where(
-                (Workspace.title.ilike(search_pattern)) | 
-                (Workspace.content.ilike(search_pattern))
-            )
-            
-        # Order by updatedAt desc for stable pagination
-        query = query.order_by(Workspace.updatedAt.desc())
-        
-        if limit is not None:
-            query = query.limit(limit)
-        if offset is not None:
-            query = query.offset(offset)
-            
-        result = await self.db.execute(query)
-        # get total count
-        total_res = await self.db.execute(select(func.count(Workspace.id)).where(Workspace.userId == user_id))
-        total = total_res.scalar() or 0
-        return {"items":list(result.scalars().all()),
-                "total":total
-            }
+    async def find_all(self, user_id: str, search: str | None = None, group_id: str | None = None, limit: int | None = None, offset: int | None = None) -> dict[str, Any]:
+        return await self.repository.find_all(
+            user_id=user_id,
+            search=search,
+            group_id=group_id,
+            limit=limit,
+            offset=offset
+        )
 
     async def find_one(self, id: str, user_id: str) -> Workspace:
-        result = await self.db.execute(select(Workspace).where(Workspace.id == id))
-        workspace = result.scalars().first()
-        if not workspace or workspace.userId != user_id:
+        workspace = await self.repository.get_by_id_and_user(id, user_id)
+        if not workspace:
             raise ValueError(f"Workspace with ID {id} not found")
         return workspace
 
     async def get_total_workspaces(self, user_id: str) -> int:
-        from sqlalchemy import func
-        result = await self.db.execute(select(func.count(Workspace.id)).where(Workspace.userId == user_id))
-        return result.scalar() or 0
+        return await self.repository.get_total_workspaces(user_id)
 
     async def update(self, id: str, update_input: dict[str, Any], user_id: str) -> Workspace:
-        result = await self.db.execute(select(Workspace).where(Workspace.id == id))
-        workspace = result.scalars().first()
-        if not workspace or workspace.userId != user_id:
+        workspace = await self.repository.get_by_id_and_user(id, user_id)
+        if not workspace:
             raise ValueError(f"Workspace with ID {id} not found")
 
         now = datetime.utcnow()
@@ -83,11 +54,7 @@ class WorkspacesService:
         # Handle exclusive taskId: if this workspace is taking a taskId, other workspaces must release it
         task_id = update_input.get("taskId")
         if task_id:
-            await self.db.execute(
-                update(Workspace)
-                .where(Workspace.taskId == task_id, Workspace.id != id)
-                .values(taskId=None, updatedAt=now)
-            )
+            await self.repository.release_taskId_for_other_workspaces(task_id, id, now)
 
         if "title" in update_input:
             workspace.title = update_input["title"]
@@ -120,20 +87,15 @@ class WorkspacesService:
             workspace.groupId = update_input["groupId"]
 
         workspace.updatedAt = now
-        await self.db.commit()
-        await self.db.refresh(workspace)
-        return workspace
+        return await self.repository.save(workspace)
 
     async def remove(self, id: str, user_id: str) -> bool:
-        result = await self.db.execute(select(Workspace).where(Workspace.id == id))
-        workspace = result.scalars().first()
-        if not workspace or workspace.userId != user_id:
+        workspace = await self.repository.get_by_id_and_user(id, user_id)
+        if not workspace:
             raise ValueError(f"Workspace with ID {id} not found")
 
-        await self.db.delete(workspace)
-        await self.db.commit()
+        await self.repository.delete(workspace)
         return True
 
     async def find_by_task_id(self, task_id: str) -> Workspace | None:
-        result = await self.db.execute(select(Workspace).where(Workspace.taskId == task_id))
-        return result.scalars().first()
+        return await self.repository.get_by_task_id(task_id)

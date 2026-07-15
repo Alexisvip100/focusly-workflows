@@ -1,14 +1,15 @@
 import uuid
 from typing import Any
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.future import select
 
 from app.models import FocusSession
 from app.modules.task.schemas.focus_sessions import FocusSessionCreateSchema
+from app.modules.task.repository import FocusSessionsRepository
 
 class FocusSessionsService:
     def __init__(self, db: AsyncSession):
         self.db = db
+        self.repository = FocusSessionsRepository(db)
 
     async def create(self, session_data: dict[str, Any]) -> FocusSession:
         session_id = session_data.get("id") or str(uuid.uuid4())
@@ -18,21 +19,13 @@ class FocusSessionsService:
             id=session_id,
             **parsed_session.model_dump()
         )
-        self.db.add(new_session)
-        await self.db.commit()
-        await self.db.refresh(new_session)
-        return new_session
+        return await self.repository.create(new_session)
 
     async def findAll(self) -> list[FocusSession]:
-        result = await self.db.execute(select(FocusSession))
-        return list(result.scalars().all())
+        return await self.repository.get_all()
 
     async def findOne(self, id: str) -> FocusSession | None:
-        result = await self.db.execute(select(FocusSession).where(FocusSession.id == id))
-        return result.scalars().first()
+        return await self.repository.get_by_id(id)
 
     async def findAllByUser(self, user_id: str) -> list[FocusSession]:
-        result = await self.db.execute(
-            select(FocusSession).where(FocusSession.userId == user_id)
-        )
-        return list(result.scalars().all())
+        return await self.repository.get_all_by_user(user_id)

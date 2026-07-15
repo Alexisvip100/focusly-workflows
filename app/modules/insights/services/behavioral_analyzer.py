@@ -8,10 +8,10 @@ for the AI pattern analysis — keeping user data private.
 from datetime import datetime, timedelta
 from typing import Any
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.future import select
-from sqlalchemy import or_
 
 from app.models import Task, FocusSession, Workspace
+from app.modules.task.repository import TasksRepository, FocusSessionsRepository
+from app.modules.workspace.repository import WorkspacesRepository
 
 
 class BehavioralAnalyzer:
@@ -59,26 +59,13 @@ class BehavioralAnalyzer:
     # ── Private Helpers ──────────────────────────────────────────────────────
 
     async def _fetch_tasks(self, user_id: str) -> list[Task]:
-        result = await self.db.execute(
-            select(Task).where(
-                Task.userId == user_id,
-                Task.deletedAt == None,
-                or_(Task.source != "google", Task.source == None),
-            )
-        )
-        return list(result.scalars().all())
+        return await TasksRepository(self.db).get_all_active_by_user(user_id)
 
     async def _fetch_sessions(self, user_id: str) -> list[FocusSession]:
-        result = await self.db.execute(
-            select(FocusSession).where(FocusSession.userId == user_id)
-        )
-        return list(result.scalars().all())
+        return await FocusSessionsRepository(self.db).get_all_by_user(user_id)
 
     async def _fetch_workspaces(self, user_id: str) -> list[Workspace]:
-        result = await self.db.execute(
-            select(Workspace).where(Workspace.userId == user_id)
-        )
-        return list(result.scalars().all())
+        return await WorkspacesRepository(self.db).get_all_by_user(user_id)
 
     def _to_dt(self, value) -> datetime | None:
         if value is None:

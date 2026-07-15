@@ -1,11 +1,12 @@
 from typing import Any
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.future import select
 from app.models import User
+from app.modules.user.repository import UsersRepository
 
 class UsersService:
     def __init__(self, db: AsyncSession):
         self.db = db
+        self.repository = UsersRepository(db)
 
     async def create(self, user_data: dict[str, Any]) -> User:
         user = User(
@@ -22,26 +23,19 @@ class UsersService:
             externalId=user_data.get("externalId"),
             fcmToken=user_data.get("fcmToken")
         )
-        self.db.add(user)
-        await self.db.commit()
-        await self.db.refresh(user)
-        return user
+        return await self.repository.create(user)
 
     async def findOne(self, id: str) -> User | None:
-        result = await self.db.execute(select(User).where(User.id == id))
-        return result.scalars().first()
+        return await self.repository.get_by_id(id)
 
     async def findByEmail(self, email: str) -> User | None:
-        result = await self.db.execute(select(User).where(User.email == email))
-        return result.scalars().first()
+        return await self.repository.get_by_email(email)
 
     async def find(self) -> list[User]:
-        result = await self.db.execute(select(User))
-        return list(result.scalars().all())
+        return await self.repository.get_all()
 
     async def update(self, id: str, update_data: dict[str, Any]) -> User | None:
-        result = await self.db.execute(select(User).where(User.id == id))
-        user = result.scalars().first()
+        user = await self.repository.get_by_id(id)
         if not user:
             return None
 
@@ -49,13 +43,11 @@ class UsersService:
             if hasattr(user, key) and value is not None:
                 setattr(user, key, value)
 
-        await self.db.commit()
-        await self.db.refresh(user)
-        return user
+        return await self.repository.save(user)
 
     async def updateGoogleRefreshToken(self, id: str, token: str) -> None:
-        result = await self.db.execute(select(User).where(User.id == id))
-        user = result.scalars().first()
+        user = await self.repository.get_by_id(id)
         if user:
             user.googleRefreshToken = token
-            await self.db.commit()
+            await self.repository.save(user)
+

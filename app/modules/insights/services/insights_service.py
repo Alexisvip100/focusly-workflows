@@ -2,10 +2,10 @@ import re
 from datetime import datetime, timedelta
 from typing import Any
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.future import select
 
 from app.models import Task, FocusSession, User
-from sqlalchemy import or_
+from app.modules.task.repository import TasksRepository, FocusSessionsRepository
+from app.modules.user.repository import UsersRepository
 
 class InsightsService:
     def __init__(self, db: AsyncSession, tasks_service=None, focus_sessions_service=None, users_service=None):
@@ -20,20 +20,18 @@ class InsightsService:
             tasks_res = await self.tasks_service.find_all_by_user(user_id)
             all_tasks = tasks_res.get("items", []) if isinstance(tasks_res, dict) else tasks_res
         else:
-            result = await self.db.execute(select(Task).where(Task.userId == user_id, Task.deletedAt == None, or_(Task.source != "google", Task.source == None)))
-            all_tasks = [self._map_task_to_dict(t) for t in result.scalars().all()]
+            tasks_list = await TasksRepository(self.db).get_active_non_google_tasks(user_id)
+            all_tasks = [self._map_task_to_dict(t) for t in tasks_list]
 
         if self.focus_sessions_service:
             all_focus_sessions = await self.focus_sessions_service.findAllByUser(user_id)
         else:
-            result = await self.db.execute(select(FocusSession).where(FocusSession.userId == user_id))
-            all_focus_sessions = list(result.scalars().all())
+            all_focus_sessions = await FocusSessionsRepository(self.db).get_all_by_user(user_id)
 
         if self.users_service:
             user = await self.users_service.findOne(user_id)
         else:
-            result = await self.db.execute(select(User).where(User.id == user_id))
-            user = result.scalars().first()
+            user = await UsersRepository(self.db).get_by_id(user_id)
 
         # 2. Determine Date Range based on filter
         # timezone_offset_minutes: JS getTimezoneOffset() value (e.g. 360 for UTC-6)

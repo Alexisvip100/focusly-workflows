@@ -3,10 +3,10 @@ from typing import Any
 import jwt
 import httpx
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.future import select
 
 from app.config import settings
 from app.models import User
+from app.modules.user.repository import UsersRepository
 
 
 class AuthService:
@@ -48,8 +48,8 @@ class AuthService:
             if not email:
                 raise ValueError("Email not found in Google user info")
 
-            result = await self.db.execute(select(User).where(User.email == email))
-            user = result.scalars().first()
+            user_repo = UsersRepository(self.db)
+            user = await user_repo.get_by_email(email)
 
             refresh_token = tokens.get("refresh_token")
 
@@ -65,13 +65,10 @@ class AuthService:
                     subscriptionStatus="free",
                     googleRefreshToken=refresh_token
                 )
-                self.db.add(user)
-                await self.db.commit()
-                await self.db.refresh(user)
+                await user_repo.create(user)
             elif refresh_token:
                 user.googleRefreshToken = refresh_token
-                await self.db.commit()
-                await self.db.refresh(user)
+                await user_repo.save(user)
 
             jwt_data = self.generate_jwt(user)
             jwt_data["google_access_token"] = access_token
@@ -80,8 +77,7 @@ class AuthService:
             raise ValueError(f"Invalid Google OAuth Token: {str(e)}")
 
     async def refresh_google_access_token(self, user_id: str) -> dict[str, Any]:
-        result = await self.db.execute(select(User).where(User.id == user_id))
-        user = result.scalars().first()
+        user = await UsersRepository(self.db).get_by_id(user_id)
 
         if not user or not user.googleRefreshToken:
             raise ValueError("No valid refresh token found for this user")
@@ -106,8 +102,7 @@ class AuthService:
         }
 
     async def refresh_session(self, user_id: str) -> User:
-        result = await self.db.execute(select(User).where(User.id == user_id))
-        user = result.scalars().first()
+        user = await UsersRepository(self.db).get_by_id(user_id)
         if not user:
             raise ValueError("User not found")
         return user
@@ -218,8 +213,8 @@ class AuthService:
             raise ValueError("Email not found in token")
 
         # Find or create user in Postgres
-        result = await self.db.execute(select(User).where(User.email == email))
-        user = result.scalars().first()
+        user_repo = UsersRepository(self.db)
+        user = await user_repo.get_by_email(email)
 
         if not user:
             import uuid
@@ -231,8 +226,6 @@ class AuthService:
                 role="user",
                 subscriptionStatus="free"
             )
-            self.db.add(user)
-            await self.db.commit()
-            await self.db.refresh(user)
+            await user_repo.create(user)
 
         return self.generate_jwt(user)

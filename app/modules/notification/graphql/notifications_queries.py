@@ -1,8 +1,6 @@
 import strawberry
-from sqlalchemy.future import select
 from app.graphql import types
 from app.graphql.common import get_user_id
-from app.models import Notification
 
 @strawberry.type
 class NotificationQuery:
@@ -11,10 +9,7 @@ class NotificationQuery:
         user_id = get_user_id(info)
         db = info.context["db"]
         
-        result = await db.execute(
-            select(Notification)
-            .where(Notification.userId == user_id)
-            .order_by(Notification.createdAt.desc())
-        )
-        notifications = result.scalars().all()
+        from app.modules.notification.repository import NotificationsRepository
+        repo = NotificationsRepository(db)
+        notifications = await repo.get_all_by_user(user_id)
         return [types.map_model_to_strawberry_notification(n) for n in notifications]

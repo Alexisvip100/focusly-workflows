@@ -6,11 +6,11 @@ from typing import Any
 from urllib.parse import urlencode
 import httpx
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.future import select
-from sqlalchemy import delete
 
 from app.config import settings
 from app.models import User, Task
+from app.modules.user.repository import UsersRepository
+from app.modules.task.repository import TasksRepository
 
 class GoogleCalendarService:
     def __init__(self, db: AsyncSession, auth_service=None, tasks_service=None, scheduler_service=None):
@@ -110,43 +110,31 @@ class GoogleCalendarService:
         token_info = await self.auth_service.refresh_google_access_token(user_id)
         access_token = token_info.get("access_token")
 
-        result = await self.db.execute(select(User).where(User.id == user_id))
-        user = result.scalars().first()
+        user_repo = UsersRepository(self.db)
+        tasks_repo = TasksRepository(self.db)
+        user = await user_repo.get_by_id(user_id)
         if not user:
             raise ValueError(f"User {user_id} not found")
 
         has_changes = False
 
         # Clean up legacy Google Calendar-only tasks from database
-        delete_result = await self.db.execute(
-            delete(Task).where(
-                Task.userId == user_id,
-                Task.source == "google"
-            )
-        )
-        deleted_count = delete_result.rowcount
+        deleted_count = await tasks_repo.delete_google_tasks_by_user(user_id)
         if deleted_count > 0:
-            await self.db.commit()
             has_changes = True
 
         sync_token = user.googleCalendarSyncToken
 
         # Check if we have any existing google tasks in the local DB
-        tasks_result = await self.db.execute(
-            select(Task).where(
-                Task.userId == user_id,
-                Task.task_type == "GoogleTask",
-                Task.deletedAt == None
-            )
-        )
-        existing_google_tasks = tasks_result.scalars().all()
+        all_user_tasks = await tasks_repo.get_all_active_by_user(user_id)
+        existing_google_tasks = [t for t in all_user_tasks if t.task_type == "GoogleTask"]
 
         # If we have a sync token but no local tasks, it indicates a database reset
         # or out-of-sync state. Force a full sync by clearing the sync token.
         if sync_token and not existing_google_tasks:
             sync_token = None
             user.googleCalendarSyncToken = None
-            await self.db.commit()
+            await user_repo.save(user)
 
         next_page_token = None
         new_sync_token = None
@@ -174,7 +162,7 @@ class GoogleCalendarService:
 
                     if res.status_code == 410:
                         user.googleCalendarSyncToken = None
-                        await self.db.commit()
+                        await user_repo.save(user)
                         sync_token = None
                         next_page_token = None
                         continue
@@ -198,14 +186,8 @@ class GoogleCalendarService:
                     
                     if item.get("status") == "cancelled":
                         # Find existing task
-                        result_tasks = await self.db.execute(
-                            select(Task).where(
-                                Task.userId == user_id,
-                                Task.google_event_id == event_id,
-                                Task.deletedAt == None
-                            )
-                        )
-                        existing_tasks = result_tasks.scalars().all()
+                        t_existing = await tasks_repo.get_by_google_event_id(user_id, event_id)
+                        existing_tasks = [t_existing] if t_existing else []
                         for t in existing_tasks:
                             # delete task
                             await self.tasks_service.delete(t.id, skip_scheduling=True, skip_google_sync=True)
@@ -214,14 +196,7 @@ class GoogleCalendarService:
                         summary = item.get("summary") or "Sin título"
                         
                         # Check if this event already exists in DB
-                        existing_result = await self.db.execute(
-                            select(Task).where(
-                                Task.userId == user_id,
-                                Task.google_event_id == event_id,
-                                Task.deletedAt == None
-                            )
-                        )
-                        existing_task = existing_result.scalars().first()
+                        existing_task = await tasks_repo.get_by_google_event_id(user_id, event_id)
                         if not existing_task:
                             continue
 
@@ -284,7 +259,7 @@ class GoogleCalendarService:
 
                 if new_sync_token:
                     user.googleCalendarSyncToken = new_sync_token
-                    await self.db.commit()
+                    await user_repo.save(user)
 
                 if has_changes:
                     # In python tasks service, scheduler pipeline uses the socket server we injected or default
@@ -298,8 +273,8 @@ class GoogleCalendarService:
 
     async def watch_calendar(self, user_id: str) -> None:
         try:
-            result = await self.db.execute(select(User).where(User.id == user_id))
-            user = result.scalars().first()
+            user_repo = UsersRepository(self.db)
+            user = await user_repo.get_by_id(user_id)
             if not user:
                 return
 
@@ -351,7 +326,7 @@ class GoogleCalendarService:
             user.googleChannelId = data.get("id")
             user.googleResourceId = data.get("resourceId")
             user.googleChannelExpiration = int(data.get("expiration") or expiration_time)
-            await self.db.commit()
+            await user_repo.save(user)
 
             pass
 
@@ -360,8 +335,8 @@ class GoogleCalendarService:
 
     async def stop_watching_calendar(self, user_id: str) -> None:
         try:
-            result = await self.db.execute(select(User).where(User.id == user_id))
-            user = result.scalars().first()
+            user_repo = UsersRepository(self.db)
+            user = await user_repo.get_by_id(user_id)
             if not user:
                 return
 
@@ -391,7 +366,7 @@ class GoogleCalendarService:
                     user.googleChannelId = None
                     user.googleResourceId = None
                     user.googleChannelExpiration = None
-                    await self.db.commit()
+                    await user_repo.save(user)
                     print(f"Stopped watching calendar for user {user_id}")
                 else:
                     print(f"Failed to stop watch channel for user {user_id}. Body: {res.text}")

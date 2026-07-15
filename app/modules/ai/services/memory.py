@@ -2,10 +2,10 @@ import os
 import uuid
 import json
 import numpy as np
-from sqlalchemy.future import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from google import genai
 from app.models import UserMemory
+from app.modules.ai.repository import UserMemoryRepository
 from .embeddings import generate_embedding
 from .prompts import MEMORY_EXTRACTION_PROMPT
 
@@ -28,8 +28,8 @@ async def search_memories(user_id: str, query: str, db: AsyncSession, top_k: int
     if not query_emb:
         return ""
         
-    result = await db.execute(select(UserMemory).filter(UserMemory.userId == user_id))
-    all_memories = result.scalars().all()
+    repo = UserMemoryRepository(db)
+    all_memories = await repo.get_all_by_user(user_id)
     
     scored_memories = []
     for m in all_memories:
@@ -75,6 +75,7 @@ async def extract_and_save_memory(user_id: str, message: str, db: AsyncSession):
         if not isinstance(memories, list):
             return
             
+        repo = UserMemoryRepository(db)
         for m in memories:
             category = m.get("type", "fact")
             content = m.get("content", "")
@@ -91,8 +92,7 @@ async def extract_and_save_memory(user_id: str, message: str, db: AsyncSession):
                 importance=1,
                 embedding=emb
             )
-            db.add(new_memory)
+            await repo.create(new_memory)
             
-        await db.commit()
     except Exception:
         pass

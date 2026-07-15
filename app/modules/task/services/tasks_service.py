@@ -1,13 +1,16 @@
 import uuid
+import re
 from datetime import datetime, timedelta
 from typing import Any
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
-from sqlalchemy import or_
 
 from app.models import Task, User, Workspace
 from app.modules.task.services.scheduler_service import SchedulerService
 from app.modules.task.schemas.tasks import TaskCreateSchema
+from app.modules.task.repository import TasksRepository
+from app.modules.user.repository import UsersRepository
+from app.modules.workspace.repository import WorkspacesRepository
 
 class TasksService:
     def __init__(self, db: AsyncSession, google_calendar_service=None, socket_server=None):
@@ -15,8 +18,8 @@ class TasksService:
         self.google_calendar_service = google_calendar_service
         self.scheduler_service = SchedulerService()
         self.socket_server = socket_server
+        self.repository = TasksRepository(db)
 
-    
     def _map_to_dict(self, t: Task) -> dict[str, Any]:
         return {
             "id": t.id,
@@ -63,18 +66,14 @@ class TasksService:
 
         # 1. Upsert check
         if google_event_id and user_id and not skip_existing_check:
-            result = await self.db.execute(
-                select(Task).where(Task.userId == user_id, Task.google_event_id == google_event_id, Task.deletedAt == None)
-            )
-            existing = result.scalars().first()
+            existing = await self.repository.get_by_google_event_id(user_id, google_event_id)
             if existing:
                 return await self.update(existing.id, task_data, skip_scheduling=skip_scheduling, skip_google_sync=skip_google_sync)
 
         # 2. Sync to Google Calendar
         if user_id and not skip_google_sync and not google_event_id:
             try:
-                user_res = await self.db.execute(select(User).where(User.id == user_id))
-                user = user_res.scalars().first()
+                user = await UsersRepository(self.db).get_by_id(user_id)
                 if user and user.googleRefreshToken and self.google_calendar_service:
                     google_event_body = self._map_task_to_google_event(task_data)
                     google_event = await self.google_calendar_service.create_event(
@@ -108,11 +107,9 @@ class TasksService:
             id=task_id,
             userId=user_id,
             deadline=task_input.deadline or now,
-            **task_input.model_dump(exclude={"deadline"})  # Desempaqueta el resto de campos ya procesados
+            **task_input.model_dump(exclude={"deadline"})
         )
-        self.db.add(new_task)
-        await self.db.commit()
-        await self.db.refresh(new_task)
+        await self.repository.create(new_task)
 
         if user_id and not skip_scheduling:
             await self.scheduler_service.run_scheduling_pipeline(user_id, self.db, self.socket_server)
@@ -120,25 +117,18 @@ class TasksService:
         return self._map_to_dict(new_task)
 
     async def get_synced_google_ids(self, user_id: str) -> list[str]:
-        result = await self.db.execute(
-            select(Task.google_event_id).where(
-                Task.userId == user_id,
-                Task.deletedAt == None,
-                Task.google_event_id != None
-            )
-        )
-        return [r for r in result.scalars().all() if r]
+        active_tasks = await self.repository.get_all_active_by_user(user_id)
+        return [t.google_event_id for t in active_tasks if t.google_event_id]
 
     async def find_one(self, id: str) -> dict[str, Any]:
-        result = await self.db.execute(select(Task).where(Task.id == id))
-        task = result.scalars().first()
+        task = await self.repository.get_by_id(id)
         if not task:
             raise ValueError(f"Task with ID {id} not found")
         return self._map_to_dict(task)
 
     async def find_all(self) -> list[dict[str, Any]]:
-        result = await self.db.execute(select(Task).where(Task.deletedAt == None, or_(Task.source != "google", Task.source == None)))
-        return [self._map_to_dict(t) for t in result.scalars().all()]
+        tasks = await self.repository.get_active_non_google_tasks()
+        return [self._map_to_dict(t) for t in tasks]
 
     async def find_all_by_user(
         self,
@@ -148,15 +138,8 @@ class TasksService:
         offset: int = 0,
         limit: int = 24,
     ) -> dict[str, Any]:
-        result = await self.db.execute(
-            select(Task).where(
-                Task.userId == user_id,
-                Task.deletedAt == None,
-                or_(Task.source != "google", Task.source == None),
-            )
-        )
-
-        tasks = [self._map_to_dict(t) for t in result.scalars().all()]
+        result = await self.repository.get_all_active_by_user(user_id)
+        tasks = [self._map_to_dict(t) for t in result]
 
         # Aplicar filtros y orden
         tasks = self._apply_filters_and_sorting(tasks, filters, sort)
@@ -192,47 +175,29 @@ class TasksService:
         filters: dict[str, Any],
         sort: dict[str, Any] | None = None
     ) -> list[dict[str, Any]]:
-        result = await self.db.execute(select(Task).where(Task.deletedAt == None, or_(Task.source != "google", Task.source == None)))
-        tasks = [self._map_to_dict(t) for t in result.scalars().all()]
+        tasks_list = await self.repository.get_active_non_google_tasks()
+        tasks = [self._map_to_dict(t) for t in tasks_list]
         return self._apply_filters_and_sorting(tasks, filters, sort)
 
     async def find_upcoming_tasks(self, start_date: datetime, end_date: datetime) -> list[dict[str, Any]]:
-        result = await self.db.execute(
-            select(Task).where(
-                Task.deadline >= start_date,
-                Task.deadline <= end_date,
-                Task.notified == False,
-                Task.deletedAt == None,
-                or_(Task.source != "google", Task.source == None)
-            )
-        )
-        return [self._map_to_dict(t) for t in result.scalars().all()]
+        tasks = await self.repository.get_upcoming_tasks(start_date, end_date)
+        return [self._map_to_dict(t) for t in tasks]
 
     async def find_last_minute_tasks(self, start_date: datetime, end_date: datetime) -> list[dict[str, Any]]:
-        result = await self.db.execute(
-            select(Task).where(
-                Task.deadline >= start_date,
-                Task.deadline <= end_date,
-                Task.lastMinuteNotified == False,
-                Task.deletedAt == None,
-                or_(Task.source != "google", Task.source == None)
-            )
-        )
-        return [self._map_to_dict(t) for t in result.scalars().all()]
+        tasks = await self.repository.get_last_minute_tasks(start_date, end_date)
+        return [self._map_to_dict(t) for t in tasks]
 
     async def mark_as_notified(self, id: str) -> None:
-        result = await self.db.execute(select(Task).where(Task.id == id))
-        task = result.scalars().first()
+        task = await self.repository.get_by_id(id)
         if task:
             task.notified = True
-            await self.db.commit()
+            await self.repository.save(task)
 
     async def mark_as_last_minute_notified(self, id: str) -> None:
-        result = await self.db.execute(select(Task).where(Task.id == id))
-        task = result.scalars().first()
+        task = await self.repository.get_by_id(id)
         if task:
             task.lastMinuteNotified = True
-            await self.db.commit()
+            await self.repository.save(task)
 
     async def update(
         self,
@@ -241,8 +206,7 @@ class TasksService:
         skip_scheduling: bool = False,
         skip_google_sync: bool = False
     ) -> dict[str, Any]:
-        result = await self.db.execute(select(Task).where(Task.id == id))
-        task = result.scalars().first()
+        task = await self.repository.get_by_id(id)
         if not task:
             # If update on non-existent task, we create it
             return await self.create(update_data, skip_scheduling=skip_scheduling, skip_google_sync=skip_google_sync)
@@ -252,13 +216,11 @@ class TasksService:
             if not val:
                 return None
             if isinstance(val, datetime):
-                # Strip tzinfo so it's always naive (TIMESTAMP WITHOUT TIME ZONE)
                 return val.replace(tzinfo=None)
             if isinstance(val, str):
                 try:
                     val = val.replace("Z", "+00:00")
                     dt = datetime.fromisoformat(val)
-                    # Always return naive datetime (strip UTC offset)
                     return dt.replace(tzinfo=None)
                 except:
                     return None
@@ -311,8 +273,7 @@ class TasksService:
                 except Exception:
                     pass
 
-            await self.db.commit()
-            await self.db.refresh(task)
+            await self.repository.save(task)
 
         if task.userId and has_changes and not skip_scheduling:
             await self.scheduler_service.run_scheduling_pipeline(task.userId, self.db, self.socket_server)
@@ -323,13 +284,10 @@ class TasksService:
         return result_task
 
     async def delete(self, id: str, skip_scheduling: bool = False, skip_google_sync: bool = False) -> None:
-        result = await self.db.execute(select(Task).where(Task.id == id))
-        task = result.scalars().first()
+        task = await self.repository.get_by_id(id)
         if not task:
             raise ValueError(f"Task with ID {id} not found")
 
-        task_type = task.task_type or "PlatformTask"
-        
         # Sync deletion to Google Calendar
         if task.google_event_id and task.userId and not skip_google_sync:
             if self.google_calendar_service:
@@ -340,13 +298,14 @@ class TasksService:
 
         # Release task references from workspaces
         workspaces_res = await self.db.execute(select(Workspace).where(Workspace.taskId == id))
+        workspaces_repo = WorkspacesRepository(self.db)
         for w in workspaces_res.scalars().all():
             w.taskId = None
             w.updatedAt = datetime.utcnow()
+            await workspaces_repo.save(w)
 
         # Hard delete (Físico)
-        await self.db.delete(task)
-        await self.db.commit()
+        await self.repository.delete(task)
 
         if task.userId and not skip_scheduling:
             await self.scheduler_service.run_scheduling_pipeline(task.userId, self.db, self.socket_server)
@@ -354,8 +313,7 @@ class TasksService:
     async def delete_many(self, ids: list[str]) -> None:
         user_ids = set()
         for id in ids:
-            result = await self.db.execute(select(Task).where(Task.id == id))
-            task = result.scalars().first()
+            task = await self.repository.get_by_id(id)
             if task:
                 if task.userId:
                     user_ids.add(task.userId)
@@ -421,7 +379,6 @@ class TasksService:
 
                 filtered_by_date = []
                 for t in mapped:
-                    # Prioritize the task's scheduled start date, deadline, completion date, and finally creation date.
                     date_to_use_str = (
                         t.get("estimated_start_date") or
                         t.get("deadline") or
@@ -432,7 +389,6 @@ class TasksService:
                         continue
                     date_to_use = datetime.fromisoformat(date_to_use_str)
                     
-                    # Convert start/end to offset naive if date_to_use is naive
                     if date_to_use.tzinfo is None:
                         if start_date and start_date.tzinfo is not None:
                             start_date = start_date.replace(tzinfo=None)
@@ -480,7 +436,6 @@ class TasksService:
 
     def _map_task_to_google_event(self, task: dict[str, Any]) -> dict[str, Any]:
         def parse_naive(val):
-            """Parse a datetime string or object and always return a naive (offset-free) datetime."""
             if not val:
                 return None
             if isinstance(val, datetime):
@@ -502,7 +457,6 @@ class TasksService:
             end = start + timedelta(minutes=(task.get("estimateTimer") or 30))
 
         clean_desc = (task.get("notesEncrypted") or "")
-        import re
         clean_desc = re.sub(r'\[COLOR:(.*?)\]', '', clean_desc)
         clean_desc = re.sub(r'\[START_DATE:(.*?)\]', '', clean_desc).strip()
 
