@@ -23,7 +23,7 @@ def serialize_user(user: User) -> dict:
         "googleCalendarSyncToken": user.googleCalendarSyncToken,
         "googleChannelId": user.googleChannelId,
         "googleResourceId": user.googleResourceId,
-        "googleChannelExpiration": user.googleChannelExpiration.isoformat() if user.googleChannelExpiration else None,
+        "googleChannelExpiration": user.googleChannelExpiration,
         "createdAt": user.createdAt.isoformat() if user.createdAt else None,
         "updatedAt": user.updatedAt.isoformat() if user.updatedAt else None
     }
@@ -32,7 +32,7 @@ def deserialize_user(data: dict) -> User:
     created_at = datetime.fromisoformat(data["createdAt"]) if data.get("createdAt") else None
     updated_at = datetime.fromisoformat(data["updatedAt"]) if data.get("updatedAt") else None
     last_sync_at = datetime.fromisoformat(data["lastSyncAt"]) if data.get("lastSyncAt") else None
-    google_channel_exp = datetime.fromisoformat(data["googleChannelExpiration"]) if data.get("googleChannelExpiration") else None
+    google_channel_exp = data.get("googleChannelExpiration")
     user = User(
         id=data["id"],
         email=data["email"],
