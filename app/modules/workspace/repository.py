@@ -46,7 +46,8 @@ def serialize_group(g: ProjectGroup) -> dict:
         "id": g.id,
         "userId": g.userId,
         "name": g.name,
-        "description": g.description,
+        "color": g.color,
+        "emoji": g.emoji,
         "createdAt": g.createdAt.isoformat() if g.createdAt else None,
         "updatedAt": g.updatedAt.isoformat() if g.updatedAt else None
     }
@@ -58,8 +59,9 @@ def deserialize_group(data: dict) -> ProjectGroup:
         id=data["id"],
         userId=data["userId"],
         name=data["name"],
-        description=data["description"]
     )
+    g.color = data.get("color")
+    g.emoji = data.get("emoji")
     g.createdAt = created_at
     g.updatedAt = updated_at
     return g

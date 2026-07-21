@@ -90,6 +90,18 @@ class ProjectGroup:
     created_at: datetime = strawberry.field(name="createdAt")
     updated_at: datetime = strawberry.field(name="updatedAt")
 
+    @strawberry.field(name="workspaceCount")
+    async def workspace_count(self, info) -> int:
+        db = info.context["db"]
+        from sqlalchemy import select, func
+        from app.models import Workspace
+        result = await db.execute(
+            select(func.count(Workspace.id))
+            .where(Workspace.userId == self.user_id)
+            .where(Workspace.groupId == str(self.id))
+        )
+        return result.scalar() or 0
+
     @strawberry.field
     async def workspaces(self, info) -> list[Workspace]:
         """Workspaces that belong to this group."""
