@@ -136,7 +136,7 @@ class TasksService:
         filters: dict[str, Any] | None = None,
         sort: dict[str, Any] | None = None,
         offset: int = 0,
-        limit: int = 24,
+        limit: int | None = 24,
     ) -> dict[str, Any]:
         result = await self.repository.get_all_active_by_user(user_id)
         tasks = [self._map_to_dict(t) for t in result]
@@ -148,7 +148,7 @@ class TasksService:
         total = len(tasks)
 
         # Paginación
-        items = tasks[offset: offset + limit]
+        items = tasks[offset: offset + limit] if limit is not None else tasks[offset:]
 
         return {
             "items": items,

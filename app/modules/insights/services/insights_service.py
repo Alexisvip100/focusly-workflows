@@ -17,7 +17,7 @@ class InsightsService:
     async def getInsights(self, user_id: str, filter_type: str, timezone_offset_minutes: int = 0, base_date: str | None = None) -> dict[str, Any]:
         # 1. Fetch data
         if self.tasks_service:
-            tasks_res = await self.tasks_service.find_all_by_user(user_id)
+            tasks_res = await self.tasks_service.find_all_by_user(user_id, limit=None)
             all_tasks = tasks_res.get("items", []) if isinstance(tasks_res, dict) else tasks_res
         else:
             tasks_list = await TasksRepository(self.db).get_active_non_google_tasks(user_id)
@@ -68,7 +68,7 @@ class InsightsService:
         filtered_tasks = []
         end_date = now.replace(hour=23, minute=59, second=59)
         for t in all_tasks:
-            updated_str = t.get("updatedAt") or t.get("createdAt")
+            updated_str = t.get("completedAt") or t.get("updatedAt") or t.get("createdAt")
             task_date = datetime.fromisoformat(updated_str.replace("Z", "+00:00")).replace(tzinfo=None) if updated_str else now
             if (start_date <= task_date <= end_date) or t.get("status") != "Done":
                 filtered_tasks.append(t)
