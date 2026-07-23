@@ -55,7 +55,7 @@ class GoogleCalendarService:
         token_info = await self.auth_service.refresh_google_access_token(user_id)
         access_token = token_info.get("access_token")
 
-        url = "https://www.googleapis.com/calendar/v3/calendars/primary/events?conferenceDataVersion=1"
+        url = "https://www.googleapis.com/calendar/v3/calendars/primary/events?conferenceDataVersion=1&sendUpdates=all"
         async with httpx.AsyncClient() as client:
             res = await client.post(
                 url,
@@ -76,7 +76,7 @@ class GoogleCalendarService:
         token_info = await self.auth_service.refresh_google_access_token(user_id)
         access_token = token_info.get("access_token")
 
-        url = f"https://www.googleapis.com/calendar/v3/calendars/primary/events/{event_id}?conferenceDataVersion=1"
+        url = f"https://www.googleapis.com/calendar/v3/calendars/primary/events/{event_id}?conferenceDataVersion=1&sendUpdates=all"
         async with httpx.AsyncClient() as client:
             res = await client.patch(
                 url,
