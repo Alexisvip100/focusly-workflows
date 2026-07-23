@@ -6,7 +6,7 @@ import os
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from app.database import engine, Base
-from app.models import models  # Import models to register them on Base
+import app.models  # Import models to register them on Base
 
 async def init_db():
     print("Initializing database...")
