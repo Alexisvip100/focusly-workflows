@@ -7,13 +7,6 @@ from app.modules.task.services.tasks_service import TasksService
 
 @strawberry.type
 class TaskQuery:
-    @strawberry.field
-    async def get_tasks(self, info) -> list[types.Task]:
-        get_user_id(info)
-        db = info.context["db"]
-        tasks_serv = TasksService(db)
-        res = await tasks_serv.find_all()
-        return [types.map_dict_to_strawberry_task(t) for t in res]
 
     @strawberry.field
     async def get_tasks_by_user(
@@ -66,8 +59,8 @@ class TaskQuery:
         user_id: str,
         filters: types.TaskFilterInput | None = None,
         sort: types.TaskSortInput | None = None,
-        offset: int | None = 0,
-        limit: int | None = None
+        offset: int = 0,
+        limit: int = 24
     ) -> types.PaginatedTasks:
         get_user_id(info)
         db = info.context["db"]
@@ -88,6 +81,8 @@ class TaskQuery:
                 filters_dict["endDate"] = filters.endDate
             if filters.searchTerm is not None:
                 filters_dict["searchTerm"] = filters.searchTerm
+            if filters.tags is not None:
+                filters_dict["tags"] = filters.tags
 
         sort_dict = None
         if sort:
