@@ -111,24 +111,3 @@ class TaskQuery:
         tasks_serv = TasksService(db)
         res = await tasks_serv.find_one(id)
         return types.map_dict_to_strawberry_task(res)
-
-    @strawberry.field
-    async def get_task_by_filters(
-        self,
-        info,
-        filters: types.TaskFilterInput
-    ) -> list[types.Task]:
-        get_user_id(info)
-        db = info.context["db"]
-        tasks_serv = TasksService(db)
-
-        filters_dict = {}
-        if filters.status is not None:
-            filters_dict["status"] = filters.status
-        if filters.priorityLevel is not None:
-            filters_dict["priorityLevel"] = filters.priorityLevel
-        if filters.category is not None:
-            filters_dict["category"] = filters.category
-
-        res = await tasks_serv.filter_by_status(filters_dict)
-        return [types.map_dict_to_strawberry_task(t) for t in res]

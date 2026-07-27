@@ -26,23 +26,28 @@ class WorkspacesService:
         )
         return await self.repository.create(workspace)
 
-    async def find_all(self, user_id: str, search: str | None = None, group_id: str | None = None, limit: int | None = None, offset: int | None = None) -> dict[str, Any]:
-        return await self.repository.find_all(
+    async def find_all(self, user_id: str, search: str | None = None, group_id: str | None = None, limit: int = 24, offset: int = 0) -> dict[str, Any]:
+        res = await self.repository.find_all(
             user_id=user_id,
             search=search,
             group_id=group_id,
             limit=limit,
             offset=offset
-        )
+        )   
+        total_workspaces = res["total"]
+        return {
+            "items": res["items"],
+            "total": total_workspaces,
+            "page": (offset // limit + 1) if limit > 0 else 1,
+            "limit": limit,
+            "hasMore": (offset + limit) < total_workspaces
+        }   
 
     async def find_one(self, id: str, user_id: str) -> Workspace:
         workspace = await self.repository.get_by_id_and_user(id, user_id)
         if not workspace:
             raise ValueError(f"Workspace with ID {id} not found")
         return workspace
-
-    async def get_total_workspaces(self, user_id: str) -> int:
-        return await self.repository.get_total_workspaces(user_id)
 
     async def update(self, id: str, update_input: dict[str, Any], user_id: str) -> Workspace:
         workspace = await self.repository.get_by_id_and_user(id, user_id)

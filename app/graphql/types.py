@@ -60,7 +60,7 @@ class Workspace:
     emoji: str | None = None
     background_color: str | None = strawberry.field(name="background_color", default=None)
     card_show_background: bool | None = strawberry.field(name="card_show_background", default=None)
-    groupId: str | None = None
+    projectId: str | None = None
     content: str
     saveStatus: bool | None = None
     createdAt: datetime
@@ -184,6 +184,12 @@ class Task:
 class PaginatedTasks:
     tasks: list[Task]
     totalCount: int
+
+@strawberry.type
+class PaginatedWorkspaces:
+    workspaces: list[Workspace]
+    totalCount: int
+    hasMore: bool | None = None
 
 # Insights Types
 
