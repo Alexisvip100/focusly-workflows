@@ -7,21 +7,20 @@ from app.modules.task.services.tasks_service import TasksService
 
 @strawberry.type
 class TaskQuery:
-
     @strawberry.field
     async def get_tasks_by_user(
         self,
         info,
         user_id: str,
         limit: int = 24,
-        offset: int = 0,  
+        offset: int = 0,
         filters: types.TaskFilterInput | None = None,
         sort: types.TaskSortInput | None = None,
     ) -> list[types.Task]:
         get_user_id(info)
         db = info.context["db"]
         tasks_serv = TasksService(db)
-        
+
         # Convert filters input to dict
         filters_dict = None
         if filters:
@@ -43,12 +42,11 @@ class TaskQuery:
 
         sort_dict = None
         if sort:
-            sort_dict = {
-                "sort": sort.sort,
-                "order": sort.order or "asc"
-            }
+            sort_dict = {"sort": sort.sort, "order": sort.order or "asc"}
 
-        res = await tasks_serv.find_all_by_user(user_id, filters_dict, sort_dict, limit=limit, offset=offset)
+        res = await tasks_serv.find_all_by_user(
+            user_id, filters_dict, sort_dict, limit=limit, offset=offset
+        )
         items = res["items"] if isinstance(res, dict) else res
         return [types.map_dict_to_strawberry_task(t) for t in items]
 
@@ -60,7 +58,7 @@ class TaskQuery:
         filters: types.TaskFilterInput | None = None,
         sort: types.TaskSortInput | None = None,
         offset: int = 0,
-        limit: int = 24
+        limit: int = 24,
     ) -> types.PaginatedTasks:
         get_user_id(info)
         db = info.context["db"]
@@ -86,22 +84,19 @@ class TaskQuery:
 
         sort_dict = None
         if sort:
-            sort_dict = {
-                "sort": sort.sort,
-                "order": sort.order or "asc"
-            }
+            sort_dict = {"sort": sort.sort, "order": sort.order or "asc"}
 
         paginated_res, total = await tasks_serv.find_paginated_by_user(
             user_id=user_id,
             filters=filters_dict,
             sort=sort_dict,
             offset=offset or 0,
-            limit=limit
+            limit=limit,
         )
 
         return types.PaginatedTasks(
             tasks=[types.map_dict_to_strawberry_task(t) for t in paginated_res],
-            totalCount=total
+            totalCount=total,
         )
 
     @strawberry.field

@@ -3,7 +3,6 @@ from sqlalchemy.sql import func
 from app.database import Base
 
 
-
 class Task(Base):
     __tablename__ = "Task"
 
@@ -23,7 +22,9 @@ class Task(Base):
     status = Column(String, nullable=False, default="Todo")
     completedAt = Column(DateTime, nullable=True)
     createdAt = Column(DateTime, default=func.now(), nullable=False)
-    updatedAt = Column(DateTime, default=func.now(), onupdate=func.now(), nullable=False)
+    updatedAt = Column(
+        DateTime, default=func.now(), onupdate=func.now(), nullable=False
+    )
     deletedAt = Column(DateTime, nullable=True)
     tags = Column(JSON, nullable=True)
     filters = Column(JSON, nullable=True)
@@ -38,4 +39,3 @@ class Task(Base):
     use_ai = Column(Boolean, nullable=True, default=False)
     workspaceId = Column(String, nullable=True)
     is_owner = Column(Boolean, nullable=True, default=False)
-  

@@ -19,67 +19,73 @@ class InsightsQuery:
     ) -> types.InsightsResponse:
         get_user_id(info)
         db = info.context["db"]
-        
+
         # Instantiate services needed by insights_service
         from app.modules.user.services.users_service import UsersService
-        from app.modules.task.services.focus_sessions_service import FocusSessionsService
-        
+        from app.modules.task.services.focus_sessions_service import (
+            FocusSessionsService,
+        )
+
         users_serv = UsersService(db)
         tasks_serv = TasksService(db)
         fs_serv = FocusSessionsService(db)
-        
+
         insights_serv = InsightsService(
             db=db,
             tasks_service=tasks_serv,
             focus_sessions_service=fs_serv,
-            users_service=users_serv
+            users_service=users_serv,
         )
-        
-        res = await insights_serv.getInsights(user_id, filter or "Weekly", timezone_offset or 0, base_date)
-        
+
+        res = await insights_serv.getInsights(
+            user_id, filter or "Weekly", timezone_offset or 0, base_date
+        )
+
         # Map ProductivityTrend
         trends = []
         for t in res["productivityTrends"]:
-            trends.append(types.ProductivityTrend(
-                label=t["label"],
-                actual=float(t["actual"]),
-                planned=float(t["planned"])
-            ))
-            
+            trends.append(
+                types.ProductivityTrend(
+                    label=t["label"],
+                    actual=float(t["actual"]),
+                    planned=float(t["planned"]),
+                )
+            )
+
         # Map TimeDistribution
         dist = []
         for d in res["timeDistribution"]:
-            dist.append(types.TimeDistribution(
-                name=d["name"],
-                value=float(d["value"]),
-                color=d["color"]
-            ))
+            dist.append(
+                types.TimeDistribution(
+                    name=d["name"], value=float(d["value"]), color=d["color"]
+                )
+            )
 
         return types.InsightsResponse(
             total_focus_hours=types.StatCardValue(
                 value=res["totalFocusHours"]["value"],
                 change=res["totalFocusHours"]["change"],
-                trend=res["totalFocusHours"]["trend"]
+                trend=res["totalFocusHours"]["trend"],
             ),
             task_completion=types.StatCardValue(
                 value=res["taskCompletion"]["value"],
                 change=res["taskCompletion"]["change"],
-                trend=res["taskCompletion"]["trend"]
+                trend=res["taskCompletion"]["trend"],
             ),
             energy_score=types.StatCardValue(
                 value=res["energyScore"]["value"],
                 change=res["energyScore"]["change"],
-                trend=res["energyScore"]["trend"]
+                trend=res["energyScore"]["trend"],
             ),
             golden_window=types.StatCardValue(
                 value=res["goldenWindow"]["value"],
                 change=res["goldenWindow"]["change"],
-                trend=res["goldenWindow"]["trend"]
+                trend=res["goldenWindow"]["trend"],
             ),
             break_hours=types.StatCardValue(
                 value=res["breakHours"]["value"],
                 change=res["breakHours"]["change"],
-                trend=res["breakHours"]["trend"]
+                trend=res["breakHours"]["trend"],
             ),
             productivity_trends=trends,
             time_distribution=dist,

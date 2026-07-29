@@ -3,11 +3,14 @@ from sqlalchemy.future import select
 from sqlalchemy import func, delete
 from app.models import Notification
 
+
 class NotificationsRepository:
     def __init__(self, db: AsyncSession):
         self.db = db
 
-    async def create(self, notification: Notification, commit: bool = True) -> Notification:
+    async def create(
+        self, notification: Notification, commit: bool = True
+    ) -> Notification:
         self.db.add(notification)
         if commit:
             await self.db.commit()
@@ -17,7 +20,9 @@ class NotificationsRepository:
         return notification
 
     async def get_by_id(self, notification_id: str) -> Notification | None:
-        result = await self.db.execute(select(Notification).where(Notification.id == notification_id))
+        result = await self.db.execute(
+            select(Notification).where(Notification.id == notification_id)
+        )
         return result.scalars().first()
 
     async def get_all(self) -> list[Notification]:
@@ -35,8 +40,7 @@ class NotificationsRepository:
     async def get_unread_count(self, user_id: str) -> int:
         result = await self.db.execute(
             select(func.count(Notification.id)).where(
-                Notification.userId == user_id,
-                Notification.read == False
+                Notification.userId == user_id, Notification.read == False
             )
         )
         return result.scalar() or 0
@@ -52,6 +56,7 @@ class NotificationsRepository:
 
     async def mark_all_read(self, user_id: str) -> int:
         from sqlalchemy import update
+
         result = await self.db.execute(
             update(Notification)
             .where(Notification.userId == user_id, Notification.status != "read")
@@ -75,11 +80,12 @@ class NotificationsRepository:
         )
         await self.db.commit()
 
-    async def update_status_by_id_and_user(self, notification_id: str, user_id: str, status: str) -> Notification | None:
+    async def update_status_by_id_and_user(
+        self, notification_id: str, user_id: str, status: str
+    ) -> Notification | None:
         result = await self.db.execute(
             select(Notification).where(
-                Notification.id == notification_id,
-                Notification.userId == user_id
+                Notification.id == notification_id, Notification.userId == user_id
             )
         )
         notification = result.scalars().first()

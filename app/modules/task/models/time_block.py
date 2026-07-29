@@ -3,7 +3,6 @@ from sqlalchemy.sql import func
 from app.database import Base
 
 
-
 class TimeBlock(Base):
     __tablename__ = "TimeBlock"
 
@@ -19,4 +18,6 @@ class TimeBlock(Base):
     meetingUrl = Column(String, nullable=True)
     attendees = Column(JSON, nullable=True)
     createdAt = Column(DateTime, default=func.now(), nullable=False)
-    updatedAt = Column(DateTime, default=func.now(), onupdate=func.now(), nullable=False)
+    updatedAt = Column(
+        DateTime, default=func.now(), onupdate=func.now(), nullable=False
+    )

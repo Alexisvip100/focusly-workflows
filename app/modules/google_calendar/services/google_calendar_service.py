@@ -12,25 +12,30 @@ from app.config import settings
 from app.modules.user.repository import UsersRepository
 from app.modules.task.repository import TasksRepository
 
+
 class GoogleCalendarService:
-    def __init__(self, db: AsyncSession, auth_service=None, tasks_service=None, scheduler_service=None):
+    def __init__(
+        self,
+        db: AsyncSession,
+        auth_service=None,
+        tasks_service=None,
+        scheduler_service=None,
+    ):
         self.db = db
         self.auth_service = auth_service
         self.tasks_service = tasks_service
         self.scheduler_service = scheduler_service
 
-    async def get_events(self, user_id: str, time_min: str | None = None, time_max: str | None = None) -> dict[str, Any]:
+    async def get_events(
+        self, user_id: str, time_min: str | None = None, time_max: str | None = None
+    ) -> dict[str, Any]:
         if not self.auth_service:
             raise ValueError("AuthService is required to get events")
-            
+
         token_info = await self.auth_service.refresh_google_access_token(user_id)
         access_token = token_info.get("access_token")
 
-        params = {
-            "maxResults": "2500",
-            "singleEvents": "true",
-            "orderBy": "startTime"
-        }
+        params = {"maxResults": "2500", "singleEvents": "true", "orderBy": "startTime"}
 
         if time_min:
             params["timeMin"] = time_min
@@ -43,7 +48,9 @@ class GoogleCalendarService:
 
         url = f"https://www.googleapis.com/calendar/v3/calendars/primary/events?{urlencode(params)}"
         async with httpx.AsyncClient() as client:
-            res = await client.get(url, headers={"Authorization": f"Bearer {access_token}"})
+            res = await client.get(
+                url, headers={"Authorization": f"Bearer {access_token}"}
+            )
             if res.status_code != 200:
                 raise Exception(f"Failed to fetch from Google Calendar: {res.text}")
             return res.json()
@@ -51,7 +58,7 @@ class GoogleCalendarService:
     async def create_event(self, user_id: str, event: dict[str, Any]) -> dict[str, Any]:
         if not self.auth_service:
             raise ValueError("AuthService is required to create event")
-            
+
         token_info = await self.auth_service.refresh_google_access_token(user_id)
         access_token = token_info.get("access_token")
 
@@ -61,18 +68,20 @@ class GoogleCalendarService:
                 url,
                 headers={
                     "Authorization": f"Bearer {access_token}",
-                    "Content-Type": "application/json"
+                    "Content-Type": "application/json",
                 },
-                json=event
+                json=event,
             )
             if res.status_code not in (200, 201):
                 raise Exception(f"Failed to create Google event: {res.text}")
             return res.json()
 
-    async def patch_event(self, user_id: str, event_id: str, event: dict[str, Any]) -> dict[str, Any]:
+    async def patch_event(
+        self, user_id: str, event_id: str, event: dict[str, Any]
+    ) -> dict[str, Any]:
         if not self.auth_service:
             raise ValueError("AuthService is required to patch event")
-            
+
         token_info = await self.auth_service.refresh_google_access_token(user_id)
         access_token = token_info.get("access_token")
 
@@ -82,9 +91,9 @@ class GoogleCalendarService:
                 url,
                 headers={
                     "Authorization": f"Bearer {access_token}",
-                    "Content-Type": "application/json"
+                    "Content-Type": "application/json",
                 },
-                json=event
+                json=event,
             )
             if res.status_code != 200:
                 raise Exception(f"Failed to patch Google event: {res.text}")
@@ -93,18 +102,28 @@ class GoogleCalendarService:
     async def delete_event(self, user_id: str, event_id: str) -> None:
         if not self.auth_service:
             raise ValueError("AuthService is required to delete event")
-            
+
         token_info = await self.auth_service.refresh_google_access_token(user_id)
         access_token = token_info.get("access_token")
 
         url = f"https://www.googleapis.com/calendar/v3/calendars/primary/events/{event_id}"
         async with httpx.AsyncClient() as client:
-            res = await client.delete(url, headers={"Authorization": f"Bearer {access_token}"})
-            if res.status_code != 200 and res.status_code != 204 and res.status_code != 404:
+            res = await client.delete(
+                url, headers={"Authorization": f"Bearer {access_token}"}
+            )
+            if (
+                res.status_code != 200
+                and res.status_code != 204
+                and res.status_code != 404
+            ):
                 raise Exception("Failed to delete Google event")
 
     async def sync_calendar(self, user_id: str) -> None:
-        if not self.auth_service or not self.tasks_service or not self.scheduler_service:
+        if (
+            not self.auth_service
+            or not self.tasks_service
+            or not self.scheduler_service
+        ):
             raise ValueError("Required services not injected in GoogleCalendarService")
 
         token_info = await self.auth_service.refresh_google_access_token(user_id)
@@ -127,7 +146,9 @@ class GoogleCalendarService:
 
         # Check if we have any existing google tasks in the local DB
         all_user_tasks = await tasks_repo.get_all_active_by_user(user_id)
-        existing_google_tasks = [t for t in all_user_tasks if t.task_type == "GoogleTask"]
+        existing_google_tasks = [
+            t for t in all_user_tasks if t.task_type == "GoogleTask"
+        ]
 
         # If we have a sync token but no local tasks, it indicates a database reset
         # or out-of-sync state. Force a full sync by clearing the sync token.
@@ -141,24 +162,26 @@ class GoogleCalendarService:
         items_to_process = []
 
         base_url = "https://www.googleapis.com/calendar/v3/calendars/primary/events"
-        
+
         async with httpx.AsyncClient() as client:
             try:
                 while True:
                     params = {"maxResults": "250"}
-                    
+
                     if sync_token:
                         params["syncToken"] = sync_token
                     else:
                         default_min = datetime.utcnow() - timedelta(days=30)
                         params["timeMin"] = default_min.isoformat() + "Z"
                         params["singleEvents"] = "true"
-                        
+
                     if next_page_token:
                         params["pageToken"] = next_page_token
 
                     url = f"{base_url}?{urlencode(params)}"
-                    res = await client.get(url, headers={"Authorization": f"Bearer {access_token}"})
+                    res = await client.get(
+                        url, headers={"Authorization": f"Bearer {access_token}"}
+                    )
 
                     if res.status_code == 410:
                         user.googleCalendarSyncToken = None
@@ -174,46 +197,61 @@ class GoogleCalendarService:
                     items = data.get("items", [])
                     if items:
                         items_to_process.extend(items)
-                        
+
                     next_page_token = data.get("nextPageToken")
                     new_sync_token = data.get("nextSyncToken")
-                    
+
                     if not next_page_token:
                         break
 
                 for item in items_to_process:
                     event_id = item.get("id") or ""
-                    
+
                     if item.get("status") == "cancelled":
                         # Find existing task
-                        t_existing = await tasks_repo.get_by_google_event_id(user_id, event_id)
+                        t_existing = await tasks_repo.get_by_google_event_id(
+                            user_id, event_id
+                        )
                         existing_tasks = [t_existing] if t_existing else []
                         for t in existing_tasks:
                             # delete task
-                            await self.tasks_service.delete(t.id, skip_scheduling=True, skip_google_sync=True)
+                            await self.tasks_service.delete(
+                                t.id, skip_scheduling=True, skip_google_sync=True
+                            )
                             has_changes = True
                     else:
                         summary = item.get("summary") or "Sin título"
-                        
+
                         # Check if this event already exists in DB
-                        existing_task = await tasks_repo.get_by_google_event_id(user_id, event_id)
+                        existing_task = await tasks_repo.get_by_google_event_id(
+                            user_id, event_id
+                        )
                         if not existing_task:
                             continue
 
-                        processed = self._process_google_event(item, user_email=user.email)
+                        processed = self._process_google_event(
+                            item, user_email=user.email
+                        )
 
                         # Check if this event already exists in DB and if so, whether
                         # our local version is newer than the Google event's updated timestamp.
                         # If the DB task was updated MORE RECENTLY than Google's event, we skip
                         # overwriting estimated_start/end dates to preserve manual drag-and-drop changes.
-                        google_updated_str = item.get("updated")  # e.g. "2026-06-03T22:00:05.000Z"
+                        google_updated_str = item.get(
+                            "updated"
+                        )  # e.g. "2026-06-03T22:00:05.000Z"
                         google_updated = None
                         if google_updated_str:
                             try:
                                 from datetime import timezone as _tz
-                                google_updated = datetime.fromisoformat(
-                                    google_updated_str.replace("Z", "+00:00")
-                                ).astimezone(_tz.utc).replace(tzinfo=None)
+
+                                google_updated = (
+                                    datetime.fromisoformat(
+                                        google_updated_str.replace("Z", "+00:00")
+                                    )
+                                    .astimezone(_tz.utc)
+                                    .replace(tzinfo=None)
+                                )
                             except Exception:
                                 pass
 
@@ -225,7 +263,7 @@ class GoogleCalendarService:
                                 # it means WE triggered this change; skip date overwrite.
                                 if db_updated >= google_updated - timedelta(seconds=2):
                                     preserve_dates = True
-                        
+
                         task_data = {
                             "userId": user_id,
                             "title": processed["title"],
@@ -246,13 +284,15 @@ class GoogleCalendarService:
 
                         # Only include dates from Google if we are NOT preserving local values
                         if not preserve_dates:
-                            task_data["estimated_start_date"] = processed["estimated_start_date"]
-                            task_data["estimated_end_date"] = processed["estimated_end_date"]
+                            task_data["estimated_start_date"] = processed[
+                                "estimated_start_date"
+                            ]
+                            task_data["estimated_end_date"] = processed[
+                                "estimated_end_date"
+                            ]
 
                         task = await self.tasks_service.create(
-                            task_data,
-                            skip_scheduling=True,
-                            skip_google_sync=True
+                            task_data, skip_scheduling=True, skip_google_sync=True
                         )
                         if task.get("_changed"):
                             has_changes = True
@@ -263,7 +303,9 @@ class GoogleCalendarService:
 
                 if has_changes:
                     # In python tasks service, scheduler pipeline uses the socket server we injected or default
-                    await self.scheduler_service.run_scheduling_pipeline(user_id, self.db, self.tasks_service.socket_server)
+                    await self.scheduler_service.run_scheduling_pipeline(
+                        user_id, self.db, self.tasks_service.socket_server
+                    )
 
                 # Register push watch
                 await self.watch_calendar(user_id)
@@ -300,32 +342,36 @@ class GoogleCalendarService:
 
             channel_id = str(uuid.uuid4())
             address = f"{webhook_url}/google-calendar/webhook"
-            expiration_time = now + 7 * 24 * 60 * 60 * 1000 # 7 days
+            expiration_time = now + 7 * 24 * 60 * 60 * 1000  # 7 days
 
-            url = "https://www.googleapis.com/calendar/v3/calendars/primary/events/watch"
+            url = (
+                "https://www.googleapis.com/calendar/v3/calendars/primary/events/watch"
+            )
             async with httpx.AsyncClient() as client:
                 res = await client.post(
                     url,
                     headers={
                         "Authorization": f"Bearer {access_token}",
-                        "Content-Type": "application/json"
+                        "Content-Type": "application/json",
                     },
                     json={
                         "id": channel_id,
                         "type": "web_hook",
                         "address": address,
                         "token": user_id,
-                        "expiration": str(expiration_time)
-                    }
+                        "expiration": str(expiration_time),
+                    },
                 )
                 if res.status_code != 200:
                     return
 
                 data = res.json()
-                
+
             user.googleChannelId = data.get("id")
             user.googleResourceId = data.get("resourceId")
-            user.googleChannelExpiration = int(data.get("expiration") or expiration_time)
+            user.googleChannelExpiration = int(
+                data.get("expiration") or expiration_time
+            )
             await user_repo.save(user)
 
             pass
@@ -355,12 +401,9 @@ class GoogleCalendarService:
                     url,
                     headers={
                         "Authorization": f"Bearer {access_token}",
-                        "Content-Type": "application/json"
+                        "Content-Type": "application/json",
                     },
-                    json={
-                        "id": channel_id,
-                        "resourceId": resource_id
-                    }
+                    json={"id": channel_id, "resourceId": resource_id},
                 )
                 if res.status_code in (200, 204, 404):
                     user.googleChannelId = None
@@ -369,25 +412,32 @@ class GoogleCalendarService:
                     await user_repo.save(user)
                     print(f"Stopped watching calendar for user {user_id}")
                 else:
-                    print(f"Failed to stop watch channel for user {user_id}. Body: {res.text}")
+                    print(
+                        f"Failed to stop watch channel for user {user_id}. Body: {res.text}"
+                    )
 
         except Exception as error:
             print(f"Error stopping watch channel: {error}")
 
-    def _process_google_event(self, event: dict[str, Any], user_email: str | None = None) -> dict[str, Any]:
+    def _process_google_event(
+        self, event: dict[str, Any], user_email: str | None = None
+    ) -> dict[str, Any]:
         # Stage 1: Basic Mapping
         start_obj = event.get("start") or {}
         end_obj = event.get("end") or {}
-        
+
         is_all_day = bool(start_obj.get("date"))
         creator_email = event.get("creator", {}).get("email")
         is_creator_self = bool(event.get("creator", {}).get("self", False))
-        is_owner = is_creator_self or (user_email is not None and creator_email == user_email)
+        is_owner = is_creator_self or (
+            user_email is not None and creator_email == user_email
+        )
         start_val = start_obj.get("dateTime") or start_obj.get("date")
         if start_val:
             dt = datetime.fromisoformat(start_val.replace("Z", "+00:00"))
             if dt.tzinfo is not None:
                 from datetime import timezone
+
                 dt = dt.astimezone(timezone.utc)
             start = dt.replace(tzinfo=None)
         else:
@@ -398,6 +448,7 @@ class GoogleCalendarService:
             dt = datetime.fromisoformat(end_val.replace("Z", "+00:00"))
             if dt.tzinfo is not None:
                 from datetime import timezone
+
                 dt = dt.astimezone(timezone.utc)
             deadline = dt.replace(tzinfo=None)
         else:
@@ -408,9 +459,17 @@ class GoogleCalendarService:
             if not color_id:
                 return 1
             priority_map = {
-                "11": 3, "4": 3, "6": 3, "3": 3,
-                "5": 2, "9": 2, "7": 2, "2": 2,
-                "1": 1, "10": 1, "8": 1
+                "11": 3,
+                "4": 3,
+                "6": 3,
+                "3": 3,
+                "5": 2,
+                "9": 2,
+                "7": 2,
+                "2": 2,
+                "1": 1,
+                "10": 1,
+                "8": 1,
             }
             return priority_map.get(color_id, 1)
 
@@ -432,21 +491,31 @@ class GoogleCalendarService:
             "location": event.get("location"),
             "collaborators": [],
             "organizer_email": event.get("organizer", {}).get("email"),
-            "is_owner": is_owner
+            "is_owner": is_owner,
         }
 
         # Stage 2: Clean Description
         notes = task["notes_encrypted"]
         if notes:
             # strip html
-            notes = notes.replace("<br>", "\n").replace("<br/>", "\n").replace("<br />", "\n")
-            notes = re.sub(r'</p>', '\n', notes, flags=re.IGNORECASE)
-            notes = re.sub(r'<li>', '• ', notes, flags=re.IGNORECASE)
-            notes = re.sub(r'</li>', '\n', notes, flags=re.IGNORECASE)
-            notes = re.sub(r'<[^>]*>?', '', notes)
+            notes = (
+                notes.replace("<br>", "\n")
+                .replace("<br/>", "\n")
+                .replace("<br />", "\n")
+            )
+            notes = re.sub(r"</p>", "\n", notes, flags=re.IGNORECASE)
+            notes = re.sub(r"<li>", "• ", notes, flags=re.IGNORECASE)
+            notes = re.sub(r"</li>", "\n", notes, flags=re.IGNORECASE)
+            notes = re.sub(r"<[^>]*>?", "", notes)
             # decode HTML entities
-            notes = notes.replace("&amp;", "&").replace("&nbsp;", " ").replace("&lt;", "<").replace("&gt;", ">").replace("&quot;", '"')
-            notes = re.sub(r'\n\s*\n', '\n\n', notes)
+            notes = (
+                notes.replace("&amp;", "&")
+                .replace("&nbsp;", " ")
+                .replace("&lt;", "<")
+                .replace("&gt;", ">")
+                .replace("&quot;", '"')
+            )
+            notes = re.sub(r"\n\s*\n", "\n\n", notes)
             task["notes_encrypted"] = notes.strip()
 
         # Stage 3: Extract Meeting Links
@@ -466,19 +535,24 @@ class GoogleCalendarService:
 
         # Stage 4: Process Participants
         attendees = event.get("attendees") or []
-        has_meet_link = any("meet.google.com" in l["url"] or l["title"] == "Google Meet" for l in task["links"])
-        
+        has_meet_link = any(
+            "meet.google.com" in l["url"] or l["title"] == "Google Meet"
+            for l in task["links"]
+        )
+
         if has_meet_link and attendees:
             collaborators = []
             for att in attendees:
                 email = att.get("email")
                 if email:
                     name = att.get("displayName") or email.split("@")[0]
-                    collaborators.append({
-                        "name": name,
-                        "email": email,
-                        "avatar": f"https://ui-avatars.com/api/?name={name}&background=random&color=fff&size=128"
-                    })
+                    collaborators.append(
+                        {
+                            "name": name,
+                            "email": email,
+                            "avatar": f"https://ui-avatars.com/api/?name={name}&background=random&color=fff&size=128",
+                        }
+                    )
             task["collaborators"] = collaborators
 
         return task

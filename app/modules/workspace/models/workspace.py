@@ -3,7 +3,6 @@ from sqlalchemy.sql import func
 from app.database import Base
 
 
-
 class Workspace(Base):
     __tablename__ = "Workspace"
 
@@ -18,4 +17,6 @@ class Workspace(Base):
     content = Column(String, nullable=False)
     saveStatus = Column(Boolean, nullable=True, default=False)
     createdAt = Column(DateTime, default=func.now(), nullable=False)
-    updatedAt = Column(DateTime, default=func.now(), onupdate=func.now(), nullable=False)
+    updatedAt = Column(
+        DateTime, default=func.now(), onupdate=func.now(), nullable=False
+    )

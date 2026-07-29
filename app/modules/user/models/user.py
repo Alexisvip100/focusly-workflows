@@ -3,7 +3,6 @@ from sqlalchemy.sql import func
 from app.database import Base
 
 
-
 class User(Base):
     __tablename__ = "User"
 
@@ -21,7 +20,9 @@ class User(Base):
     externalId = Column(String, nullable=True)
     fcmToken = Column(String, nullable=True)
     createdAt = Column(DateTime, default=func.now(), nullable=False)
-    updatedAt = Column(DateTime, default=func.now(), onupdate=func.now(), nullable=False)
+    updatedAt = Column(
+        DateTime, default=func.now(), onupdate=func.now(), nullable=False
+    )
     lastSyncAt = Column(DateTime, nullable=True)
     googleCalendarSyncToken = Column(String, nullable=True)
     googleChannelId = Column(String, nullable=True)

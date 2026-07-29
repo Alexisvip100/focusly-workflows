@@ -4,9 +4,11 @@ from typing import Optional, Any
 
 # Types
 
+
 @strawberry.type
 class Tag:
     name: str
+
 
 @strawberry.type
 class Collaborator:
@@ -15,22 +17,34 @@ class Collaborator:
     avatar: str | None = None
     response_status: str | None = strawberry.field(name="responseStatus", default=None)
 
+
 @strawberry.type
 class TaskLink:
     title: str
     url: str
 
+
 @strawberry.type
 class TaskFilters:
     status: list[str] | None = None
-    priority_level: list[int] | None = strawberry.field(name="priorityLevel", default=None)
+    priority_level: list[int] | None = strawberry.field(
+        name="priorityLevel", default=None
+    )
     category: list[str] | None = None
+
 
 @strawberry.type
 class UserSettings:
-    focus_duration_pref: int | None = strawberry.field(name="focusDurationPref", default=None)
-    break_duration_pref: int | None = strawberry.field(name="breakDurationPref", default=None)
-    notifications_enabled: bool | None = strawberry.field(name="notificationsEnabled", default=None)
+    focus_duration_pref: int | None = strawberry.field(
+        name="focusDurationPref", default=None
+    )
+    break_duration_pref: int | None = strawberry.field(
+        name="breakDurationPref", default=None
+    )
+    notifications_enabled: bool | None = strawberry.field(
+        name="notificationsEnabled", default=None
+    )
+
 
 @strawberry.type
 class User:
@@ -40,16 +54,20 @@ class User:
     picture: str | None = None
     role: str | None = None
     auth_provider: str | None = strawberry.field(name="authProvider", default=None)
-    google_refresh_token: str | None = strawberry.field(name="googleRefreshToken", default=None)
+    google_refresh_token: str | None = strawberry.field(
+        name="googleRefreshToken", default=None
+    )
     subscription_status: str = strawberry.field(name="subscriptionStatus")
     settings: UserSettings | None = None
     bio: str | None = None
+
 
 @strawberry.type
 class AuthResponse:
     access_token: str
     user: User
     google_access_token: str | None = None
+
 
 @strawberry.type
 class Workspace:
@@ -58,8 +76,12 @@ class Workspace:
     taskId: str | None = None
     title: str
     emoji: str | None = None
-    background_color: str | None = strawberry.field(name="background_color", default=None)
-    card_show_background: bool | None = strawberry.field(name="card_show_background", default=None)
+    background_color: str | None = strawberry.field(
+        name="background_color", default=None
+    )
+    card_show_background: bool | None = strawberry.field(
+        name="card_show_background", default=None
+    )
     projectId: str | None = None
     content: str
     saveStatus: bool | None = None
@@ -73,12 +95,14 @@ class Workspace:
             return None
         db = info.context["db"]
         from app.modules.task.services.tasks_service import TasksService
+
         tasks_serv = TasksService(db)
         try:
             res = await tasks_serv.find_one(self.taskId)
             return map_dict_to_strawberry_task(res)
         except:
             return None
+
 
 @strawberry.type
 class ProjectGroup:
@@ -95,6 +119,7 @@ class ProjectGroup:
         db = info.context["db"]
         from sqlalchemy import select, func
         from app.models import Workspace
+
         result = await db.execute(
             select(func.count(Workspace.id))
             .where(Workspace.userId == self.user_id)
@@ -107,9 +132,12 @@ class ProjectGroup:
         """Workspaces that belong to this group."""
         db = info.context["db"]
         from app.modules.workspace.services.workspaces_service import WorkspacesService
+
         ws_serv = WorkspacesService(db)
         all_ws_res = await ws_serv.find_all(self.user_id, group_id=str(self.id))
-        all_ws = all_ws_res.get("items", []) if isinstance(all_ws_res, dict) else all_ws_res
+        all_ws = (
+            all_ws_res.get("items", []) if isinstance(all_ws_res, dict) else all_ws_res
+        )
         return [
             Workspace(
                 id=strawberry.ID(w.id),
@@ -123,9 +151,11 @@ class ProjectGroup:
                 content=w.content,
                 saveStatus=w.saveStatus,
                 createdAt=w.createdAt,
-                updatedAt=w.updatedAt
-            ) for w in all_ws
+                updatedAt=w.updatedAt,
+            )
+            for w in all_ws
         ]
+
 
 @strawberry.type
 class Task:
@@ -150,8 +180,12 @@ class Task:
     links: list[TaskLink]
     task_type: str | None = strawberry.field(name="task_type", default="PlatformTask")
     google_event_id: str | None = strawberry.field(name="google_event_id", default=None)
-    estimated_start_date: datetime | None = strawberry.field(name="estimated_start_date", default=None)
-    estimated_end_date: datetime | None = strawberry.field(name="estimated_end_date", default=None)
+    estimated_start_date: datetime | None = strawberry.field(
+        name="estimated_start_date", default=None
+    )
+    estimated_end_date: datetime | None = strawberry.field(
+        name="estimated_end_date", default=None
+    )
     collaborators: list[Collaborator] | None = strawberry.field(default_factory=list)
     use_ai: bool | None = strawberry.field(name="use_ai", default=False)
     is_owner: bool | None = strawberry.field(name="is_owner", default=True)
@@ -161,6 +195,7 @@ class Task:
     async def workspace(self, info) -> Workspace | None:
         db = info.context["db"]
         from app.modules.workspace.services.workspaces_service import WorkspacesService
+
         ws_serv = WorkspacesService(db)
         res = await ws_serv.find_by_task_id(str(self.id))
         if res:
@@ -176,14 +211,16 @@ class Task:
                 content=res.content,
                 saveStatus=res.saveStatus,
                 createdAt=res.createdAt,
-                updatedAt=res.updatedAt
+                updatedAt=res.updatedAt,
             )
         return None
+
 
 @strawberry.type
 class PaginatedTasks:
     tasks: list[Task]
     totalCount: int
+
 
 @strawberry.type
 class PaginatedWorkspaces:
@@ -191,7 +228,9 @@ class PaginatedWorkspaces:
     totalCount: int
     hasMore: bool | None = None
 
+
 # Insights Types
+
 
 @strawberry.type
 class StatCardValue:
@@ -199,17 +238,20 @@ class StatCardValue:
     change: str
     trend: str
 
+
 @strawberry.type
 class ProductivityTrend:
     label: str
     actual: float
     planned: float
 
+
 @strawberry.type
 class TimeDistribution:
     name: str
     value: float
     color: str
+
 
 @strawberry.type
 class HeatmapCompletedTask:
@@ -219,6 +261,7 @@ class HeatmapCompletedTask:
     category: str | None = None
     real_timer: int | None = strawberry.field(name="realTimer", default=None)
 
+
 @strawberry.type
 class HeatmapCell:
     key: str
@@ -227,6 +270,7 @@ class HeatmapCell:
     count: int
     tasks: list[HeatmapCompletedTask]
 
+
 @strawberry.type
 class InsightsResponse:
     total_focus_hours: StatCardValue = strawberry.field(name="totalFocusHours")
@@ -234,13 +278,23 @@ class InsightsResponse:
     energy_score: StatCardValue = strawberry.field(name="energyScore")
     golden_window: StatCardValue = strawberry.field(name="goldenWindow")
     break_hours: StatCardValue = strawberry.field(name="breakHours")
-    productivity_trends: list[ProductivityTrend] = strawberry.field(name="productivityTrends")
-    time_distribution: list[TimeDistribution] = strawberry.field(name="timeDistribution")
+    productivity_trends: list[ProductivityTrend] = strawberry.field(
+        name="productivityTrends"
+    )
+    time_distribution: list[TimeDistribution] = strawberry.field(
+        name="timeDistribution"
+    )
     heatmap: list[int]
-    heatmap_labels: list[str] | None = strawberry.field(name="heatmapLabels", default=None)
-    heatmap_cells: list[HeatmapCell] = strawberry.field(name="heatmapCells", default_factory=list)
+    heatmap_labels: list[str] | None = strawberry.field(
+        name="heatmapLabels", default=None
+    )
+    heatmap_cells: list[HeatmapCell] = strawberry.field(
+        name="heatmapCells", default_factory=list
+    )
+
 
 # Inputs
+
 
 @strawberry.input
 class CollaboratorInput:
@@ -249,10 +303,12 @@ class CollaboratorInput:
     avatar: str | None = None
     responseStatus: str | None = None
 
+
 @strawberry.input
 class LinkInput:
     title: str
     url: str
+
 
 @strawberry.input
 class CreateTaskInput:
@@ -271,13 +327,20 @@ class CreateTaskInput:
     links: list[LinkInput] | None = strawberry.field(name="links", default=None)
     task_type: str | None = strawberry.field(name="task_type", default=None)
     google_event_id: str | None = strawberry.field(name="google_event_id", default=None)
-    estimated_start_date: str | None = strawberry.field(name="estimated_start_date", default=None)
-    estimated_end_date: str | None = strawberry.field(name="estimated_end_date", default=None)
+    estimated_start_date: str | None = strawberry.field(
+        name="estimated_start_date", default=None
+    )
+    estimated_end_date: str | None = strawberry.field(
+        name="estimated_end_date", default=None
+    )
     source: str | None = strawberry.field(name="source", default=None)
     sync_status: str | None = strawberry.field(name="sync_status", default=None)
-    collaborators: list[CollaboratorInput] | None = strawberry.field(name="collaborators", default=None)
+    collaborators: list[CollaboratorInput] | None = strawberry.field(
+        name="collaborators", default=None
+    )
     use_ai: bool | None = strawberry.field(name="use_ai", default=None)
     is_owner: bool | None = strawberry.field(name="is_owner", default=True)
+
 
 @strawberry.input
 class UpdateTaskInput:
@@ -297,13 +360,20 @@ class UpdateTaskInput:
     links: list[LinkInput] | None = strawberry.field(name="links", default=None)
     task_type: str | None = strawberry.field(name="task_type", default=None)
     google_event_id: str | None = strawberry.field(name="google_event_id", default=None)
-    estimated_start_date: str | None = strawberry.field(name="estimated_start_date", default=None)
-    estimated_end_date: str | None = strawberry.field(name="estimated_end_date", default=None)
+    estimated_start_date: str | None = strawberry.field(
+        name="estimated_start_date", default=None
+    )
+    estimated_end_date: str | None = strawberry.field(
+        name="estimated_end_date", default=None
+    )
     source: str | None = strawberry.field(name="source", default=None)
     sync_status: str | None = strawberry.field(name="sync_status", default=None)
-    collaborators: list[CollaboratorInput] | None = strawberry.field(name="collaborators", default=None)
+    collaborators: list[CollaboratorInput] | None = strawberry.field(
+        name="collaborators", default=None
+    )
     use_ai: bool | None = strawberry.field(name="use_ai", default=None)
     is_owner: bool | None = strawberry.field(name="is_owner", default=None)
+
 
 @strawberry.input
 class TaskFilterInput:
@@ -315,21 +385,28 @@ class TaskFilterInput:
     searchTerm: str | None = None
     tags: list[str] | None = None
 
+
 @strawberry.input
 class TaskSortInput:
     sort: str | None = None
     order: str | None = None
+
 
 @strawberry.input
 class CreateWorkspaceInput:
     title: str
     content: str
     emoji: str | None = None
-    background_color: str | None = strawberry.field(name="background_color", default=None)
-    card_show_background: bool | None = strawberry.field(name="card_show_background", default=None)
+    background_color: str | None = strawberry.field(
+        name="background_color", default=None
+    )
+    card_show_background: bool | None = strawberry.field(
+        name="card_show_background", default=None
+    )
     groupId: str | None = None
     taskId: str | None = None
     saveStatus: bool | None = None
+
 
 @strawberry.input
 class UpdateWorkspaceInput:
@@ -337,17 +414,23 @@ class UpdateWorkspaceInput:
     title: str | None = None
     content: str | None = None
     emoji: str | None = None
-    background_color: str | None = strawberry.field(name="background_color", default=None)
-    card_show_background: bool | None = strawberry.field(name="card_show_background", default=None)
+    background_color: str | None = strawberry.field(
+        name="background_color", default=None
+    )
+    card_show_background: bool | None = strawberry.field(
+        name="card_show_background", default=None
+    )
     groupId: str | None = None
     taskId: str | None = None
     saveStatus: bool | None = None
+
 
 @strawberry.input
 class CreateProjectGroupInput:
     name: str
     color: str | None = None
     emoji: str | None = None
+
 
 @strawberry.input
 class UpdateProjectGroupInput:
@@ -356,7 +439,9 @@ class UpdateProjectGroupInput:
     color: str | None = None
     emoji: str | None = None
 
+
 # Helper functions to convert DB/dict data to strawberry types
+
 
 def map_dict_to_strawberry_task(t: dict[str, Any]) -> Task:
     from datetime import timezone as _tz
@@ -391,12 +476,14 @@ def map_dict_to_strawberry_task(t: dict[str, Any]) -> Task:
     if isinstance(t.get("collaborators"), list):
         for c in t["collaborators"]:
             if isinstance(c, dict):
-                collaborators.append(Collaborator(
-                    name=c.get("name"),
-                    email=c.get("email", ""),
-                    avatar=c.get("avatar"),
-                    response_status=c.get("responseStatus")
-                ))
+                collaborators.append(
+                    Collaborator(
+                        name=c.get("name"),
+                        email=c.get("email", ""),
+                        avatar=c.get("avatar"),
+                        response_status=c.get("responseStatus"),
+                    )
+                )
 
     # Filters
     filters = None
@@ -405,7 +492,7 @@ def map_dict_to_strawberry_task(t: dict[str, Any]) -> Task:
         filters = TaskFilters(
             status=f.get("status"),
             priority_level=f.get("priorityLevel"),
-            category=f.get("category")
+            category=f.get("category"),
         )
 
     return Task(
@@ -435,7 +522,7 @@ def map_dict_to_strawberry_task(t: dict[str, Any]) -> Task:
         collaborators=collaborators,
         use_ai=t.get("use_ai"),
         is_owner=t.get("is_owner", True),
-        source=t.get("source", "platform")
+        source=t.get("source", "platform"),
     )
 
 
@@ -466,4 +553,3 @@ def map_model_to_strawberry_notification(n) -> NotificationType:
         createdAt=n.createdAt,
         updatedAt=n.updatedAt,
     )
-

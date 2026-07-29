@@ -6,6 +6,7 @@ from app.models import Tag
 from app.modules.task.schemas.tags import TagCreateSchema
 from app.modules.task.repository import TagsRepository
 
+
 class TagsService:
     def __init__(self, db: AsyncSession):
         self.db = db
@@ -14,11 +15,8 @@ class TagsService:
     async def create(self, tag_data: dict[str, Any]) -> str:
         tag_id = str(uuid.uuid4())
         parsed_tag = TagCreateSchema(**tag_data)
-        
-        tag = Tag(
-            id=tag_id,
-            **parsed_tag.model_dump()
-        )
+
+        tag = Tag(id=tag_id, **parsed_tag.model_dump())
         await self.repository.create(tag)
         return tag_id
 

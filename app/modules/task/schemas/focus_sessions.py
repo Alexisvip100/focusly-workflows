@@ -2,6 +2,7 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 from datetime import datetime
 from typing import Any
 
+
 class FocusSessionCreateSchema(BaseModel):
     userId: str
     taskId: str
@@ -18,13 +19,12 @@ class FocusSessionCreateSchema(BaseModel):
             defaults = {
                 "durationMinutes": 0,
                 "distractionCount": 0,
-                "wasSuccessful": True
+                "wasSuccessful": True,
             }
             for key, default_val in defaults.items():
                 if data.get(key) is None:
                     data[key] = default_val
         return data
-
 
     @field_validator("startedAt", "endedAt", mode="before")
     @classmethod

@@ -3,7 +3,6 @@ from sqlalchemy.sql import func
 from app.database import Base
 
 
-
 class FocusSession(Base):
     __tablename__ = "FocusSession"
 
@@ -16,4 +15,6 @@ class FocusSession(Base):
     distractionCount = Column(Integer, nullable=False, default=0)
     wasSuccessful = Column(Boolean, nullable=False, default=True)
     createdAt = Column(DateTime, default=func.now(), nullable=False)
-    updatedAt = Column(DateTime, default=func.now(), onupdate=func.now(), nullable=False)
+    updatedAt = Column(
+        DateTime, default=func.now(), onupdate=func.now(), nullable=False
+    )

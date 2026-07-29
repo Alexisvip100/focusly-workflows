@@ -2,6 +2,7 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 from datetime import datetime
 from typing import Any
 
+
 class TaskCreateSchema(BaseModel):
     title: str | None = "Untitled Task"
     notesEncrypted: str | None = ""
@@ -29,6 +30,7 @@ class TaskCreateSchema(BaseModel):
     use_ai: bool | None = False
     workspaceId: str | None = None
     is_owner: bool | None = True
+
     @model_validator(mode="before")
     @classmethod
     def set_defaults(cls, data: Any) -> Any:
@@ -47,7 +49,7 @@ class TaskCreateSchema(BaseModel):
                 "tags": [],
                 "links": [],
                 "collaborators": [],
-                "is_owner": True
+                "is_owner": True,
             }
             for key, default_val in defaults.items():
                 if data.get(key) is None:
@@ -55,7 +57,14 @@ class TaskCreateSchema(BaseModel):
         return data
 
     # Este validador centraliza y reemplaza tu función parse_dt
-    @field_validator("duration", "estimated_start_date", "estimated_end_date", "completedAt", "deadline", mode="before")
+    @field_validator(
+        "duration",
+        "estimated_start_date",
+        "estimated_end_date",
+        "completedAt",
+        "deadline",
+        mode="before",
+    )
     @classmethod
     def parse_datetime(cls, val):
         if not val:
@@ -69,4 +78,3 @@ class TaskCreateSchema(BaseModel):
             except:
                 return None
         return None
-

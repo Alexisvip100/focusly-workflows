@@ -6,6 +6,7 @@ from app.models import FocusSession
 from app.modules.task.schemas.focus_sessions import FocusSessionCreateSchema
 from app.modules.task.repository import FocusSessionsRepository
 
+
 class FocusSessionsService:
     def __init__(self, db: AsyncSession):
         self.db = db
@@ -14,11 +15,8 @@ class FocusSessionsService:
     async def create(self, session_data: dict[str, Any]) -> FocusSession:
         session_id = session_data.get("id") or str(uuid.uuid4())
         parsed_session = FocusSessionCreateSchema(**session_data)
-        
-        new_session = FocusSession(
-            id=session_id,
-            **parsed_session.model_dump()
-        )
+
+        new_session = FocusSession(id=session_id, **parsed_session.model_dump())
         return await self.repository.create(new_session)
 
     async def findAll(self) -> list[FocusSession]:

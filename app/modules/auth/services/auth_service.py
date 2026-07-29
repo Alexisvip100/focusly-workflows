@@ -13,7 +13,9 @@ class AuthService:
     def __init__(self, db: AsyncSession):
         self.db = db
 
-    async def validate_google_token(self, code: str, redirect_uri: str | None = None) -> dict[str, Any]:
+    async def validate_google_token(
+        self, code: str, redirect_uri: str | None = None
+    ) -> dict[str, Any]:
         try:
             # Exchange code for Google tokens
             async with httpx.AsyncClient() as client:
@@ -24,18 +26,20 @@ class AuthService:
                         "client_id": settings.GOOGLE_CLIENT_ID,
                         "client_secret": settings.GOOGLE_CLIENT_SECRET,
                         "redirect_uri": redirect_uri or settings.GOOGLE_REDIRECT_URI,
-                        "grant_type": "authorization_code"
-                    }
+                        "grant_type": "authorization_code",
+                    },
                 )
                 if res.status_code != 200:
-                    raise ValueError(f"Failed to exchange Google OAuth code: {res.text}")
+                    raise ValueError(
+                        f"Failed to exchange Google OAuth code: {res.text}"
+                    )
                 tokens = res.json()
                 access_token = tokens.get("access_token")
 
                 # Get user info
                 user_res = await client.get(
                     "https://www.googleapis.com/oauth2/v3/userinfo",
-                    headers={"Authorization": f"Bearer {access_token}"}
+                    headers={"Authorization": f"Bearer {access_token}"},
                 )
                 if user_res.status_code != 200:
                     raise ValueError("Failed to get Google user info")
@@ -55,6 +59,7 @@ class AuthService:
 
             if not user:
                 import uuid
+
                 user = User(
                     id=str(uuid.uuid4()),
                     email=email,
@@ -63,7 +68,7 @@ class AuthService:
                     authProvider="google",
                     role="user",
                     subscriptionStatus="free",
-                    googleRefreshToken=refresh_token
+                    googleRefreshToken=refresh_token,
                 )
                 await user_repo.create(user)
             elif refresh_token:
@@ -89,8 +94,8 @@ class AuthService:
                     "client_id": settings.GOOGLE_CLIENT_ID,
                     "client_secret": settings.GOOGLE_CLIENT_SECRET,
                     "refresh_token": user.googleRefreshToken,
-                    "grant_type": "refresh_token"
-                }
+                    "grant_type": "refresh_token",
+                },
             )
             if res.status_code != 200:
                 raise ValueError(f"Failed to refresh Google token: {res.text}")
@@ -98,7 +103,8 @@ class AuthService:
 
         return {
             "access_token": credentials.get("access_token"),
-            "expiry_date": int(time.time() * 1000) + (credentials.get("expires_in", 3600) * 1000)
+            "expiry_date": int(time.time() * 1000)
+            + (credentials.get("expires_in", 3600) * 1000),
         }
 
     async def refresh_session(self, user_id: str) -> User:
@@ -115,16 +121,20 @@ class AuthService:
             "role": user.role,
             "iat": int(now),
         }
-        
+
         # Access token: 15 minutes
         access_payload = payload.copy()
         access_payload["exp"] = int(now + 15 * 60)
-        access_token = jwt.encode(access_payload, settings.JWT_SECRET, algorithm="HS256")
-        
+        access_token = jwt.encode(
+            access_payload, settings.JWT_SECRET, algorithm="HS256"
+        )
+
         # Refresh token: 7 days
         refresh_payload = payload.copy()
         refresh_payload["exp"] = int(now + 7 * 24 * 60 * 60)
-        refresh_token = jwt.encode(refresh_payload, settings.JWT_SECRET, algorithm="HS256")
+        refresh_token = jwt.encode(
+            refresh_payload, settings.JWT_SECRET, algorithm="HS256"
+        )
 
         # Map to dict matches IUser interface
         user_dict = {
@@ -146,23 +156,25 @@ class AuthService:
         return {
             "access_token": access_token,
             "refresh_token": refresh_token,
-            "user": user_dict
+            "user": user_dict,
         }
 
-    def generate_magic_link_token(self, email: str, full_name: str | None = None) -> str:
+    def generate_magic_link_token(
+        self, email: str, full_name: str | None = None
+    ) -> str:
         now = time.time()
         payload = {
             "email": email.strip().lower(),
             "fullName": full_name,
             "purpose": "magic-link",
             "iat": int(now),
-            "exp": int(now + 15 * 60)  # 15 minutes
+            "exp": int(now + 15 * 60),  # 15 minutes
         }
         return jwt.encode(payload, settings.JWT_SECRET, algorithm="HS256")
 
     async def send_magic_link(self, email: str, token: str) -> None:
         magic_link = f"http://localhost:5173/login?token={token}"
-        
+
         if settings.RESEND_API_KEY:
             async with httpx.AsyncClient() as client:
                 try:
@@ -170,13 +182,13 @@ class AuthService:
                         "https://api.resend.com/emails",
                         headers={
                             "Authorization": f"Bearer {settings.RESEND_API_KEY}",
-                            "Content-Type": "application/json"
-                       },
-                       json={
-                           "from": "Focusly <onboarding@resend.dev>",
-                           "to": email,
-                           "subject": "Your Focusly Magic Link",
-                           "html": f"""
+                            "Content-Type": "application/json",
+                        },
+                        json={
+                            "from": "Focusly <onboarding@resend.dev>",
+                            "to": email,
+                            "subject": "Your Focusly Magic Link",
+                            "html": f"""
                            <div style="font-family: sans-serif; padding: 20px; max-width: 600px; margin: 0 auto; border: 1px solid #eee; border-radius: 10px;">
                                <h2 style="color: #137fec;">Welcome to Focusly</h2>
                                <p>Click the button below to log in to your account. This link will expire in 15 minutes.</p>
@@ -187,8 +199,8 @@ class AuthService:
                                <hr style="border: 0; border-top: 1px solid #eee;" />
                                <p style="color: #999; font-size: 10px;">If the button doesn't work, copy and paste this URL into your browser: <br/> {magic_link}</p>
                            </div>
-                           """
-                       }
+                           """,
+                        },
                     )
                     if response.status_code in (200, 201):
                         return
@@ -218,13 +230,14 @@ class AuthService:
 
         if not user:
             import uuid
+
             user = User(
                 id=str(uuid.uuid4()),
                 email=email,
                 name=full_name or email.split("@")[0].title(),
                 authProvider="email",
                 role="user",
-                subscriptionStatus="free"
+                subscriptionStatus="free",
             )
             await user_repo.create(user)
 

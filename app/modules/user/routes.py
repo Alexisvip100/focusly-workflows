@@ -9,6 +9,7 @@ from app.modules.user.services.users_service import UsersService
 
 router = APIRouter(prefix="/users", tags=["users"])
 
+
 class CreateUserSchema(BaseModel):
     email: EmailStr
     name: str | None = None
@@ -22,6 +23,7 @@ class CreateUserSchema(BaseModel):
     externalId: str | None = None
     fcmToken: str | None = None
 
+
 class UpdateUserSchema(BaseModel):
     name: str | None = None
     picture: str | None = None
@@ -34,8 +36,10 @@ class UpdateUserSchema(BaseModel):
     externalId: str | None = None
     fcmToken: str | None = None
 
+
 def get_users_service(db: AsyncSession = Depends(get_db)) -> UsersService:
     return UsersService(db)
+
 
 def map_user_to_dict(user) -> dict[str, Any]:
     return {
@@ -54,10 +58,10 @@ def map_user_to_dict(user) -> dict[str, Any]:
         "googleRefreshToken": user.googleRefreshToken,
     }
 
+
 @router.post("", response_model=dict[str, Any])
 async def create_user(
-    body: CreateUserSchema,
-    users_service: UsersService = Depends(get_users_service)
+    body: CreateUserSchema, users_service: UsersService = Depends(get_users_service)
 ):
     try:
         user_data = body.model_dump()
@@ -67,28 +71,26 @@ async def create_user(
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
+
 @router.get("", response_model=list[dict[str, Any]])
-async def find_all_users(
-    users_service: UsersService = Depends(get_users_service)
-):
+async def find_all_users(users_service: UsersService = Depends(get_users_service)):
     users = await users_service.find()
     return [map_user_to_dict(u) for u in users]
 
+
 @router.get("/{id}", response_model=dict[str, Any])
-async def find_user(
-    id: str,
-    users_service: UsersService = Depends(get_users_service)
-):
+async def find_user(id: str, users_service: UsersService = Depends(get_users_service)):
     user = await users_service.findOne(id)
     if not user:
         raise HTTPException(status_code=404, detail=f"User with ID {id} not found")
     return map_user_to_dict(user)
 
+
 @router.patch("/{id}", response_model=dict[str, Any])
 async def update_user(
     id: str,
     body: UpdateUserSchema,
-    users_service: UsersService = Depends(get_users_service)
+    users_service: UsersService = Depends(get_users_service),
 ):
     update_data = body.model_dump(exclude_unset=True)
     user = await users_service.update(id, update_data)

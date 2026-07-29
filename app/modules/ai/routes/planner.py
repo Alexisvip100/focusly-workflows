@@ -10,23 +10,29 @@ router = APIRouter(prefix="/ai/planner", tags=["ai-planner"])
 
 # ─── Request/Response Schemas ───────────────────────────────────────────────────
 
+
 class OrganizeTasksRequest(BaseModel):
     tasks: list[dict[str, Any]]
+
 
 class CalendarPlannerRequest(BaseModel):
     tasks: list[dict[str, Any]]
     free_slots: list[dict[str, Any]]
 
+
 class WeeklyPlannerRequest(BaseModel):
     tasks: list[dict[str, Any]]
     availability: dict[str, Any] | None = None
+
 
 class TaskImproveRequest(BaseModel):
     title: str
     description: str | None = ""
     mode: str  # subtasks, estimate, priority, all
 
+
 # ─── Endpoints ─────────────────────────────────────────────────────────────────
+
 
 @router.post("/organize")
 async def organize_tasks(
@@ -38,10 +44,17 @@ async def organize_tasks(
         try:
             r = await client.post(url, json={"tasks": body.tasks}, timeout=30.0)
             if r.status_code != 200:
-                raise HTTPException(status_code=502, detail=f"focusly-ai service returned code {r.status_code}")
+                raise HTTPException(
+                    status_code=502,
+                    detail=f"focusly-ai service returned code {r.status_code}",
+                )
             return r.json()
         except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Failed to delegate tasks organization to focusly-ai: {str(e)}")
+            raise HTTPException(
+                status_code=500,
+                detail=f"Failed to delegate tasks organization to focusly-ai: {str(e)}",
+            )
+
 
 @router.post("/calendar")
 async def calendar_planner(
@@ -54,13 +67,20 @@ async def calendar_planner(
             r = await client.post(
                 url,
                 json={"tasks": body.tasks, "free_slots": body.free_slots},
-                timeout=30.0
+                timeout=30.0,
             )
             if r.status_code != 200:
-                raise HTTPException(status_code=502, detail=f"focusly-ai service returned code {r.status_code}")
+                raise HTTPException(
+                    status_code=502,
+                    detail=f"focusly-ai service returned code {r.status_code}",
+                )
             return r.json()
         except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Failed to delegate calendar planning to focusly-ai: {str(e)}")
+            raise HTTPException(
+                status_code=500,
+                detail=f"Failed to delegate calendar planning to focusly-ai: {str(e)}",
+            )
+
 
 @router.post("/weekly")
 async def weekly_planner(
@@ -74,13 +94,20 @@ async def weekly_planner(
             r = await client.post(
                 url,
                 json={"tasks": body.tasks, "availability": availability},
-                timeout=30.0
+                timeout=30.0,
             )
             if r.status_code != 200:
-                raise HTTPException(status_code=502, detail=f"focusly-ai service returned code {r.status_code}")
+                raise HTTPException(
+                    status_code=502,
+                    detail=f"focusly-ai service returned code {r.status_code}",
+                )
             return r.json()
         except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Failed to delegate weekly planning to focusly-ai: {str(e)}")
+            raise HTTPException(
+                status_code=500,
+                detail=f"Failed to delegate weekly planning to focusly-ai: {str(e)}",
+            )
+
 
 @router.post("/improve")
 async def task_improve(
@@ -92,12 +119,21 @@ async def task_improve(
         try:
             r = await client.post(
                 url,
-                json={"title": body.title, "description": body.description, "mode": body.mode},
-                timeout=30.0
+                json={
+                    "title": body.title,
+                    "description": body.description,
+                    "mode": body.mode,
+                },
+                timeout=30.0,
             )
             if r.status_code != 200:
-                raise HTTPException(status_code=502, detail=f"focusly-ai service returned code {r.status_code}")
+                raise HTTPException(
+                    status_code=502,
+                    detail=f"focusly-ai service returned code {r.status_code}",
+                )
             return r.json()
         except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Failed to delegate task improvements to focusly-ai: {str(e)}")
-
+            raise HTTPException(
+                status_code=500,
+                detail=f"Failed to delegate task improvements to focusly-ai: {str(e)}",
+            )

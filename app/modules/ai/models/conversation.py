@@ -3,7 +3,6 @@ from sqlalchemy.sql import func
 from app.database import Base
 
 
-
 class Conversation(Base):
     __tablename__ = "Conversation"
 
@@ -12,4 +11,6 @@ class Conversation(Base):
     title = Column(String, nullable=True)
     summary = Column(String, nullable=True)
     createdAt = Column(DateTime, default=func.now(), nullable=False)
-    updatedAt = Column(DateTime, default=func.now(), onupdate=func.now(), nullable=False)
+    updatedAt = Column(
+        DateTime, default=func.now(), onupdate=func.now(), nullable=False
+    )

@@ -3,7 +3,6 @@ from sqlalchemy.sql import func
 from app.database import Base
 
 
-
 class UserMemory(Base):
     __tablename__ = "UserMemory"
 
@@ -14,4 +13,6 @@ class UserMemory(Base):
     importance = Column(Integer, default=1, nullable=False)
     embedding = Column(JSON, nullable=True)
     createdAt = Column(DateTime, default=func.now(), nullable=False)
-    updatedAt = Column(DateTime, default=func.now(), onupdate=func.now(), nullable=False)
+    updatedAt = Column(
+        DateTime, default=func.now(), onupdate=func.now(), nullable=False
+    )

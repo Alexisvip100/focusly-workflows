@@ -11,11 +11,12 @@ async_session_local = async_sessionmaker(
     class_=AsyncSession,
     expire_on_commit=False,
     autocommit=False,
-    autoflush=False
+    autoflush=False,
 )
 
 # Declarative base
 Base = declarative_base()
+
 
 # Dependency to get db session
 async def get_db():

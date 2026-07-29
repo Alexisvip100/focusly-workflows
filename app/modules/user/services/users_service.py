@@ -3,6 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models import User
 from app.modules.user.repository import UsersRepository
 
+
 class UsersService:
     def __init__(self, db: AsyncSession):
         self.db = db
@@ -21,7 +22,7 @@ class UsersService:
             subscriptionStatus=user_data.get("subscriptionStatus", "free"),
             settings=user_data.get("settings"),
             externalId=user_data.get("externalId"),
-            fcmToken=user_data.get("fcmToken")
+            fcmToken=user_data.get("fcmToken"),
         )
         return await self.repository.create(user)
 
@@ -50,4 +51,3 @@ class UsersService:
         if user:
             user.googleRefreshToken = token
             await self.repository.save(user)
-

@@ -7,7 +7,6 @@ from app.modules.workspace.services.workspaces_service import WorkspacesService
 
 @strawberry.type
 class WorkspaceQuery:
-
     @strawberry.field
     async def workspace(self, info, id: strawberry.ID) -> types.Workspace:
         user_id = get_user_id(info)
@@ -26,8 +25,9 @@ class WorkspaceQuery:
             content=res.content,
             saveStatus=res.saveStatus,
             createdAt=res.createdAt,
-            updatedAt=res.updatedAt
+            updatedAt=res.updatedAt,
         )
+
     @strawberry.field
     async def workspaces_paginated(
         self,
@@ -35,12 +35,14 @@ class WorkspaceQuery:
         search: str | None = None,
         projectId: str | None = None,
         limit: int = 20,
-        offset: int = 0
+        offset: int = 0,
     ) -> types.PaginatedWorkspaces:
         user_id = get_user_id(info)
         db = info.context["db"]
         ws_serv = WorkspacesService(db)
-        res = await ws_serv.find_all(user_id, search, group_id=projectId, limit=limit, offset=offset)
+        res = await ws_serv.find_all(
+            user_id, search, group_id=projectId, limit=limit, offset=offset
+        )
         workspaces_list = res.get("items", []) if isinstance(res, dict) else res
         total = res.get("total", 0) if isinstance(res, dict) else len(workspaces_list)
         has_more = res.get("hasMore", False) if isinstance(res, dict) else False
@@ -58,7 +60,10 @@ class WorkspaceQuery:
                 content=w.content,
                 saveStatus=w.saveStatus,
                 createdAt=w.createdAt,
-                updatedAt=w.updatedAt
-            ) for w in workspaces_list
+                updatedAt=w.updatedAt,
+            )
+            for w in workspaces_list
         ]
-        return types.PaginatedWorkspaces(workspaces=mapped, totalCount=total, hasMore=has_more)
+        return types.PaginatedWorkspaces(
+            workspaces=mapped, totalCount=total, hasMore=has_more
+        )

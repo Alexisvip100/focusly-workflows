@@ -7,6 +7,7 @@ from app.models import Workspace
 from app.modules.workspace.schemas.workspaces import WorkspaceCreateSchema
 from app.modules.workspace.repository import WorkspacesRepository
 
+
 class WorkspacesService:
     def __init__(self, db: AsyncSession):
         self.db = db
@@ -17,31 +18,38 @@ class WorkspacesService:
         group_id = create_input.pop("groupId", None)
 
         workspace_data = WorkspaceCreateSchema(**create_input)
-        
+
         workspace = Workspace(
             id=workspace_id,
             userId=user_id,
             groupId=group_id,
-            **workspace_data.model_dump()
+            **workspace_data.model_dump(),
         )
         return await self.repository.create(workspace)
 
-    async def find_all(self, user_id: str, search: str | None = None, group_id: str | None = None, limit: int = 24, offset: int = 0) -> dict[str, Any]:
+    async def find_all(
+        self,
+        user_id: str,
+        search: str | None = None,
+        group_id: str | None = None,
+        limit: int = 24,
+        offset: int = 0,
+    ) -> dict[str, Any]:
         res = await self.repository.find_all(
             user_id=user_id,
             search=search,
             group_id=group_id,
             limit=limit,
-            offset=offset
-        )   
+            offset=offset,
+        )
         total_workspaces = res["total"]
         return {
             "items": res["items"],
             "total": total_workspaces,
             "page": (offset // limit + 1) if limit > 0 else 1,
             "limit": limit,
-            "hasMore": (offset + limit) < total_workspaces
-        }   
+            "hasMore": (offset + limit) < total_workspaces,
+        }
 
     async def find_one(self, id: str, user_id: str) -> Workspace:
         workspace = await self.repository.get_by_id_and_user(id, user_id)
@@ -49,7 +57,9 @@ class WorkspacesService:
             raise ValueError(f"Workspace with ID {id} not found")
         return workspace
 
-    async def update(self, id: str, update_input: dict[str, Any], user_id: str) -> Workspace:
+    async def update(
+        self, id: str, update_input: dict[str, Any], user_id: str
+    ) -> Workspace:
         workspace = await self.repository.get_by_id_and_user(id, user_id)
         if not workspace:
             raise ValueError(f"Workspace with ID {id} not found")
@@ -67,14 +77,14 @@ class WorkspacesService:
             workspace.content = update_input["content"]
         if "saveStatus" in update_input:
             workspace.saveStatus = update_input["saveStatus"]
-            
+
         # Handle emoji removal/persistence
         emoji = update_input.get("emoji")
         if emoji == "" or emoji is None:
             workspace.emoji = None
         else:
             workspace.emoji = emoji
-            
+
         # Handle background color
         bg = update_input.get("background_color")
         if bg == "none" or bg is None:

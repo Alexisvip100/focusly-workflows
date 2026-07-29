@@ -4,6 +4,7 @@ from app.models import User
 from app.redis import cache
 from datetime import datetime
 
+
 def serialize_user(user: User) -> dict:
     return {
         "id": user.id,
@@ -25,13 +26,20 @@ def serialize_user(user: User) -> dict:
         "googleResourceId": user.googleResourceId,
         "googleChannelExpiration": user.googleChannelExpiration,
         "createdAt": user.createdAt.isoformat() if user.createdAt else None,
-        "updatedAt": user.updatedAt.isoformat() if user.updatedAt else None
+        "updatedAt": user.updatedAt.isoformat() if user.updatedAt else None,
     }
 
+
 def deserialize_user(data: dict) -> User:
-    created_at = datetime.fromisoformat(data["createdAt"]) if data.get("createdAt") else None
-    updated_at = datetime.fromisoformat(data["updatedAt"]) if data.get("updatedAt") else None
-    last_sync_at = datetime.fromisoformat(data["lastSyncAt"]) if data.get("lastSyncAt") else None
+    created_at = (
+        datetime.fromisoformat(data["createdAt"]) if data.get("createdAt") else None
+    )
+    updated_at = (
+        datetime.fromisoformat(data["updatedAt"]) if data.get("updatedAt") else None
+    )
+    last_sync_at = (
+        datetime.fromisoformat(data["lastSyncAt"]) if data.get("lastSyncAt") else None
+    )
     google_channel_exp = data.get("googleChannelExpiration")
     user = User(
         id=data["id"],
@@ -45,7 +53,7 @@ def deserialize_user(data: dict) -> User:
         subscriptionStatus=data["subscriptionStatus"],
         settings=data["settings"],
         externalId=data["externalId"],
-        fcmToken=data["fcmToken"]
+        fcmToken=data["fcmToken"],
     )
     user.passwordHash = data.get("passwordHash")
     user.lastSyncAt = last_sync_at
@@ -56,6 +64,7 @@ def deserialize_user(data: dict) -> User:
     user.createdAt = created_at
     user.updatedAt = updated_at
     return user
+
 
 class UsersRepository:
     def __init__(self, db: AsyncSession):

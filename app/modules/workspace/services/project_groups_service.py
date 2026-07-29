@@ -8,6 +8,7 @@ from app.models import ProjectGroup
 from app.modules.workspace.schemas.project_groups import ProjectGroupCreateSchema
 from app.modules.workspace.repository import ProjectGroupsRepository
 
+
 class ProjectGroupsService:
     def __init__(self, db: AsyncSession):
         self.db = db
@@ -17,11 +18,7 @@ class ProjectGroupsService:
         group_id = str(uuid.uuid4())
         group_data = ProjectGroupCreateSchema(**create_input)
 
-        group = ProjectGroup(
-            id=group_id,
-            userId=user_id,
-            **group_data.model_dump()
-        )
+        group = ProjectGroup(id=group_id, userId=user_id, **group_data.model_dump())
         return await self.repository.create(group)
 
     async def find_all(self, user_id: str) -> list[ProjectGroup]:
@@ -33,7 +30,9 @@ class ProjectGroupsService:
             raise ValueError(f"ProjectGroup with ID {id} not found")
         return group
 
-    async def update(self, id: str, update_input: dict[str, Any], user_id: str) -> ProjectGroup:
+    async def update(
+        self, id: str, update_input: dict[str, Any], user_id: str
+    ) -> ProjectGroup:
         group = await self.repository.get_by_id_and_user(id, user_id)
         if not group:
             raise ValueError(f"ProjectGroup with ID {id} not found")

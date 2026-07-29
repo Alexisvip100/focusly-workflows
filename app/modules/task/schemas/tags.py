@@ -1,6 +1,7 @@
 from pydantic import BaseModel, model_validator
 from typing import Any
 
+
 class TagCreateSchema(BaseModel):
     name: str | None = ""
     userId: str | None = None
@@ -12,4 +13,3 @@ class TagCreateSchema(BaseModel):
             if data.get("name") is None:
                 data["name"] = ""
         return data
-

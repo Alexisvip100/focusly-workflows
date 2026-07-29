@@ -5,6 +5,7 @@ from app.models import Conversation, Message, UserMemory
 from app.redis import cache
 from datetime import datetime
 
+
 def serialize_conversation(c: Conversation) -> dict:
     return {
         "id": c.id,
@@ -12,21 +13,27 @@ def serialize_conversation(c: Conversation) -> dict:
         "title": c.title,
         "summary": c.summary,
         "createdAt": c.createdAt.isoformat() if c.createdAt else None,
-        "updatedAt": c.updatedAt.isoformat() if c.updatedAt else None
+        "updatedAt": c.updatedAt.isoformat() if c.updatedAt else None,
     }
 
+
 def deserialize_conversation(data: dict) -> Conversation:
-    created_at = datetime.fromisoformat(data["createdAt"]) if data.get("createdAt") else None
-    updated_at = datetime.fromisoformat(data["updatedAt"]) if data.get("updatedAt") else None
+    created_at = (
+        datetime.fromisoformat(data["createdAt"]) if data.get("createdAt") else None
+    )
+    updated_at = (
+        datetime.fromisoformat(data["updatedAt"]) if data.get("updatedAt") else None
+    )
     c = Conversation(
         id=data["id"],
         userId=data["userId"],
         title=data["title"],
-        summary=data["summary"]
+        summary=data["summary"],
     )
     c.createdAt = created_at
     c.updatedAt = updated_at
     return c
+
 
 def serialize_message(m: Message) -> dict:
     return {
@@ -35,20 +42,24 @@ def serialize_message(m: Message) -> dict:
         "role": m.role,
         "content": m.content,
         "tokenUsage": m.tokenUsage,
-        "createdAt": m.createdAt.isoformat() if m.createdAt else None
+        "createdAt": m.createdAt.isoformat() if m.createdAt else None,
     }
 
+
 def deserialize_message(data: dict) -> Message:
-    created_at = datetime.fromisoformat(data["createdAt"]) if data.get("createdAt") else None
+    created_at = (
+        datetime.fromisoformat(data["createdAt"]) if data.get("createdAt") else None
+    )
     m = Message(
         id=data["id"],
         conversationId=data["conversationId"],
         role=data["role"],
         content=data["content"],
-        tokenUsage=data["tokenUsage"]
+        tokenUsage=data["tokenUsage"],
     )
     m.createdAt = created_at
     return m
+
 
 class ConversationRepository:
     def __init__(self, db: AsyncSession):
@@ -58,7 +69,9 @@ class ConversationRepository:
         self.db.add(conversation)
         await self.db.flush()
         await self.db.refresh(conversation)
-        await cache.set(f"conversation:id:{conversation.id}", serialize_conversation(conversation))
+        await cache.set(
+            f"conversation:id:{conversation.id}", serialize_conversation(conversation)
+        )
         await cache.delete(f"conversations:user:{conversation.userId}")
         return conversation
 
@@ -66,10 +79,15 @@ class ConversationRepository:
         cached = await cache.get(f"conversation:id:{conv_id}")
         if cached:
             return deserialize_conversation(cached)
-        result = await self.db.execute(select(Conversation).where(Conversation.id == conv_id))
+        result = await self.db.execute(
+            select(Conversation).where(Conversation.id == conv_id)
+        )
         conversation = result.scalars().first()
         if conversation:
-            await cache.set(f"conversation:id:{conversation.id}", serialize_conversation(conversation))
+            await cache.set(
+                f"conversation:id:{conversation.id}",
+                serialize_conversation(conversation),
+            )
         return conversation
 
     async def get_all_by_user(self, user_id: str) -> list[Conversation]:
@@ -82,7 +100,10 @@ class ConversationRepository:
             .order_by(Conversation.updatedAt.desc())
         )
         conversations = list(result.scalars().all())
-        await cache.set(f"conversations:user:{user_id}", [serialize_conversation(c) for c in conversations])
+        await cache.set(
+            f"conversations:user:{user_id}",
+            [serialize_conversation(c) for c in conversations],
+        )
         return conversations
 
     async def save(self, conversation: Conversation) -> Conversation:
@@ -90,7 +111,9 @@ class ConversationRepository:
             conversation = await self.db.merge(conversation)
         await self.db.flush()
         await self.db.refresh(conversation)
-        await cache.set(f"conversation:id:{conversation.id}", serialize_conversation(conversation))
+        await cache.set(
+            f"conversation:id:{conversation.id}", serialize_conversation(conversation)
+        )
         await cache.delete(f"conversations:user:{conversation.userId}")
         return conversation
 
@@ -129,7 +152,11 @@ class MessageRepository:
             .order_by(Message.createdAt.asc())
         )
         messages = list(result.scalars().all())
-        await cache.set(f"conversation:messages:{conversation_id}", [serialize_message(m) for m in messages], expire_seconds=3600)
+        await cache.set(
+            f"conversation:messages:{conversation_id}",
+            [serialize_message(m) for m in messages],
+            expire_seconds=3600,
+        )
         return messages
 
     async def delete_by_conversation_id(self, conversation_id: str) -> None:
@@ -143,9 +170,7 @@ class MessageRepository:
         if not messages:
             return
         ids = [m.id for m in messages]
-        await self.db.execute(
-            delete(Message).where(Message.id.in_(ids))
-        )
+        await self.db.execute(delete(Message).where(Message.id.in_(ids)))
         await self.db.flush()
         conv_id = messages[0].conversationId
         await cache.delete(f"conversation:messages:{conv_id}")
@@ -170,11 +195,15 @@ class UserMemoryRepository:
         return memory
 
     async def get_by_id(self, memory_id: str) -> UserMemory | None:
-        result = await self.db.execute(select(UserMemory).where(UserMemory.id == memory_id))
+        result = await self.db.execute(
+            select(UserMemory).where(UserMemory.id == memory_id)
+        )
         return result.scalars().first()
 
     async def get_all_by_user(self, user_id: str) -> list[UserMemory]:
-        result = await self.db.execute(select(UserMemory).where(UserMemory.userId == user_id))
+        result = await self.db.execute(
+            select(UserMemory).where(UserMemory.userId == user_id)
+        )
         return list(result.scalars().all())
 
     async def save(self, memory: UserMemory) -> UserMemory:

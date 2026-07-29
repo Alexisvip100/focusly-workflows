@@ -7,6 +7,7 @@ from app.config import settings
 
 logger = logging.getLogger(__name__)
 
+
 class ResilientRedisCache:
     def __init__(self, redis_url: str):
         self.redis_url = redis_url
@@ -26,19 +27,21 @@ class ResilientRedisCache:
             retry = Retry(backoff, retries=3)
 
             self.client = aioredis.from_url(
-                self.redis_url, 
-                encoding="utf-8", 
+                self.redis_url,
+                encoding="utf-8",
                 decode_responses=True,
                 socket_timeout=2.0,
                 retry=retry,
                 retry_on_timeout=True,
-                retry_on_error=[ConnectionError, TimeoutError]
+                retry_on_error=[ConnectionError, TimeoutError],
             )
             # Ping to verify connection
             await self.client.ping()
             logger.info("Successfully connected to Redis cache.")
         except Exception as e:
-            logger.error(f"Failed to connect to Redis cache at {self.redis_url}: {e}. Caching will be bypassed.")
+            logger.error(
+                f"Failed to connect to Redis cache at {self.redis_url}: {e}. Caching will be bypassed."
+            )
             self.client = None
 
     async def disconnect(self):
@@ -99,6 +102,7 @@ class ResilientRedisCache:
         except Exception as e:
             logger.warning(f"Redis DELETE_PATTERN failed for pattern {pattern}: {e}.")
         return False
+
 
 # Global resilient cache client instance
 cache = ResilientRedisCache(settings.REDIS_URL)

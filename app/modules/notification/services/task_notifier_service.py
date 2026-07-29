@@ -40,7 +40,9 @@ async def _check_and_notify_once() -> None:
         # ── 5-minute warning ──────────────────────────────────────────────
         # Tasks whose start time falls in [now+4min, now+6min] and haven't
         # been notified yet for the 5-min window.
-        tasks_5min = await tasks_repo.get_tasks_for_warning(4.0, 6.0, is_last_minute=False)
+        tasks_5min = await tasks_repo.get_tasks_for_warning(
+            4.0, 6.0, is_last_minute=False
+        )
 
         for task, user in tasks_5min:
             start_at = _task_start_at(task)
@@ -53,7 +55,7 @@ async def _check_and_notify_once() -> None:
                 minutes_left=minutes_left,
                 notif_type="5min",
             )
-            
+
             # Save notification in the database
             notif_item = Notification(
                 id=str(uuid.uuid4()),
@@ -71,7 +73,9 @@ async def _check_and_notify_once() -> None:
             await tasks_repo.save(task, commit=False)
 
         # ── 1-minute warning ──────────────────────────────────────────────
-        tasks_1min = await tasks_repo.get_tasks_for_warning(0.0, 2.0, is_last_minute=True)
+        tasks_1min = await tasks_repo.get_tasks_for_warning(
+            0.0, 2.0, is_last_minute=True
+        )
 
         for task, user in tasks_1min:
             start_at = _task_start_at(task)
@@ -84,7 +88,7 @@ async def _check_and_notify_once() -> None:
                 minutes_left=minutes_left,
                 notif_type="1min",
             )
-            
+
             # Save notification in the database
             notif_item = Notification(
                 id=str(uuid.uuid4()),

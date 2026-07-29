@@ -5,6 +5,7 @@ Aggregates user behavioral signals from Tasks, FocusSessions, and Workspaces
 into hourly statistics. These aggregated (never raw) stats are used as input
 for the AI pattern analysis — keeping user data private.
 """
+
 from datetime import datetime, timedelta
 from typing import Any
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -26,6 +27,7 @@ class BehavioralAnalyzer:
         titles, notes, or workspace content are included.
         """
         from app.redis import cache
+
         cache_key = f"signals:user:{user_id}"
         cached = await cache.get(cache_key)
         if cached is not None:
@@ -46,9 +48,10 @@ class BehavioralAnalyzer:
             {
                 "id": t.id,
                 "priority_level": t.priorityLevel or 1,
-                "estimate_timer": t.estimateTimer or 30
+                "estimate_timer": t.estimateTimer or 30,
             }
-            for t in tasks if t.status not in ["Done"] and (t.priorityLevel or 0) >= 2
+            for t in tasks
+            if t.status not in ["Done"] and (t.priorityLevel or 0) >= 2
         ]
 
         res = {
@@ -81,7 +84,9 @@ class BehavioralAnalyzer:
             return value.replace(tzinfo=None)
         if isinstance(value, str):
             try:
-                return datetime.fromisoformat(value.replace("Z", "+00:00")).replace(tzinfo=None)
+                return datetime.fromisoformat(value.replace("Z", "+00:00")).replace(
+                    tzinfo=None
+                )
             except ValueError:
                 return None
         return None
@@ -194,7 +199,11 @@ class BehavioralAnalyzer:
 
         for t in tasks:
             updated_at = self._to_dt(t.updatedAt)
-            if t.status == "In Progress" and updated_at and updated_at < stale_threshold:
+            if (
+                t.status == "In Progress"
+                and updated_at
+                and updated_at < stale_threshold
+            ):
                 abandoned += 1
             if t.realTimer and t.realTimer > 0:
                 real_timers.append(t.realTimer)
@@ -212,7 +221,11 @@ class BehavioralAnalyzer:
 
     def _compute_session_stats(self, sessions: list[FocusSession]) -> dict[str, Any]:
         if not sessions:
-            return {"total_sessions": 0, "total_focus_minutes": 0, "avg_session_minutes": 0}
+            return {
+                "total_sessions": 0,
+                "total_focus_minutes": 0,
+                "avg_session_minutes": 0,
+            }
 
         total_minutes = sum(s.durationMinutes or 0 for s in sessions)
         return {
@@ -221,9 +234,7 @@ class BehavioralAnalyzer:
             "avg_session_minutes": round(total_minutes / len(sessions)),
         }
 
-    def _top_productive_hours(
-        self, buckets: dict[str, dict[str, Any]]
-    ) -> list[int]:
+    def _top_productive_hours(self, buckets: dict[str, dict[str, Any]]) -> list[int]:
         """
         Score each hour using a weighted formula:
           score = tasks_completed*3 + high_priority_completed*2 + focus_minutes*0.05 + workspace_edits*0.5

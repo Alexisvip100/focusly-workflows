@@ -21,8 +21,9 @@ class ProjectGroupQuery:
                 color=g.color,
                 emoji=g.emoji,
                 created_at=g.createdAt,
-                updated_at=g.updatedAt
-            ) for g in res
+                updated_at=g.updatedAt,
+            )
+            for g in res
         ]
 
     @strawberry.field
@@ -38,5 +39,5 @@ class ProjectGroupQuery:
             color=res.color,
             emoji=res.emoji,
             created_at=res.createdAt,
-            updated_at=res.updatedAt
+            updated_at=res.updatedAt,
         )

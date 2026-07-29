@@ -2,6 +2,7 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 from datetime import datetime
 from typing import Any
 
+
 class NotificationCreateSchema(BaseModel):
     userId: str
     relatedTaskId: str | None = None
@@ -19,13 +20,12 @@ class NotificationCreateSchema(BaseModel):
                 "type": "task_reminder",
                 "status": "pending",
                 "title": "",
-                "body": ""
+                "body": "",
             }
             for key, default_val in defaults.items():
                 if data.get(key) is None:
                     data[key] = default_val
         return data
-
 
     @field_validator("scheduledAt", mode="before")
     @classmethod

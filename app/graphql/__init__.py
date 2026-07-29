@@ -9,18 +9,35 @@ from app.modules.insights.graphql.queries import InsightsQuery
 from app.modules.workspace.graphql.project_groups_queries import ProjectGroupQuery
 from app.modules.workspace.graphql.project_groups_mutations import ProjectGroupMutation
 from app.modules.notification.graphql.notifications_queries import NotificationQuery
-from app.modules.notification.graphql.notifications_mutations import NotificationMutation
+from app.modules.notification.graphql.notifications_mutations import (
+    NotificationMutation,
+)
 
 
 @strawberry.type
-class Query(TaskQuery, WorkspaceQuery, TagQuery, InsightsQuery, ProjectGroupQuery, NotificationQuery):
+class Query(
+    TaskQuery,
+    WorkspaceQuery,
+    TagQuery,
+    InsightsQuery,
+    ProjectGroupQuery,
+    NotificationQuery,
+):
     """Combined Query class with all entity queries"""
+
     pass
 
 
 @strawberry.type
-class Mutation(TaskMutation, WorkspaceMutation, AuthMutation, ProjectGroupMutation, NotificationMutation):
+class Mutation(
+    TaskMutation,
+    WorkspaceMutation,
+    AuthMutation,
+    ProjectGroupMutation,
+    NotificationMutation,
+):
     """Combined Mutation class with all entity mutations"""
+
     pass
 
 

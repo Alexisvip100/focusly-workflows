@@ -1,6 +1,7 @@
 from pydantic import BaseModel, model_validator
 from typing import Any
 
+
 class WorkspaceCreateSchema(BaseModel):
     title: str | None = None
     emoji: str | None = None
@@ -14,12 +15,8 @@ class WorkspaceCreateSchema(BaseModel):
     @classmethod
     def set_defaults(cls, data: Any) -> Any:
         if isinstance(data, dict):
-            defaults = {
-                "content": "",
-                "saveStatus": False
-            }
+            defaults = {"content": "", "saveStatus": False}
             for key, default_val in defaults.items():
                 if data.get(key) is None:
                     data[key] = default_val
         return data
-

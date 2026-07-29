@@ -2,6 +2,7 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 from datetime import datetime
 from typing import Any
 
+
 class TimeBlockCreateSchema(BaseModel):
     userId: str
     taskId: str | None = None
@@ -18,10 +19,7 @@ class TimeBlockCreateSchema(BaseModel):
     @classmethod
     def set_defaults(cls, data: Any) -> Any:
         if isinstance(data, dict):
-            defaults = {
-                "title": "",
-                "attendees": []
-            }
+            defaults = {"title": "", "attendees": []}
             for key, default_val in defaults.items():
                 if data.get(key) is None:
                     data[key] = default_val
@@ -41,4 +39,3 @@ class TimeBlockCreateSchema(BaseModel):
             except:
                 return datetime.utcnow()
         return datetime.utcnow()
-

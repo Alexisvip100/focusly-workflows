@@ -1,3 +1,6 @@
+[dependency-groups]
+dev = ["ruff==0.16.0"]
+
 [tool.pyrefly]
 python_interpreter = ".venv/bin/python"
 

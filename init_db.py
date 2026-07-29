@@ -8,12 +8,14 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from app.database import engine, Base
 import app.models  # Import models to register them on Base
 
+
 async def init_db():
     print("Initializing database...")
     async with engine.begin() as conn:
         # Create all tables defined in models
         await conn.run_sync(Base.metadata.create_all)
     print("Database initialized successfully.")
+
 
 if __name__ == "__main__":
     try:

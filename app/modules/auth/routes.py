@@ -9,24 +9,31 @@ from app.modules.auth.services.auth_service import AuthService
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
+
 class GoogleLoginBody(BaseModel):
     code: str
+
 
 class RefreshBody(BaseModel):
     userId: str
 
+
 class GoogleRefreshBody(BaseModel):
     userId: str
+
 
 class MagicLinkBody(BaseModel):
     email: str
     fullName: str | None = None
 
+
 class VerifyMagicLinkBody(BaseModel):
     token: str
 
+
 def get_auth_service(db: AsyncSession = Depends(get_db)) -> AuthService:
     return AuthService(db)
+
 
 def set_auth_cookies(response: Response, result: dict[str, Any]):
     is_secure = settings.IS_PRODUCTION
@@ -37,7 +44,7 @@ def set_auth_cookies(response: Response, result: dict[str, Any]):
         httponly=True,
         secure=is_secure,
         samesite=samesite_val,
-        max_age=15 * 60
+        max_age=15 * 60,
     )
     response.set_cookie(
         key="refresh_token",
@@ -45,33 +52,37 @@ def set_auth_cookies(response: Response, result: dict[str, Any]):
         httponly=True,
         secure=is_secure,
         samesite=samesite_val,
-        max_age=7 * 24 * 60 * 60
+        max_age=7 * 24 * 60 * 60,
     )
+
 
 @router.post("/google")
 async def google_login(
     request: Request,
     body: GoogleLoginBody,
     response: Response,
-    auth_service: AuthService = Depends(get_auth_service)
+    auth_service: AuthService = Depends(get_auth_service),
 ):
     try:
         origin = request.headers.get("origin")
-        result = await auth_service.validate_google_token(body.code, redirect_uri=origin)
+        result = await auth_service.validate_google_token(
+            body.code, redirect_uri=origin
+        )
         set_auth_cookies(response, result)
-        
+
         return {"user": result["user"]}
     except ValueError as e:
         raise HTTPException(status_code=401, detail=str(e))
     except Exception:
         raise HTTPException(status_code=500, detail="Internal server error")
 
+
 @router.post("/refresh")
 async def refresh(
     body: RefreshBody,
     request: Request,
     response: Response,
-    auth_service: AuthService = Depends(get_auth_service)
+    auth_service: AuthService = Depends(get_auth_service),
 ):
     refresh_token = request.cookies.get("refresh_token")
     if not refresh_token:
@@ -93,10 +104,10 @@ async def refresh(
     except Exception:
         raise HTTPException(status_code=500, detail="Internal server error")
 
+
 @router.post("/google/refresh")
 async def refresh_google_token(
-    body: GoogleRefreshBody,
-    auth_service: AuthService = Depends(get_auth_service)
+    body: GoogleRefreshBody, auth_service: AuthService = Depends(get_auth_service)
 ):
     try:
         return await auth_service.refresh_google_access_token(body.userId)
@@ -105,17 +116,22 @@ async def refresh_google_token(
     except Exception:
         raise HTTPException(status_code=500, detail="Internal server error")
 
+
 @router.post("/logout")
 async def logout(response: Response):
     samesite_val = "none" if settings.IS_PRODUCTION else "lax"
-    response.delete_cookie(key="access_token", secure=True, httponly=True, samesite=samesite_val)
-    response.delete_cookie(key="refresh_token", secure=True, httponly=True, samesite=samesite_val)
+    response.delete_cookie(
+        key="access_token", secure=True, httponly=True, samesite=samesite_val
+    )
+    response.delete_cookie(
+        key="refresh_token", secure=True, httponly=True, samesite=samesite_val
+    )
     return {"message": "Logged out successfully"}
+
 
 @router.post("/magic-link")
 async def request_magic_link(
-    body: MagicLinkBody,
-    auth_service: AuthService = Depends(get_auth_service)
+    body: MagicLinkBody, auth_service: AuthService = Depends(get_auth_service)
 ):
     try:
         token = auth_service.generate_magic_link_token(body.email, body.fullName)
@@ -124,11 +140,12 @@ async def request_magic_link(
     except Exception:
         raise HTTPException(status_code=500, detail="Internal server error")
 
+
 @router.post("/magic-link/verify")
 async def verify_magic_link(
     body: VerifyMagicLinkBody,
     response: Response,
-    auth_service: AuthService = Depends(get_auth_service)
+    auth_service: AuthService = Depends(get_auth_service),
 ):
     try:
         result = await auth_service.verify_magic_link_token(body.token)

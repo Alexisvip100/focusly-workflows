@@ -1,7 +1,10 @@
 from datetime import datetime
 from typing import Any
+
 # pyrefly: ignore [missing-import]
 import numpy as np
+
+
 class MigrationService:
     def migrate_task(self, task: dict[str, Any]) -> dict[str, Any]:
         result = {}
@@ -40,7 +43,7 @@ class MigrationService:
             "blockType": self._map_block_type(time_block.get("blockType")),
             "isGenerated": time_block.get("source") == "App",
             "createdAt": self._parse_date(time_block.get("createdAt")),
-            "updatedAt": datetime.now()
+            "updatedAt": datetime.now(),
         }
 
     def _migrate_to_external_event(self, task: dict[str, Any]) -> dict[str, Any]:
@@ -63,18 +66,23 @@ class MigrationService:
                 {
                     "email": c.get("email"),
                     "name": c.get("name"),
-                    "responseStatus": self._map_response_status(c.get("responseStatus")),
-                    "avatar": c.get("avatar")
-                } for c in collaborators
+                    "responseStatus": self._map_response_status(
+                        c.get("responseStatus")
+                    ),
+                    "avatar": c.get("avatar"),
+                }
+                for c in collaborators
             ],
             "organizer": {
                 "email": collaborators[0].get("email") if collaborators else "",
                 "name": collaborators[0].get("name") if collaborators else "",
-                "isSelf": True
-            } if collaborators else None,
+                "isSelf": True,
+            }
+            if collaborators
+            else None,
             "source": "external",
             "createdAt": self._parse_date(task.get("createdAt")),
-            "updatedAt": self._parse_date(task.get("updatedAt"))
+            "updatedAt": self._parse_date(task.get("updatedAt")),
         }
 
     def _migrate_to_meeting(self, task: dict[str, Any]) -> dict[str, Any]:
@@ -97,16 +105,19 @@ class MigrationService:
                 {
                     "email": c.get("email"),
                     "name": c.get("name"),
-                    "responseStatus": self._map_response_status(c.get("responseStatus")),
-                    "avatar": c.get("avatar")
-                } for c in collaborators
+                    "responseStatus": self._map_response_status(
+                        c.get("responseStatus")
+                    ),
+                    "avatar": c.get("avatar"),
+                }
+                for c in collaborators
             ],
             "isRecurring": False,
             "recurrenceRule": None,
             "source": "external" if task.get("source") == "google" else "manual",
             "externalEventId": task.get("google_event_id"),
             "createdAt": self._parse_date(task.get("createdAt")),
-            "updatedAt": self._parse_date(task.get("updatedAt"))
+            "updatedAt": self._parse_date(task.get("updatedAt")),
         }
 
     def _migrate_to_new_task(self, task: dict[str, Any]) -> dict[str, Any]:
@@ -133,7 +144,7 @@ class MigrationService:
             "source": "ai_suggested" if task.get("use_ai") else "manual",
             "createdAt": self._parse_date(task.get("createdAt")),
             "updatedAt": self._parse_date(task.get("updatedAt")),
-            "completedAt": self._parse_date(task.get("completedAt"))
+            "completedAt": self._parse_date(task.get("completedAt")),
         }
 
     def _migrate_to_work_block(self, task: dict[str, Any]) -> dict[str, Any]:
@@ -142,12 +153,14 @@ class MigrationService:
             "userId": task.get("userId"),
             "taskId": task.get("id"),
             "start": self._parse_date(task.get("estimated_start_date")),
-            "end": self._parse_date(task.get("estimated_end_date") or self._parse_date(task.get("deadline"))),
+            "end": self._parse_date(
+                task.get("estimated_end_date") or self._parse_date(task.get("deadline"))
+            ),
             "duration": task.get("estimateTimer") or 30,
             "blockType": "focus",
             "isGenerated": False,
             "createdAt": self._parse_date(task.get("createdAt")),
-            "updatedAt": self._parse_date(task.get("updatedAt"))    
+            "updatedAt": self._parse_date(task.get("updatedAt")),
         }
 
     def _is_meeting(self, task: dict[str, Any]) -> bool:
@@ -165,11 +178,13 @@ class MigrationService:
             "zoom.us",
             "teams.microsoft.com",
             "webex.com",
-            "skype.com"
+            "skype.com",
         ]
         return any(domain in url for domain in meeting_domains)
 
-    def _extract_conference_data(self, links: list[dict[str, str]]) -> dict[str, Any] | None:
+    def _extract_conference_data(
+        self, links: list[dict[str, str]]
+    ) -> dict[str, Any] | None:
         for link in links:
             url = link.get("url", "")
             if "meet.google.com" in url:
@@ -234,7 +249,7 @@ class MigrationService:
             "Review": "in_progress",
             "Done": "completed",
             "Backlog": "backlog",
-            "Archived": "cancelled"
+            "Archived": "cancelled",
         }
         return mapping.get(status, "backlog")
 
@@ -262,10 +277,7 @@ class MigrationService:
         return {
             "userId": user_id,
             "workingDays": ["mon", "tue", "wed", "thu", "fri"],
-            "workingHours": {
-                "start": "09:00",
-                "end": "17:00"
-            },
+            "workingHours": {"start": "09:00", "end": "17:00"},
             "breakDuration": 15,
             "breakInterval": 90,
             "preferredFocusBlockDuration": 60,
@@ -274,9 +286,6 @@ class MigrationService:
             "schedulingStrategy": "balanced",
             "allowSameDaySplitting": True,
             "allowOvertime": False,
-            "goldenWindow": {
-                "start": "09:00",
-                "end": "11:00"
-            },
-            "updatedAt": datetime.now()
+            "goldenWindow": {"start": "09:00", "end": "11:00"},
+            "updatedAt": datetime.now(),
         }

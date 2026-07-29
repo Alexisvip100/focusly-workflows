@@ -3,6 +3,7 @@ from app.database import async_session_local
 from app.models import Workspace, ProjectGroup, Folder
 from sqlalchemy import select
 
+
 async def main():
     async with async_session_local() as session:
         # Check Project Groups
@@ -24,7 +25,10 @@ async def main():
         workspaces = result.scalars().all()
         print("\n--- WORKSPACES ---")
         for w in workspaces:
-            print(f"ID: {w.id}, Title: {w.title}, FolderID: {w.folderId}, GroupID: {w.groupId}")
+            print(
+                f"ID: {w.id}, Title: {w.title}, FolderID: {w.folderId}, GroupID: {w.groupId}"
+            )
+
 
 if __name__ == "__main__":
     asyncio.run(main())

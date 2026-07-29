@@ -7,6 +7,7 @@ from app.redis import cache
 
 INACTIVE_STATUSES = ["completed", "cancelled", "Completed"]
 
+
 def serialize_task(t: Task) -> dict:
     return {
         "id": t.id,
@@ -19,8 +20,12 @@ def serialize_task(t: Task) -> dict:
         "priorityLevel": t.priorityLevel,
         "category": t.category,
         "color": t.color,
-        "estimated_start_date": t.estimated_start_date.isoformat() if t.estimated_start_date else None,
-        "estimated_end_date": t.estimated_end_date.isoformat() if t.estimated_end_date else None,
+        "estimated_start_date": t.estimated_start_date.isoformat()
+        if t.estimated_start_date
+        else None,
+        "estimated_end_date": t.estimated_end_date.isoformat()
+        if t.estimated_end_date
+        else None,
         "deadline": t.deadline.isoformat() if t.deadline else None,
         "status": t.status,
         "google_event_id": t.google_event_id,
@@ -34,8 +39,9 @@ def serialize_task(t: Task) -> dict:
         "completedAt": t.completedAt.isoformat() if t.completedAt else None,
         "createdAt": t.createdAt.isoformat() if t.createdAt else None,
         "updatedAt": t.updatedAt.isoformat() if t.updatedAt else None,
-        "deletedAt": t.deletedAt.isoformat() if t.deletedAt else None
+        "deletedAt": t.deletedAt.isoformat() if t.deletedAt else None,
     }
+
 
 def deserialize_task(data: dict) -> Task:
     t = Task(
@@ -49,9 +55,15 @@ def deserialize_task(data: dict) -> Task:
         priorityLevel=data["priorityLevel"],
         category=data["category"],
         color=data["color"],
-        estimated_start_date=datetime.fromisoformat(data["estimated_start_date"]) if data.get("estimated_start_date") else None,
-        estimated_end_date=datetime.fromisoformat(data["estimated_end_date"]) if data.get("estimated_end_date") else None,
-        deadline=datetime.fromisoformat(data["deadline"]) if data.get("deadline") else None,
+        estimated_start_date=datetime.fromisoformat(data["estimated_start_date"])
+        if data.get("estimated_start_date")
+        else None,
+        estimated_end_date=datetime.fromisoformat(data["estimated_end_date"])
+        if data.get("estimated_end_date")
+        else None,
+        deadline=datetime.fromisoformat(data["deadline"])
+        if data.get("deadline")
+        else None,
         status=data["status"],
         google_event_id=data["google_event_id"],
         source=data["source"],
@@ -60,13 +72,22 @@ def deserialize_task(data: dict) -> Task:
         tags=data["tags"],
         links=data["links"],
         collaborators=data["collaborators"],
-        use_ai=data["use_ai"]
+        use_ai=data["use_ai"],
     )
-    t.completedAt = datetime.fromisoformat(data["completedAt"]) if data.get("completedAt") else None
-    t.createdAt = datetime.fromisoformat(data["createdAt"]) if data.get("createdAt") else None
-    t.updatedAt = datetime.fromisoformat(data["updatedAt"]) if data.get("updatedAt") else None
-    t.deletedAt = datetime.fromisoformat(data["deletedAt"]) if data.get("deletedAt") else None
+    t.completedAt = (
+        datetime.fromisoformat(data["completedAt"]) if data.get("completedAt") else None
+    )
+    t.createdAt = (
+        datetime.fromisoformat(data["createdAt"]) if data.get("createdAt") else None
+    )
+    t.updatedAt = (
+        datetime.fromisoformat(data["updatedAt"]) if data.get("updatedAt") else None
+    )
+    t.deletedAt = (
+        datetime.fromisoformat(data["deletedAt"]) if data.get("deletedAt") else None
+    )
     return t
+
 
 class TasksRepository:
     def __init__(self, db: AsyncSession):
@@ -94,12 +115,14 @@ class TasksRepository:
             await cache.set(f"task:id:{task.id}", serialize_task(task))
         return task
 
-    async def get_by_google_event_id(self, user_id: str, google_event_id: str) -> Task | None:
+    async def get_by_google_event_id(
+        self, user_id: str, google_event_id: str
+    ) -> Task | None:
         result = await self.db.execute(
             select(Task).where(
                 Task.userId == user_id,
                 Task.google_event_id == google_event_id,
-                Task.deletedAt == None
+                Task.deletedAt == None,
             )
         )
         return result.scalars().first()
@@ -112,19 +135,18 @@ class TasksRepository:
             select(Task).where(
                 Task.userId == user_id,
                 Task.deletedAt == None,
-                or_(Task.source != "google", Task.source == None)
+                or_(Task.source != "google", Task.source == None),
             )
         )
         tasks = list(result.scalars().all())
-        await cache.set(f"tasks:active:user:{user_id}", [serialize_task(t) for t in tasks])
+        await cache.set(
+            f"tasks:active:user:{user_id}", [serialize_task(t) for t in tasks]
+        )
         return tasks
 
     async def get_all_non_deleted_by_user(self, user_id: str) -> list[Task]:
         result = await self.db.execute(
-            select(Task).where(
-                Task.userId == user_id,
-                Task.deletedAt == None
-            )
+            select(Task).where(Task.userId == user_id, Task.deletedAt == None)
         )
         return list(result.scalars().all())
 
@@ -133,41 +155,46 @@ class TasksRepository:
             select(Task).where(
                 Task.userId == user_id,
                 Task.deletedAt == None,
-                Task.google_event_id != None
+                Task.google_event_id != None,
             )
         )
         return list(result.scalars().all())
 
-    async def get_active_non_google_tasks(self, user_id: str | None = None) -> list[Task]:
+    async def get_active_non_google_tasks(
+        self, user_id: str | None = None
+    ) -> list[Task]:
         query = select(Task).where(
-            Task.deletedAt == None,
-            or_(Task.source != "google", Task.source == None)
+            Task.deletedAt == None, or_(Task.source != "google", Task.source == None)
         )
         if user_id is not None:
             query = query.where(Task.userId == user_id)
         result = await self.db.execute(query)
         return list(result.scalars().all())
 
-    async def get_upcoming_tasks(self, start_date: datetime, end_date: datetime) -> list[Task]:
+    async def get_upcoming_tasks(
+        self, start_date: datetime, end_date: datetime
+    ) -> list[Task]:
         result = await self.db.execute(
             select(Task).where(
                 Task.deadline >= start_date,
                 Task.deadline <= end_date,
                 Task.notified == False,
                 Task.deletedAt == None,
-                or_(Task.source != "google", Task.source == None)
+                or_(Task.source != "google", Task.source == None),
             )
         )
         return list(result.scalars().all())
 
-    async def get_last_minute_tasks(self, start_date: datetime, end_date: datetime) -> list[Task]:
+    async def get_last_minute_tasks(
+        self, start_date: datetime, end_date: datetime
+    ) -> list[Task]:
         result = await self.db.execute(
             select(Task).where(
                 Task.deadline >= start_date,
                 Task.deadline <= end_date,
                 Task.lastMinuteNotified == False,
                 Task.deletedAt == None,
-                or_(Task.source != "google", Task.source == None)
+                or_(Task.source != "google", Task.source == None),
             )
         )
         return list(result.scalars().all())
@@ -199,10 +226,9 @@ class TasksRepository:
 
     async def delete_google_tasks_by_user(self, user_id: str) -> int:
         result = await self.db.execute(
-            delete(Task).where(
-                Task.userId == user_id,
-                Task.source == "google"
-            ).returning(Task.id)
+            delete(Task)
+            .where(Task.userId == user_id, Task.source == "google")
+            .returning(Task.id)
         )
         deleted_ids = list(result.scalars().all())
         await self.db.commit()
@@ -212,30 +238,36 @@ class TasksRepository:
         await cache.delete(f"signals:user:{user_id}")
         return len(deleted_ids)
 
-    async def get_tasks_for_warning(self, start_min: float, end_min: float, is_last_minute: bool = False) -> list[tuple[Task, User]]:
+    async def get_tasks_for_warning(
+        self, start_min: float, end_min: float, is_last_minute: bool = False
+    ) -> list[tuple[Task, User]]:
         from sqlalchemy import func
         from datetime import datetime, timedelta
+
         now = datetime.utcnow()
         notif_time = func.coalesce(Task.estimated_start_date, Task.deadline)
-        
-        query = select(Task, User).join(User, User.id == Task.userId).where(
-            Task.deletedAt == None,
-            Task.status.notin_(INACTIVE_STATUSES)
+
+        query = (
+            select(Task, User)
+            .join(User, User.id == Task.userId)
+            .where(Task.deletedAt == None, Task.status.notin_(INACTIVE_STATUSES))
         )
-        
+
         if is_last_minute:
             query = query.where(
-                or_(Task.lastMinuteNotified == False, Task.lastMinuteNotified.is_(None)),
+                or_(
+                    Task.lastMinuteNotified == False, Task.lastMinuteNotified.is_(None)
+                ),
                 notif_time >= now + timedelta(minutes=start_min),
-                notif_time <= now + timedelta(minutes=end_min)
+                notif_time <= now + timedelta(minutes=end_min),
             )
         else:
             query = query.where(
                 or_(Task.notified == False, Task.notified.is_(None)),
                 notif_time >= now + timedelta(minutes=start_min),
-                notif_time <= now + timedelta(minutes=end_min)
+                notif_time <= now + timedelta(minutes=end_min),
             )
-            
+
         result = await self.db.execute(query)
         return list(result.all())
 
@@ -279,16 +311,22 @@ class TimeBlocksRepository:
         self.db.add_all(time_blocks)
         await self.db.commit()
 
-    async def replace_focus_blocks(self, user_id: str, new_blocks: list[TimeBlock]) -> None:
+    async def replace_focus_blocks(
+        self, user_id: str, new_blocks: list[TimeBlock]
+    ) -> None:
         await self.db.execute(
-            delete(TimeBlock).where(TimeBlock.userId == user_id, TimeBlock.blockType == "Focus_Block")
+            delete(TimeBlock).where(
+                TimeBlock.userId == user_id, TimeBlock.blockType == "Focus_Block"
+            )
         )
         if new_blocks:
             self.db.add_all(new_blocks)
         await self.db.commit()
 
     async def get_by_id(self, block_id: str) -> TimeBlock | None:
-        result = await self.db.execute(select(TimeBlock).where(TimeBlock.id == block_id))
+        result = await self.db.execute(
+            select(TimeBlock).where(TimeBlock.id == block_id)
+        )
         return result.scalars().first()
 
     async def get_all(self) -> list[TimeBlock]:
@@ -296,27 +334,34 @@ class TimeBlocksRepository:
         return list(result.scalars().all())
 
     async def get_all_by_user(self, user_id: str) -> list[TimeBlock]:
-        result = await self.db.execute(select(TimeBlock).where(TimeBlock.userId == user_id))
+        result = await self.db.execute(
+            select(TimeBlock).where(TimeBlock.userId == user_id)
+        )
         return list(result.scalars().all())
 
     async def get_synced_google_ids(self, user_id: str) -> list[str]:
         result = await self.db.execute(
             select(TimeBlock.externalEventId).where(
-                TimeBlock.userId == user_id,
-                TimeBlock.source == "Google"
+                TimeBlock.userId == user_id, TimeBlock.source == "Google"
             )
         )
         return [r for r in result.scalars().all() if r]
 
     async def delete_many_focus_blocks(self, user_id: str) -> None:
         await self.db.execute(
-            delete(TimeBlock).where(TimeBlock.userId == user_id, TimeBlock.blockType == "Focus_Block")
+            delete(TimeBlock).where(
+                TimeBlock.userId == user_id, TimeBlock.blockType == "Focus_Block"
+            )
         )
         await self.db.commit()
 
-    async def delete_many_by_external_ids(self, user_id: str, external_ids: list[str]) -> None:
+    async def delete_many_by_external_ids(
+        self, user_id: str, external_ids: list[str]
+    ) -> None:
         await self.db.execute(
-            delete(TimeBlock).where(TimeBlock.userId == user_id, TimeBlock.externalEventId.in_(external_ids))
+            delete(TimeBlock).where(
+                TimeBlock.userId == user_id, TimeBlock.externalEventId.in_(external_ids)
+            )
         )
         await self.db.commit()
 
@@ -341,7 +386,9 @@ class FocusSessionsRepository:
         return session
 
     async def get_by_id(self, session_id: str) -> FocusSession | None:
-        result = await self.db.execute(select(FocusSession).where(FocusSession.id == session_id))
+        result = await self.db.execute(
+            select(FocusSession).where(FocusSession.id == session_id)
+        )
         return result.scalars().first()
 
     async def get_all(self) -> list[FocusSession]:
@@ -349,7 +396,9 @@ class FocusSessionsRepository:
         return list(result.scalars().all())
 
     async def get_all_by_user(self, user_id: str) -> list[FocusSession]:
-        result = await self.db.execute(select(FocusSession).where(FocusSession.userId == user_id))
+        result = await self.db.execute(
+            select(FocusSession).where(FocusSession.userId == user_id)
+        )
         return list(result.scalars().all())
 
     async def save(self, session: FocusSession) -> FocusSession:

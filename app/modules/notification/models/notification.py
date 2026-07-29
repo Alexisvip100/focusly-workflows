@@ -15,4 +15,6 @@ class Notification(Base):
     title = Column(String, nullable=False)
     body = Column(String, nullable=False)
     createdAt = Column(DateTime, default=func.now(), nullable=False)
-    updatedAt = Column(DateTime, default=func.now(), onupdate=func.now(), nullable=False)
+    updatedAt = Column(
+        DateTime, default=func.now(), onupdate=func.now(), nullable=False
+    )

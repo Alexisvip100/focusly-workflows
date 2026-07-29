@@ -3,7 +3,6 @@ from sqlalchemy.sql import func
 from app.database import Base
 
 
-
 class ProjectGroup(Base):
     __tablename__ = "ProjectGroup"
 
@@ -13,4 +12,6 @@ class ProjectGroup(Base):
     color = Column(String, nullable=True)
     emoji = Column(String, nullable=True)
     createdAt = Column(DateTime, default=func.now(), nullable=False)
-    updatedAt = Column(DateTime, default=func.now(), onupdate=func.now(), nullable=False)
+    updatedAt = Column(
+        DateTime, default=func.now(), onupdate=func.now(), nullable=False
+    )
