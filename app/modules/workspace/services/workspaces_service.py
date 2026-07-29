@@ -1,4 +1,5 @@
 import uuid
+import asyncio
 from datetime import datetime
 from typing import Any
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -92,7 +93,32 @@ class WorkspacesService:
             workspace.groupId = update_input["groupId"]
 
         workspace.updatedAt = now
-        return await self.repository.save(workspace)
+        saved = await self.repository.save(workspace)
+
+        # ── Trigger: Automatización TODO ─────────────────────────────────────
+        # Solo se ejecuta si el contenido del workspace cambió.
+        # Se lanza como tarea en background para NO bloquear ni ralentizar
+        # la respuesta del save. Si falla, no afecta al usuario.
+        if "content" in update_input and saved.content:
+            from app.modules.automation.services.automation_engine import run_todo_automation
+            from app.database import async_session_local
+
+            async def _run_automation_bg():  # noqa: E306
+                try:
+                    async with async_session_local() as bg_db:
+                        await run_todo_automation(
+                            workspace_id=saved.id,
+                            user_id=user_id,
+                            content=saved.content,
+                            db=bg_db,
+                        )
+                except Exception:
+                    pass  # El workflow nunca debe romper el save
+
+            asyncio.create_task(_run_automation_bg())
+        # ─────────────────────────────────────────────────────────────────────
+
+        return saved
 
     async def remove(self, id: str, user_id: str) -> bool:
         workspace = await self.repository.get_by_id_and_user(id, user_id)

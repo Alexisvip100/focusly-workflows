@@ -22,12 +22,15 @@ from app.modules.notification.models.notification import Notification
 from app.modules.task.models.tag import Tag
 from app.modules.workspace.models.project_group import ProjectGroup
 from app.modules.task.models.task import Task
+from app.modules.automation.models.automation_log import AutomationLog
 
 __all__ = [
     # AI Models
     "Conversation",
     "Message",
     "UserMemory",
+    # Automation Models
+    "AutomationLog",
     # Focus Session Models
     "FocusSession",
     # Notification Models

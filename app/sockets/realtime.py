@@ -38,5 +38,40 @@ class RealTimeGateway:
         room_name = f"user_{user_id}"
         await self.sio.emit('schedule_updated', data, room=room_name, namespace='/realtime')
 
+    async def emit_automation_result(
+        self,
+        user_id: str,
+        workspace_id: str,
+        tasks_created: list[dict],
+    ):
+        """
+        Emite el evento 'automation_triggered' al frontend cuando el
+        motor de automatización crea tareas automáticamente.
+
+        El frontend escucha este evento y muestra un toast tipo:
+          "⚡ 2 tareas creadas automáticamente desde el workspace"
+
+        Payload enviado al frontend:
+          {
+            "workspaceId": "...",
+            "tasksCreated": [
+              {"taskId": "...", "taskTitle": "Revisar UI"},
+              ...
+            ],
+            "count": 2
+          }
+        """
+        room_name = f"user_{user_id}"
+        await self.sio.emit(
+            'automation_triggered',
+            {
+                "workspaceId": workspace_id,
+                "tasksCreated": tasks_created,
+                "count": len(tasks_created),
+            },
+            room=room_name,
+            namespace='/realtime',
+        )
+
 # Singleton instance
 realtime_gateway = RealTimeGateway()
