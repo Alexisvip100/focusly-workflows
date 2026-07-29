@@ -24,6 +24,7 @@ Ejemplo:
   detectar_todos(content)
   → [TodoItem(text="Diseñar el login", hash="a3f9...")]
 """
+
 import json
 import re
 import hashlib
@@ -32,15 +33,15 @@ from dataclasses import dataclass
 
 @dataclass
 class TodoItem:
-    text: str   # Texto limpio del TODO (lo que se usará como título de tarea)
-    hash: str   # SHA-256 del texto → para deduplicación
+    text: str  # Texto limpio del TODO (lo que se usará como título de tarea)
+    hash: str  # SHA-256 del texto → para deduplicación
 
 
 # Patrones que reconocemos como TODO
 _PATTERNS = [
-    re.compile(r'^TODO:\s*(.+)', re.IGNORECASE),   # TODO: texto
-    re.compile(r'^-\s*\[\s*\]\s*(.+)'),             # - [ ] texto
-    re.compile(r'^☐\s*(.+)'),                       # ☐ texto (unicode checkbox)
+    re.compile(r"^TODO:\s*(.+)", re.IGNORECASE),  # TODO: texto
+    re.compile(r"^-\s*\[\s*\]\s*(.+)"),  # - [ ] texto
+    re.compile(r"^☐\s*(.+)"),  # ☐ texto (unicode checkbox)
 ]
 
 
@@ -128,10 +129,12 @@ def detect_todos(content: str) -> list[TodoItem]:
             if match:
                 task_title = match.group(1).strip()
                 if task_title:
-                    todos.append(TodoItem(
-                        text=task_title,
-                        hash=_make_hash(task_title),
-                    ))
+                    todos.append(
+                        TodoItem(
+                            text=task_title,
+                            hash=_make_hash(task_title),
+                        )
+                    )
                 break  # Un bloque → máximo un TODO
 
     return todos

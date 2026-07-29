@@ -43,7 +43,6 @@ class RealTimeGateway:
             "schedule_updated", data, room=room_name, namespace="/realtime"
         )
 
-
     async def emit_automation_result(
         self,
         user_id: str,
@@ -69,15 +68,16 @@ class RealTimeGateway:
         """
         room_name = f"user_{user_id}"
         await self.sio.emit(
-            'automation_triggered',
+            "automation_triggered",
             {
                 "workspaceId": workspace_id,
                 "tasksCreated": tasks_created,
                 "count": len(tasks_created),
             },
             room=room_name,
-            namespace='/realtime',
+            namespace="/realtime",
         )
+
 
 # Singleton instance
 realtime_gateway = RealTimeGateway()

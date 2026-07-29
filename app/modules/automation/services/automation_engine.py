@@ -40,6 +40,7 @@ Flujo completo:
        ↓
   Frontend muestra toast: "⚡ 1 tarea creada automáticamente"
 """
+
 import uuid
 from datetime import datetime, timezone
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -72,6 +73,7 @@ async def run_todo_automation(
         Vacía si no se creó ninguna tarea.
     """
     import logging
+
     logger = logging.getLogger("automation")
 
     # ─── DEBUG: Ver exactamente qué llega ────────────────────────────────────
@@ -90,7 +92,6 @@ async def run_todo_automation(
     created_tasks: list[dict] = []
 
     for todo in todo_items:
-
         # ─── 2. Verificar si este TODO ya fue procesado (anti-duplicado) ─────
         existing = await db.execute(
             select(AutomationLog).where(
@@ -109,18 +110,18 @@ async def run_todo_automation(
         new_task = Task(
             id=task_id,
             userId=user_id,
-            workspaceId=workspace_id,          # Vinculada al workspace
+            workspaceId=workspace_id,  # Vinculada al workspace
             title=todo.text,
             notesEncrypted=f"## Creada automáticamente desde Workspace\n\n**TODO detectado:** {todo.text}",
-            estimateTimer=1800,                 # 30 minutos por defecto
+            estimateTimer=1800,  # 30 minutos por defecto
             realTimer=0.0,
-            priorityLevel=2,                   # Medium por defecto
+            priorityLevel=2,  # Medium por defecto
             category="General",
-            color="#6366f1",                   # Indigo — color de automatización
+            color="#6366f1",  # Indigo — color de automatización
             status="Backlog",
             deadline=now,
             use_ai=False,
-            source="automation",               # Identifica tareas creadas por workflow
+            source="automation",  # Identifica tareas creadas por workflow
             notified=False,
             lastMinuteNotified=False,
             tags=[],
@@ -142,10 +143,12 @@ async def run_todo_automation(
         )
         db.add(log_entry)
 
-        created_tasks.append({
-            "taskId": task_id,
-            "taskTitle": todo.text,
-        })
+        created_tasks.append(
+            {
+                "taskId": task_id,
+                "taskTitle": todo.text,
+            }
+        )
 
     if not created_tasks:
         return []

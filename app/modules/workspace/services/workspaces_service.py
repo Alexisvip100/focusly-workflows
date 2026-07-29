@@ -110,7 +110,9 @@ class WorkspacesService:
         # Se lanza como tarea en background para NO bloquear ni ralentizar
         # la respuesta del save. Si falla, no afecta al usuario.
         if "content" in update_input and saved.content:
-            from app.modules.automation.services.automation_engine import run_todo_automation
+            from app.modules.automation.services.automation_engine import (
+                run_todo_automation,
+            )
             from app.database import async_session_local
 
             async def _run_automation_bg():  # noqa: E306

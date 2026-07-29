@@ -17,6 +17,7 @@ Columnas:
   taskId      : ID de la tarea creada en la tabla Task
   createdAt   : Timestamp de ejecución
 """
+
 from sqlalchemy import Column, String, DateTime, Integer
 from sqlalchemy.sql import func
 from app.database import Base
@@ -25,10 +26,10 @@ from app.database import Base
 class AutomationLog(Base):
     __tablename__ = "AutomationLog"
 
-    id          = Column(Integer, primary_key=True, autoincrement=True)
+    id = Column(Integer, primary_key=True, autoincrement=True)
     workspaceId = Column(String, nullable=False, index=True)
-    userId      = Column(String, nullable=False, index=True)
-    todoHash    = Column(String, nullable=False, index=True)
-    taskTitle   = Column(String, nullable=True)
-    taskId      = Column(String, nullable=True)
-    createdAt   = Column(DateTime, default=func.now(), nullable=False)
+    userId = Column(String, nullable=False, index=True)
+    todoHash = Column(String, nullable=False, index=True)
+    taskTitle = Column(String, nullable=True)
+    taskId = Column(String, nullable=True)
+    createdAt = Column(DateTime, default=func.now(), nullable=False)
