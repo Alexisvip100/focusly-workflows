@@ -1,14 +1,20 @@
-from sqlalchemy import Column, String, Integer, DateTime
+from datetime import datetime
+
+from sqlalchemy import DateTime, Integer, String
+from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import func
+
 from app.database import Base
 
 
 class Message(Base):
     __tablename__ = "Message"
 
-    id = Column(String, primary_key=True, index=True)
-    conversationId = Column(String, nullable=False, index=True)
-    role = Column(String, nullable=False)
-    content = Column(String, nullable=False)
-    tokenUsage = Column(Integer, nullable=True, default=0)
-    createdAt = Column(DateTime, default=func.now(), nullable=False)
+    id: Mapped[str] = mapped_column(String, primary_key=True, index=True)
+    conversationId: Mapped[str] = mapped_column(String, nullable=False, index=True)
+    role: Mapped[str] = mapped_column(String, nullable=False)
+    content: Mapped[str] = mapped_column(String, nullable=False)
+    tokenUsage: Mapped[int | None] = mapped_column(Integer, nullable=True, default=0)
+    createdAt: Mapped[datetime] = mapped_column(
+        DateTime, default=func.now(), nullable=False
+    )

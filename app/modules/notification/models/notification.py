@@ -1,20 +1,26 @@
-from sqlalchemy import Column, String, DateTime
+from datetime import datetime
+
+from sqlalchemy import DateTime, String
+from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import func
+
 from app.database import Base
 
 
 class Notification(Base):
     __tablename__ = "Notification"
 
-    id = Column(String, primary_key=True, index=True)
-    userId = Column(String, nullable=False, index=True)
-    relatedTaskId = Column(String, nullable=True)
-    type = Column(String, nullable=False)
-    scheduledAt = Column(DateTime, nullable=False)
-    status = Column(String, nullable=False, default="pending")
-    title = Column(String, nullable=False)
-    body = Column(String, nullable=False)
-    createdAt = Column(DateTime, default=func.now(), nullable=False)
-    updatedAt = Column(
+    id: Mapped[str] = mapped_column(String, primary_key=True, index=True)
+    userId: Mapped[str] = mapped_column(String, nullable=False, index=True)
+    relatedTaskId: Mapped[str | None] = mapped_column(String, nullable=True)
+    type: Mapped[str] = mapped_column(String, nullable=False)
+    scheduledAt: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    status: Mapped[str] = mapped_column(String, nullable=False, default="pending")
+    title: Mapped[str] = mapped_column(String, nullable=False)
+    body: Mapped[str] = mapped_column(String, nullable=False)
+    createdAt: Mapped[datetime] = mapped_column(
+        DateTime, default=func.now(), nullable=False
+    )
+    updatedAt: Mapped[datetime] = mapped_column(
         DateTime, default=func.now(), onupdate=func.now(), nullable=False
     )

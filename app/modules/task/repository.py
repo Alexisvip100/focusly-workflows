@@ -78,10 +78,14 @@ def deserialize_task(data: dict) -> Task:
         datetime.fromisoformat(data["completedAt"]) if data.get("completedAt") else None
     )
     t.createdAt = (
-        datetime.fromisoformat(data["createdAt"]) if data.get("createdAt") else None
+        datetime.fromisoformat(data["createdAt"])
+        if data.get("createdAt")
+        else datetime.now()
     )
     t.updatedAt = (
-        datetime.fromisoformat(data["updatedAt"]) if data.get("updatedAt") else None
+        datetime.fromisoformat(data["updatedAt"])
+        if data.get("updatedAt")
+        else datetime.now()
     )
     t.deletedAt = (
         datetime.fromisoformat(data["deletedAt"]) if data.get("deletedAt") else None
@@ -269,7 +273,7 @@ class TasksRepository:
             )
 
         result = await self.db.execute(query)
-        return list(result.all())
+        return [(t, u) for t, u in result.all()]
 
 
 class TagsRepository:

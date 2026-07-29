@@ -1,3 +1,5 @@
+from typing import Any
+
 import strawberry
 
 from app.graphql import types
@@ -88,7 +90,7 @@ class TaskMutation:
         gc_service = GoogleCalendarService(db, auth_serv, tasks_serv, sched_serv)
         tasks_serv.google_calendar_service = gc_service
 
-        update_data = {
+        update_data: dict[str, Any] = {
             "userId": update_task_input.user_id
             if update_task_input.user_id is not None
             else user_id

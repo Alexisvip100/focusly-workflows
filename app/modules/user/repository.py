@@ -32,10 +32,14 @@ def serialize_user(user: User) -> dict:
 
 def deserialize_user(data: dict) -> User:
     created_at = (
-        datetime.fromisoformat(data["createdAt"]) if data.get("createdAt") else None
+        datetime.fromisoformat(data["createdAt"])
+        if data.get("createdAt")
+        else datetime.now()
     )
     updated_at = (
-        datetime.fromisoformat(data["updatedAt"]) if data.get("updatedAt") else None
+        datetime.fromisoformat(data["updatedAt"])
+        if data.get("updatedAt")
+        else datetime.now()
     )
     last_sync_at = (
         datetime.fromisoformat(data["lastSyncAt"]) if data.get("lastSyncAt") else None

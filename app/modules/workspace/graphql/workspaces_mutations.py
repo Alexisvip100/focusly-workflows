@@ -1,3 +1,5 @@
+from typing import Any
+
 import strawberry
 
 from app.graphql import types
@@ -37,7 +39,7 @@ class WorkspaceMutation:
             emoji=res.emoji,
             background_color=res.background_color,
             card_show_background=res.card_show_background,
-            groupId=res.groupId,
+            projectId=res.groupId,
             content=res.content,
             saveStatus=res.saveStatus,
             createdAt=res.createdAt,
@@ -52,7 +54,7 @@ class WorkspaceMutation:
         db = info.context["db"]
         ws_serv = WorkspacesService(db)
 
-        update_data = {}
+        update_data: dict[str, Any] = {}
         if update_workspace_input.title is not None:
             update_data["title"] = update_workspace_input.title
         if update_workspace_input.emoji is not None:
@@ -81,7 +83,7 @@ class WorkspaceMutation:
             emoji=res.emoji,
             background_color=res.background_color,
             card_show_background=res.card_show_background,
-            groupId=res.groupId,
+            projectId=res.groupId,
             content=res.content,
             saveStatus=res.saveStatus,
             createdAt=res.createdAt,

@@ -19,10 +19,14 @@ def serialize_conversation(c: Conversation) -> dict:
 
 def deserialize_conversation(data: dict) -> Conversation:
     created_at = (
-        datetime.fromisoformat(data["createdAt"]) if data.get("createdAt") else None
+        datetime.fromisoformat(data["createdAt"])
+        if data.get("createdAt")
+        else datetime.now()
     )
     updated_at = (
-        datetime.fromisoformat(data["updatedAt"]) if data.get("updatedAt") else None
+        datetime.fromisoformat(data["updatedAt"])
+        if data.get("updatedAt")
+        else datetime.now()
     )
     c = Conversation(
         id=data["id"],
@@ -48,7 +52,9 @@ def serialize_message(m: Message) -> dict:
 
 def deserialize_message(data: dict) -> Message:
     created_at = (
-        datetime.fromisoformat(data["createdAt"]) if data.get("createdAt") else None
+        datetime.fromisoformat(data["createdAt"])
+        if data.get("createdAt")
+        else datetime.now()
     )
     m = Message(
         id=data["id"],

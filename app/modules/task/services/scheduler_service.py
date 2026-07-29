@@ -30,9 +30,9 @@ class SchedulerService:
         # 3. Sort tasks by priority and urgency
         sorted_tasks = self._sort_tasks_by_priority(tasks_to_schedule)
 
-        scheduled_tasks = []
-        unscheduled_tasks = []
-        conflicts = []
+        scheduled_tasks: list[dict[str, Any]] = []
+        unscheduled_tasks: list[dict[str, Any]] = []
+        conflicts: list[dict[str, Any]] = []
 
         # 5. Schedule each task
         for task in sorted_tasks:

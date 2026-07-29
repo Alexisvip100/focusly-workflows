@@ -26,10 +26,14 @@ def serialize_workspace(w: Workspace) -> dict:
 
 def deserialize_workspace(data: dict) -> Workspace:
     created_at = (
-        datetime.fromisoformat(data["createdAt"]) if data.get("createdAt") else None
+        datetime.fromisoformat(data["createdAt"])
+        if data.get("createdAt")
+        else datetime.now()
     )
     updated_at = (
-        datetime.fromisoformat(data["updatedAt"]) if data.get("updatedAt") else None
+        datetime.fromisoformat(data["updatedAt"])
+        if data.get("updatedAt")
+        else datetime.now()
     )
     w = Workspace(
         id=data["id"],
@@ -62,10 +66,14 @@ def serialize_group(g: ProjectGroup) -> dict:
 
 def deserialize_group(data: dict) -> ProjectGroup:
     created_at = (
-        datetime.fromisoformat(data["createdAt"]) if data.get("createdAt") else None
+        datetime.fromisoformat(data["createdAt"])
+        if data.get("createdAt")
+        else datetime.now()
     )
     updated_at = (
-        datetime.fromisoformat(data["updatedAt"]) if data.get("updatedAt") else None
+        datetime.fromisoformat(data["updatedAt"])
+        if data.get("updatedAt")
+        else datetime.now()
     )
     g = ProjectGroup(
         id=data["id"],

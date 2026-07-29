@@ -18,18 +18,24 @@ Columnas:
   createdAt   : Timestamp de ejecución
 """
 
-from sqlalchemy import Column, String, DateTime, Integer
+from datetime import datetime
+
+from sqlalchemy import DateTime, Integer, String
+from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import func
+
 from app.database import Base
 
 
 class AutomationLog(Base):
     __tablename__ = "AutomationLog"
 
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    workspaceId = Column(String, nullable=False, index=True)
-    userId = Column(String, nullable=False, index=True)
-    todoHash = Column(String, nullable=False, index=True)
-    taskTitle = Column(String, nullable=True)
-    taskId = Column(String, nullable=True)
-    createdAt = Column(DateTime, default=func.now(), nullable=False)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    workspaceId: Mapped[str] = mapped_column(String, nullable=False, index=True)
+    userId: Mapped[str] = mapped_column(String, nullable=False, index=True)
+    todoHash: Mapped[str] = mapped_column(String, nullable=False, index=True)
+    taskTitle: Mapped[str | None] = mapped_column(String, nullable=True)
+    taskId: Mapped[str | None] = mapped_column(String, nullable=True)
+    createdAt: Mapped[datetime] = mapped_column(
+        DateTime, default=func.now(), nullable=False
+    )

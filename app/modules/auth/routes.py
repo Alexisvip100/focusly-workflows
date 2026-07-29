@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Response, Request, HTTPException, Depends
-from typing import Any
+from typing import Any, Literal
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -37,7 +37,9 @@ def get_auth_service(db: AsyncSession = Depends(get_db)) -> AuthService:
 
 def set_auth_cookies(response: Response, result: dict[str, Any]):
     is_secure = settings.IS_PRODUCTION
-    samesite_val = "none" if settings.IS_PRODUCTION else "lax"
+    samesite_val: Literal["none", "lax"] = (
+        "none" if settings.IS_PRODUCTION else "lax"
+    )
     response.set_cookie(
         key="access_token",
         value=result["access_token"],
@@ -119,7 +121,9 @@ async def refresh_google_token(
 
 @router.post("/logout")
 async def logout(response: Response):
-    samesite_val = "none" if settings.IS_PRODUCTION else "lax"
+    samesite_val: Literal["none", "lax"] = (
+        "none" if settings.IS_PRODUCTION else "lax"
+    )
     response.delete_cookie(
         key="access_token", secure=True, httponly=True, samesite=samesite_val
     )

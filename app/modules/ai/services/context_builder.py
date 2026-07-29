@@ -140,7 +140,7 @@ async def build_context(
             .order_by(Message.createdAt.desc())
             .limit(10)
         )
-        recent_messages = msg_result.scalars().all()
+        recent_messages = list(msg_result.scalars().all())
         # They come out desc, so reverse them for chronological
         recent_messages.reverse()
 

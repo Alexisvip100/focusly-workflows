@@ -1,30 +1,43 @@
-from sqlalchemy import Column, String, DateTime, JSON, BigInteger
+from datetime import datetime
+from typing import Any
+
+from sqlalchemy import BigInteger, DateTime, JSON, String
+from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import func
+
 from app.database import Base
 
 
 class User(Base):
     __tablename__ = "User"
 
-    id = Column(String, primary_key=True, index=True)
-    email = Column(String, unique=True, index=True, nullable=False)
-    name = Column(String, nullable=True)
-    picture = Column(String, nullable=True)
-    role = Column(String, nullable=True)
-    bio = Column(String, nullable=True)
-    passwordHash = Column(String, nullable=True)
-    authProvider = Column(String, nullable=True)
-    googleRefreshToken = Column(String, nullable=True)
-    subscriptionStatus = Column(String, default="free", nullable=False)
-    settings = Column(JSON, nullable=True)
-    externalId = Column(String, nullable=True)
-    fcmToken = Column(String, nullable=True)
-    createdAt = Column(DateTime, default=func.now(), nullable=False)
-    updatedAt = Column(
+    id: Mapped[str] = mapped_column(String, primary_key=True, index=True)
+    email: Mapped[str] = mapped_column(
+        String, unique=True, index=True, nullable=False
+    )
+    name: Mapped[str | None] = mapped_column(String, nullable=True)
+    picture: Mapped[str | None] = mapped_column(String, nullable=True)
+    role: Mapped[str | None] = mapped_column(String, nullable=True)
+    bio: Mapped[str | None] = mapped_column(String, nullable=True)
+    passwordHash: Mapped[str | None] = mapped_column(String, nullable=True)
+    authProvider: Mapped[str | None] = mapped_column(String, nullable=True)
+    googleRefreshToken: Mapped[str | None] = mapped_column(String, nullable=True)
+    subscriptionStatus: Mapped[str] = mapped_column(
+        String, default="free", nullable=False
+    )
+    settings: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+    externalId: Mapped[str | None] = mapped_column(String, nullable=True)
+    fcmToken: Mapped[str | None] = mapped_column(String, nullable=True)
+    createdAt: Mapped[datetime] = mapped_column(
+        DateTime, default=func.now(), nullable=False
+    )
+    updatedAt: Mapped[datetime] = mapped_column(
         DateTime, default=func.now(), onupdate=func.now(), nullable=False
     )
-    lastSyncAt = Column(DateTime, nullable=True)
-    googleCalendarSyncToken = Column(String, nullable=True)
-    googleChannelId = Column(String, nullable=True)
-    googleResourceId = Column(String, nullable=True)
-    googleChannelExpiration = Column(BigInteger, nullable=True)
+    lastSyncAt: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    googleCalendarSyncToken: Mapped[str | None] = mapped_column(String, nullable=True)
+    googleChannelId: Mapped[str | None] = mapped_column(String, nullable=True)
+    googleResourceId: Mapped[str | None] = mapped_column(String, nullable=True)
+    googleChannelExpiration: Mapped[int | None] = mapped_column(
+        BigInteger, nullable=True
+    )

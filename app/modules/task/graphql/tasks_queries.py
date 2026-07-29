@@ -1,3 +1,5 @@
+from typing import Any
+
 import strawberry
 
 from app.graphql import types
@@ -22,7 +24,7 @@ class TaskQuery:
         tasks_serv = TasksService(db)
 
         # Convert filters input to dict
-        filters_dict = None
+        filters_dict: dict[str, Any] | None = None
         if filters:
             filters_dict = {}
             if filters.status is not None:
@@ -64,7 +66,7 @@ class TaskQuery:
         db = info.context["db"]
         tasks_serv = TasksService(db)
 
-        filters_dict = None
+        filters_dict: dict[str, Any] | None = None
         if filters:
             filters_dict = {}
             if filters.status is not None:

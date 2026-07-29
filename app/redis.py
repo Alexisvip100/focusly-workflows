@@ -60,7 +60,7 @@ class ResilientRedisCache:
         return self.client is not None
 
     async def get(self, key: str) -> Any | None:
-        if not await self._ensure_connected():
+        if not await self._ensure_connected() or self.client is None:
             return None
         try:
             val = await self.client.get(key)
@@ -71,7 +71,7 @@ class ResilientRedisCache:
         return None
 
     async def set(self, key: str, value: Any, expire_seconds: int = 3600) -> bool:
-        if not await self._ensure_connected():
+        if not await self._ensure_connected() or self.client is None:
             return False
         try:
             serialized = json.dumps(value)
@@ -82,7 +82,7 @@ class ResilientRedisCache:
         return False
 
     async def delete(self, key: str) -> bool:
-        if not await self._ensure_connected():
+        if not await self._ensure_connected() or self.client is None:
             return False
         try:
             await self.client.delete(key)
@@ -92,7 +92,7 @@ class ResilientRedisCache:
         return False
 
     async def delete_pattern(self, pattern: str) -> bool:
-        if not await self._ensure_connected():
+        if not await self._ensure_connected() or self.client is None:
             return False
         try:
             keys = await self.client.keys(pattern)

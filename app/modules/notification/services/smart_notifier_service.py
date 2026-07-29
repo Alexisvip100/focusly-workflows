@@ -12,6 +12,7 @@ prevent notification spam.
 import asyncio
 import uuid
 from datetime import datetime, timedelta
+from typing import Any
 
 from sqlalchemy import func, select, cast, Date
 from sqlalchemy.sql import extract
@@ -487,7 +488,7 @@ async def _check_focus_shield(db, now: datetime) -> None:
 
 # ─── 12. Logros desbloqueados ─────────────────────────────────────────────────
 
-_ACHIEVEMENTS = [
+_ACHIEVEMENTS: list[dict[str, Any]] = [
     {
         "key": "early_bird",
         "title": "⭐ Logro: Madrugador",

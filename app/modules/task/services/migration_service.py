@@ -1,9 +1,6 @@
 from datetime import datetime
 from typing import Any
 
-# pyrefly: ignore [missing-import]
-import numpy as np
-
 
 class MigrationService:
     def migrate_task(self, task: dict[str, Any]) -> dict[str, Any]:
@@ -31,7 +28,7 @@ class MigrationService:
     def migrate_time_block(self, time_block: dict[str, Any]) -> dict[str, Any]:
         start = self._parse_date(time_block.get("startTime"))
         end = self._parse_date(time_block.get("endTime"))
-        duration = (np.subtract(end, start)).total_seconds() / 60.0
+        duration = (end - start).total_seconds() / 60.0 if start and end else 0.0
 
         return {
             "id": time_block.get("id"),
@@ -164,7 +161,8 @@ class MigrationService:
         }
 
     def _is_meeting(self, task: dict[str, Any]) -> bool:
-        if task.get("collaborators") and len(task.get("collaborators")) > 0:
+        collaborators = task.get("collaborators") or []
+        if len(collaborators) > 0:
             return True
         links = task.get("links") or []
         for l in links:
