@@ -24,9 +24,7 @@ class Task(Base):
     estimated_start_date: Mapped[datetime | None] = mapped_column(
         DateTime, nullable=True
     )
-    estimated_end_date: Mapped[datetime | None] = mapped_column(
-        DateTime, nullable=True
-    )
+    estimated_end_date: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     deadline: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     status: Mapped[str] = mapped_column(String, nullable=False, default="Todo")
     completedAt: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
@@ -47,14 +45,10 @@ class Task(Base):
     source: Mapped[str | None] = mapped_column(String, nullable=True)
     sync_status: Mapped[str | None] = mapped_column(String, nullable=True)
     collaborators: Mapped[Any | None] = mapped_column(JSON, nullable=True)
-    notified: Mapped[bool | None] = mapped_column(
-        Boolean, nullable=True, default=False
-    )
+    notified: Mapped[bool | None] = mapped_column(Boolean, nullable=True, default=False)
     lastMinuteNotified: Mapped[bool | None] = mapped_column(
         Boolean, nullable=True, default=False
     )
     use_ai: Mapped[bool | None] = mapped_column(Boolean, nullable=True, default=False)
     workspaceId: Mapped[str | None] = mapped_column(String, nullable=True)
-    is_owner: Mapped[bool | None] = mapped_column(
-        Boolean, nullable=True, default=False
-    )
+    is_owner: Mapped[bool | None] = mapped_column(Boolean, nullable=True, default=False)

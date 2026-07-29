@@ -16,9 +16,7 @@ class Workspace(Base):
     title: Mapped[str] = mapped_column(String, nullable=False)
     emoji: Mapped[str | None] = mapped_column(String, nullable=True)
     background_color: Mapped[str | None] = mapped_column(String, nullable=True)
-    card_show_background: Mapped[bool | None] = mapped_column(
-        Boolean, nullable=True
-    )
+    card_show_background: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     groupId: Mapped[str | None] = mapped_column(String, nullable=True)
     content: Mapped[str] = mapped_column(String, nullable=False)
     saveStatus: Mapped[bool | None] = mapped_column(

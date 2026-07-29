@@ -16,12 +16,8 @@ class FocusSession(Base):
     startedAt: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     endedAt: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     durationMinutes: Mapped[int] = mapped_column(Integer, nullable=False)
-    distractionCount: Mapped[int] = mapped_column(
-        Integer, nullable=False, default=0
-    )
-    wasSuccessful: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, default=True
-    )
+    distractionCount: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    wasSuccessful: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     createdAt: Mapped[datetime] = mapped_column(
         DateTime, default=func.now(), nullable=False
     )
