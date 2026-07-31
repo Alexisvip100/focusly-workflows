@@ -39,7 +39,6 @@ async def main():
         # start: 2026-05-25T00:00:00.000Z
         # end: 2026-07-07T23:59:59.000Z
         from app.graphql import types
-        import strawberry
 
         # We construct filters object
         # Since strawberry types might have constructor or field types
