@@ -7,6 +7,7 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from app.database import engine, Base
 
+
 async def init_db():
     print("Initializing database...")
     async with engine.begin() as conn:
