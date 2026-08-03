@@ -1,15 +1,15 @@
 import strawberry
-from app.modules.task.graphql.tasks_queries import TaskQuery
-from app.modules.task.graphql.tasks_mutations import TaskMutation
-from app.modules.workspace.graphql.workspaces_queries import WorkspaceQuery
-from app.modules.workspace.graphql.workspaces_mutations import WorkspaceMutation
-from app.modules.auth.graphql.mutations import AuthMutation
-from app.modules.task.graphql.tags_queries import TagQuery
-from app.modules.insights.graphql.queries import InsightsQuery
-from app.modules.workspace.graphql.project_groups_queries import ProjectGroupQuery
-from app.modules.workspace.graphql.project_groups_mutations import ProjectGroupMutation
-from app.modules.notification.graphql.notifications_queries import NotificationQuery
-from app.modules.notification.graphql.notifications_mutations import (
+from app.modules.task.presentation.graphql import TaskQuery, TaskMutation, TagQuery
+from app.modules.workspace.presentation.graphql import (
+    WorkspaceQuery,
+    WorkspaceMutation,
+    ProjectGroupQuery,
+    ProjectGroupMutation,
+)
+from app.modules.auth.presentation.graphql import AuthMutation
+from app.modules.insights.presentation.graphql import InsightsQuery
+from app.modules.notification.presentation.graphql import (
+    NotificationQuery,
     NotificationMutation,
 )
 

@@ -1,50 +1,41 @@
 """
-Paquete de modelos SQLAlchemy para Focusly Workflows.
-
-Este paquete contiene todos los modelos de base de datos organizados por dominio.
-Proporciona dos formas de importar modelos:
-
-1. Desde el módulo centralizado:
-    from app.models.models import Task, User, Workspace
-
-2. Directamente del paquete (recomendado):
-    from app.models import Task, User, Workspace
+Paquete centralizado de modelos de dominio para Focusly Workflows (DDD).
 """
 
-from app.modules.user.models.user import User
-from app.modules.workspace.models.workspace import Workspace
-from app.modules.ai.models.conversation import Conversation
-from app.modules.ai.models.message import Message
-from app.modules.ai.models.user_memory import UserMemory
-from app.modules.task.models.time_block import TimeBlock
-from app.modules.task.models.focus_session import FocusSession
-from app.modules.notification.models.notification import Notification
-from app.modules.task.models.tag import Tag
-from app.modules.workspace.models.project_group import ProjectGroup
-from app.modules.task.models.task import Task
-from app.modules.automation.models.automation_log import AutomationLog
+from app.modules.user.domain.entities.user import User
+from app.modules.workspace.domain.entities.workspace import Workspace
+from app.modules.workspace.domain.entities.project_group import ProjectGroup
+from app.modules.ai.domain.entities.conversation import Conversation
+from app.modules.ai.domain.entities.message import Message
+from app.modules.ai.domain.entities.user_memory import UserMemory
+from app.modules.task.domain.entities.time_block import TimeBlock
+from app.modules.task.domain.entities.focus_session import FocusSession
+from app.modules.task.domain.entities.tag import Tag
+from app.modules.task.domain.entities.task import Task
+from app.modules.notification.domain.entities.notification import Notification
+from app.modules.automation.domain.entities.automation_log import AutomationLog
 
 __all__ = [
-    # AI Models
+    # AI Entities
     "Conversation",
     "Message",
     "UserMemory",
-    # Automation Models
+    # Automation Entities
     "AutomationLog",
-    # Focus Session Models
+    # Focus Session Entities
     "FocusSession",
-    # Notification Models
+    # Notification Entities
     "Notification",
-    # ProjectGroup Models
+    # ProjectGroup Entities
     "ProjectGroup",
-    # Tag Models
+    # Tag Entities
     "Tag",
-    # Task Models
+    # Task Entities
     "Task",
-    # TimeBlock Models
+    # TimeBlock Entities
     "TimeBlock",
-    # User Models
+    # User Entities
     "User",
-    # Workspace Models
+    # Workspace Entities
     "Workspace",
 ]

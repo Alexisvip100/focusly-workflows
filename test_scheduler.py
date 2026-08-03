@@ -91,7 +91,7 @@ async def main():
         result = await db.execute(select(TimeBlock).where(TimeBlock.userId == user.id))
         time_blocks = result.scalars().all()
 
-        from app.services.tasks.migration_service import MigrationService
+        from app.modules.task.services.migration_service import MigrationService
 
         migrator = MigrationService()
 

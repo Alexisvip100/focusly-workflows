@@ -9,12 +9,13 @@ import socketio
 from app.config import settings
 from app.database import async_session_local
 from app.sockets.realtime import sio
-from app.modules.auth.routes import router as auth_router
-from app.modules.user.routes import router as users_router
-from app.modules.google_calendar.routes import router as google_calendar_router
-from app.modules.task.routes.time_blocks import router as time_blocks_router
-from app.modules.ai.routes.ai import router as ai_router
-from app.modules.ai.routes.planner import router as planner_router
+from app.modules.auth.presentation.rest import router as auth_router
+from app.modules.user.presentation.rest import router as users_router
+from app.modules.google_calendar.presentation.rest import (
+    router as google_calendar_router,
+)
+from app.modules.task.presentation.rest import time_blocks_router
+from app.modules.ai.presentation.rest import ai_router, planner_router
 from app.modules.notification.services.task_notifier_service import (
     run_task_notifier_loop,
 )

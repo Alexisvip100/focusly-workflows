@@ -18,7 +18,7 @@ class SchedulerService:
         constraints: dict[str, Any],
         existing_work_blocks: list[dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
-        scheduled_at = datetime.utcnow()
+        scheduled_at = datetime.now()
         existing_work_blocks = existing_work_blocks or []
 
         # 1. Build the timeline of hard constraints
@@ -216,7 +216,7 @@ class SchedulerService:
     def _calculate_scheduling_window(
         self, task: dict[str, Any], constraints: dict[str, Any]
     ) -> tuple[datetime, datetime]:
-        now = datetime.utcnow()
+        now = datetime.now()
         # Round to next 5 minutes
         minutes_to_add = 5 - (now.minute % 5)
         if minutes_to_add == 5 and now.second == 0:
@@ -341,8 +341,8 @@ class SchedulerService:
                 task, start, end, constraints
             ),
             "schedulingReason": self._get_scheduling_reason(task, start),
-            "createdAt": datetime.utcnow(),
-            "updatedAt": datetime.utcnow(),
+            "createdAt": datetime.now(),
+            "updatedAt": datetime.now(),
         }
 
     def _calculate_scheduling_score(
