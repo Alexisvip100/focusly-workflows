@@ -1,3 +1,4 @@
+import logging
 import uuid
 import re
 from datetime import datetime, timedelta
@@ -11,6 +12,8 @@ from app.modules.task.schemas.tasks import TaskCreateSchema
 from app.modules.task.repository import TasksRepository
 from app.modules.user.repository import UsersRepository
 from app.modules.workspace.repository import WorkspacesRepository
+
+logger = logging.getLogger(__name__)
 
 
 class TasksService:
@@ -96,8 +99,13 @@ class TasksService:
                     if google_event and google_event.get("id"):
                         task_data["google_event_id"] = google_event["id"]
                         task_data["task_type"] = "GoogleTask"
+                        task_data["google_synced_etag"] = google_event.get("etag")
             except Exception:
-                pass
+                logger.warning(
+                    "Failed to create mirrored Google Calendar event for a new task (user %s)",
+                    user_id,
+                    exc_info=True,
+                )
 
         task_id = task_data.get("id") or str(uuid.uuid4())
         now = datetime.utcnow()
@@ -225,6 +233,7 @@ class TasksService:
         skip_google_sync: bool = False,
     ) -> dict[str, Any]:
         task = await self.repository.get_by_id(id)
+        print("una tarea", task)
         if not task:
             # If update on non-existent task, we create it
             return await self.create(
@@ -302,11 +311,23 @@ class TasksService:
                     google_event_body = self._map_task_to_google_event(
                         updated_task_dict
                     )
-                    await self.google_calendar_service.patch_event(
+                    google_event = await self.google_calendar_service.patch_event(
                         task.userId, task.google_event_id, google_event_body
                     )
+                    # Record the resulting version so sync_calendar can tell,
+                    # deterministically (etag equality, not clock comparison),
+                    # that a later incoming copy of this same event is just an
+                    # echo of our own push rather than a genuine external edit.
+                    task.google_synced_etag = google_event.get("etag")
+                    task.sync_status = "synced"
                 except Exception:
-                    pass
+                    task.sync_status = "sync_error"
+                    logger.warning(
+                        "Failed to push task %s to Google Calendar event %s",
+                        task.id,
+                        task.google_event_id,
+                        exc_info=True,
+                    )
 
             await self.repository.save(task)
 

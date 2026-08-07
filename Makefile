@@ -12,7 +12,8 @@ stop_dependencies: ## Detiene los contenedores de dependencias
 
 compile: ## Verifica la sintaxis del código y la comprobación estática de tipos (Mypy)
 	uv run mypy app
-
+logs:
+	docker compose logs -f
 format: ## Formatea y aplica auto-correcciones al código con Ruff
 	uv run ruff format app
 	uv run ruff check --fix app

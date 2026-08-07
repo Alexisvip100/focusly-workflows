@@ -36,7 +36,14 @@ services:
     depends_on:
       - db
       - redis
+    networks:
+      - default
+      - focusly-net
 
 volumes:
   pgdata:
     driver: local
+
+networks:
+  focusly-net:
+    external: true

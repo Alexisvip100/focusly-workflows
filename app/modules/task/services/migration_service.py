@@ -16,7 +16,12 @@ class MigrationService:
             result["meeting"] = self._migrate_to_meeting(task)
             return result
 
-        # 3. If task has estimated dates, migrate to WorkBlock
+        # 3. If task has estimated dates, migrate to WorkBlock.
+        # This is what makes a manual drag/resize (or any task that was already
+        # scheduled) immovable by the auto-scheduler afterwards: only tasks
+        # WITHOUT both dates reach rule 4 below and get passed to schedule()
+        # as freely-assignable. Clearing either date is effectively "release
+        # this task back to the auto-scheduler".
         if task.get("estimated_start_date") and task.get("estimated_end_date"):
             result["workBlock"] = self._migrate_to_work_block(task)
             return result

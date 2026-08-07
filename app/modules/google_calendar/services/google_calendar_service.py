@@ -233,36 +233,21 @@ class GoogleCalendarService:
                             item, user_email=user.email
                         )
 
-                        # Check if this event already exists in DB and if so, whether
-                        # our local version is newer than the Google event's updated timestamp.
-                        # If the DB task was updated MORE RECENTLY than Google's event, we skip
-                        # overwriting estimated_start/end dates to preserve manual drag-and-drop changes.
-                        google_updated_str = item.get(
-                            "updated"
-                        )  # e.g. "2026-06-03T22:00:05.000Z"
-                        google_updated = None
-                        if google_updated_str:
-                            try:
-                                from datetime import timezone as _tz
-
-                                google_updated = (
-                                    datetime.fromisoformat(
-                                        google_updated_str.replace("Z", "+00:00")
-                                    )
-                                    .astimezone(_tz.utc)
-                                    .replace(tzinfo=None)
-                                )
-                            except Exception:
-                                pass
-
-                        preserve_dates = False
-                        if google_updated and event_id:
-                            if existing_task and existing_task.updatedAt:
-                                db_updated = existing_task.updatedAt
-                                # If our DB record is at least 2 seconds newer than Google's event,
-                                # it means WE triggered this change; skip date overwrite.
-                                if db_updated >= google_updated - timedelta(seconds=2):
-                                    preserve_dates = True
+                        # Decide whether this incoming copy of the event carries a
+                        # genuine external edit, or is merely Google echoing back a
+                        # version we already pushed/recorded ourselves. This is done
+                        # via exact etag equality (Google's own optimistic-concurrency
+                        # marker) rather than comparing timestamps between Focusly's
+                        # and Google's clocks — a wall-clock comparison is inherently
+                        # racy (clock drift, request latency, retried syncs) and would
+                        # silently let a still-in-flight local drag/resize get
+                        # overwritten by a stale Google copy.
+                        incoming_etag = item.get("etag")
+                        preserve_dates = bool(
+                            incoming_etag
+                            and existing_task
+                            and existing_task.google_synced_etag == incoming_etag
+                        )
 
                         task_data = {
                             "userId": user_id,
@@ -280,6 +265,7 @@ class GoogleCalendarService:
                             "links": processed["links"] or [],
                             "collaborators": processed["collaborators"] or [],
                             "is_owner": processed.get("is_owner", True),
+                            "google_synced_etag": incoming_etag,
                         }
 
                         # Only include dates from Google if we are NOT preserving local values

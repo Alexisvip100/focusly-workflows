@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
-from sqlalchemy import or_, delete, func
+from sqlalchemy import or_, delete, func, DateTime
 from app.models import Task, Tag, TimeBlock, FocusSession, User
 from app.redis import cache
 
@@ -9,88 +9,33 @@ INACTIVE_STATUSES = ["completed", "cancelled", "Completed"]
 
 
 def serialize_task(t: Task) -> dict:
-    return {
-        "id": t.id,
-        "userId": t.userId,
-        "title": t.title,
-        "notesEncrypted": t.notesEncrypted,
-        "estimateTimer": t.estimateTimer,
-        "realTimer": t.realTimer,
-        "duration": t.duration,
-        "priorityLevel": t.priorityLevel,
-        "category": t.category,
-        "color": t.color,
-        "estimated_start_date": t.estimated_start_date.isoformat()
-        if t.estimated_start_date
-        else None,
-        "estimated_end_date": t.estimated_end_date.isoformat()
-        if t.estimated_end_date
-        else None,
-        "deadline": t.deadline.isoformat() if t.deadline else None,
-        "status": t.status,
-        "google_event_id": t.google_event_id,
-        "source": t.source,
-        "notified": t.notified,
-        "lastMinuteNotified": t.lastMinuteNotified,
-        "tags": t.tags,
-        "links": t.links,
-        "collaborators": t.collaborators,
-        "use_ai": t.use_ai,
-        "completedAt": t.completedAt.isoformat() if t.completedAt else None,
-        "createdAt": t.createdAt.isoformat() if t.createdAt else None,
-        "updatedAt": t.updatedAt.isoformat() if t.updatedAt else None,
-        "deletedAt": t.deletedAt.isoformat() if t.deletedAt else None,
-    }
+    # Derived from Task.__table__.columns (rather than a hand-picked field
+    # list) so a column added to the model is automatically cached too —
+    # a field silently missing here previously caused it to read back as
+    # None from a warm cache even though the DB row had the real value
+    # (e.g. task_type, which broke the Google Calendar sync decision).
+    data = {}
+    for column in Task.__table__.columns:
+        value = getattr(t, column.name)
+        if isinstance(value, datetime):
+            value = value.isoformat()
+        data[column.name] = value
+    return data
 
 
 def deserialize_task(data: dict) -> Task:
-    t = Task(
-        id=data["id"],
-        userId=data["userId"],
-        title=data["title"],
-        notesEncrypted=data["notesEncrypted"],
-        estimateTimer=data["estimateTimer"],
-        realTimer=data["realTimer"],
-        duration=data["duration"],
-        priorityLevel=data["priorityLevel"],
-        category=data["category"],
-        color=data["color"],
-        estimated_start_date=datetime.fromisoformat(data["estimated_start_date"])
-        if data.get("estimated_start_date")
-        else None,
-        estimated_end_date=datetime.fromisoformat(data["estimated_end_date"])
-        if data.get("estimated_end_date")
-        else None,
-        deadline=datetime.fromisoformat(data["deadline"])
-        if data.get("deadline")
-        else None,
-        status=data["status"],
-        google_event_id=data["google_event_id"],
-        source=data["source"],
-        notified=data["notified"],
-        lastMinuteNotified=data["lastMinuteNotified"],
-        tags=data["tags"],
-        links=data["links"],
-        collaborators=data["collaborators"],
-        use_ai=data["use_ai"],
-    )
-    t.completedAt = (
-        datetime.fromisoformat(data["completedAt"]) if data.get("completedAt") else None
-    )
-    t.createdAt = (
-        datetime.fromisoformat(data["createdAt"])
-        if data.get("createdAt")
-        else datetime.now()
-    )
-    t.updatedAt = (
-        datetime.fromisoformat(data["updatedAt"])
-        if data.get("updatedAt")
-        else datetime.now()
-    )
-    t.deletedAt = (
-        datetime.fromisoformat(data["deletedAt"]) if data.get("deletedAt") else None
-    )
-    return t
+    kwargs = {}
+    for column in Task.__table__.columns:
+        if column.name not in data:
+            # Cache entry written before this column existed: leave it
+            # unset rather than guessing, so a later db.merge() keeps
+            # whatever the persistent row already has for it.
+            continue
+        value = data[column.name]
+        if value is not None and isinstance(column.type, DateTime):
+            value = datetime.fromisoformat(value)
+        kwargs[column.name] = value
+    return Task(**kwargs)
 
 
 class TasksRepository:

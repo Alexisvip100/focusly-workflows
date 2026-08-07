@@ -46,6 +46,7 @@ class Task(Base):
     )
     source: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     sync_status: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    google_synced_etag: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     collaborators: Mapped[Optional[Any]] = mapped_column(JSON, nullable=True)
     notified: Mapped[Optional[bool]] = mapped_column(
         Boolean, nullable=True, default=False

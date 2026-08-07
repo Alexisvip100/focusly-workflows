@@ -24,6 +24,7 @@ class TaskCreateSchema(BaseModel):
     google_event_id: str | None = None
     source: str | None = "platform"
     sync_status: str | None = "synced"
+    google_synced_etag: str | None = None
     collaborators: list[dict[str, Any]] = Field(default_factory=list)
     notified: bool | None = False
     lastMinuteNotified: bool | None = False
