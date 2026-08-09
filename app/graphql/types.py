@@ -229,6 +229,13 @@ class PaginatedWorkspaces:
     hasMore: bool | None = None
 
 
+@strawberry.type
+class PaginatedProjectGroups:
+    projectGroups: list[ProjectGroup]
+    totalCount: int
+    hasMore: bool | None = None
+
+
 # Insights Types
 
 
