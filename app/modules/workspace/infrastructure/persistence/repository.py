@@ -255,18 +255,26 @@ class ProjectGroupsRepository:
             return None
         return group
 
-    async def get_all_by_user(self, user_id: str) -> list[ProjectGroup]:
+    async def get_all_by_user(
+        self, user_id: str, limit: int | None = None, offset: int | None = None
+    ) -> list[ProjectGroup]:
         cached = await cache.get(f"project_groups:user:{user_id}")
         if cached is not None:
             return [deserialize_group(g) for g in cached]
-        result = await self.db.execute(
-            select(ProjectGroup)
-            .where(ProjectGroup.userId == user_id)
-            .order_by(ProjectGroup.createdAt)
-        )
-        groups = list(result.scalars().all())
+        query = select(ProjectGroup)
+        query = query.where(ProjectGroup.userId == user_id)
+        query = query.order_by(ProjectGroup.createdAt)
+        if limit is not None:
+            query = query.limit(limit)
+        if offset is not None:
+            query = query.offset(offset)
+        result = await self.db.execute(query)
+        groups = {
+            "data": list(result.scalars().all()),
+            "pagination": {"total": await self.get_total(user_id), "limit": limit, "offset": offset},
+        }
         await cache.set(
-            f"project_groups:user:{user_id}", [serialize_group(g) for g in groups]
+            f"project_groups:user:{user_id}", [serialize_group(g) for g in groups["data"]]
         )
         return groups
 
@@ -275,6 +283,23 @@ class ProjectGroupsRepository:
             select(func.count(ProjectGroup.id)).where(ProjectGroup.userId == user_id)
         )
         return result.scalar() or 0
+
+    async def find_all_paginated(
+        self, user_id: str, limit: int = 8, offset: int = 0
+    ) -> dict[str, Any]:
+        """Uncached page read — get_all_by_user's cache stores whole-list
+        snapshots per user, which doesn't fit a limit/offset query, so this
+        always reads straight from the database."""
+        query = select(ProjectGroup).where(ProjectGroup.userId == user_id)
+        count_query = select(func.count(ProjectGroup.id)).where(
+            ProjectGroup.userId == user_id
+        )
+        query = query.order_by(ProjectGroup.createdAt).limit(limit).offset(offset)
+
+        result = await self.db.execute(query)
+        total_res = await self.db.execute(count_query)
+        total = total_res.scalar() or 0
+        return {"items": list(result.scalars().all()), "total": total}
 
     async def delete_workspaces_by_group_id(self, group_id: str) -> None:
         """Deletes all workspaces belonging to a group. Defers database commit to the caller."""

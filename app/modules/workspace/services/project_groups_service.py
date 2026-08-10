@@ -21,8 +21,19 @@ class ProjectGroupsService:
         group = ProjectGroup(id=group_id, userId=user_id, **group_data.model_dump())
         return await self.repository.create(group)
 
-    async def find_all(self, user_id: str) -> list[ProjectGroup]:
-        return await self.repository.get_all_by_user(user_id)
+    async def find_all(self, user_id: str, limit, offset) -> list[ProjectGroup]:
+        return await self.repository.get_all_by_user(user_id, limit, offset)
+
+    async def find_all_paginated(
+        self, user_id: str, limit: int = 8, offset: int = 0
+    ) -> dict[str, Any]:
+        res = await self.repository.find_all_paginated(user_id, limit, offset)
+        total = res["total"]
+        return {
+            "items": res["items"],
+            "total": total,
+            "hasMore": (offset + limit) < total,
+        }
 
     async def find_one(self, id: str, user_id: str) -> ProjectGroup:
         group = await self.repository.get_by_id_and_user(id, user_id)
