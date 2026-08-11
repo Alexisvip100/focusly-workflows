@@ -65,6 +65,12 @@ class TaskMutation:
             ]
             if create_task_input.collaborators
             else [],
+            "time_logs": [
+                {"date": l.date, "minutes": l.minutes}
+                for l in create_task_input.time_logs
+            ]
+            if create_task_input.time_logs
+            else [],
             "use_ai": create_task_input.use_ai,
         }
 
@@ -142,6 +148,11 @@ class TaskMutation:
                     "responseStatus": c.responseStatus,
                 }
                 for c in update_task_input.collaborators
+            ]
+        if update_task_input.time_logs is not None:
+            update_data["time_logs"] = [
+                {"date": l.date, "minutes": l.minutes}
+                for l in update_task_input.time_logs
             ]
         if update_task_input.use_ai is not None:
             update_data["use_ai"] = update_task_input.use_ai

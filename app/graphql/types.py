@@ -25,6 +25,12 @@ class TaskLink:
 
 
 @strawberry.type
+class TimeLog:
+    date: str
+    minutes: int
+
+
+@strawberry.type
 class TaskFilters:
     status: list[str] | None = None
     priority_level: list[int] | None = strawberry.field(
@@ -187,6 +193,9 @@ class Task:
         name="estimated_end_date", default=None
     )
     collaborators: list[Collaborator] | None = strawberry.field(default_factory=list)
+    time_logs: list[TimeLog] = strawberry.field(
+        name="time_logs", default_factory=list
+    )
     use_ai: bool | None = strawberry.field(name="use_ai", default=False)
     is_owner: bool | None = strawberry.field(name="is_owner", default=True)
     source: str | None = strawberry.field(name="source", default="platform")
@@ -318,6 +327,12 @@ class LinkInput:
 
 
 @strawberry.input
+class TimeLogInput:
+    date: str
+    minutes: int
+
+
+@strawberry.input
 class CreateTaskInput:
     user_id: str = strawberry.field(name="user_id")
     title: str
@@ -344,6 +359,9 @@ class CreateTaskInput:
     sync_status: str | None = strawberry.field(name="sync_status", default=None)
     collaborators: list[CollaboratorInput] | None = strawberry.field(
         name="collaborators", default=None
+    )
+    time_logs: list[TimeLogInput] | None = strawberry.field(
+        name="time_logs", default=None
     )
     use_ai: bool | None = strawberry.field(name="use_ai", default=None)
     is_owner: bool | None = strawberry.field(name="is_owner", default=True)
@@ -377,6 +395,9 @@ class UpdateTaskInput:
     sync_status: str | None = strawberry.field(name="sync_status", default=None)
     collaborators: list[CollaboratorInput] | None = strawberry.field(
         name="collaborators", default=None
+    )
+    time_logs: list[TimeLogInput] | None = strawberry.field(
+        name="time_logs", default=None
     )
     use_ai: bool | None = strawberry.field(name="use_ai", default=None)
     is_owner: bool | None = strawberry.field(name="is_owner", default=None)
@@ -492,6 +513,15 @@ def map_dict_to_strawberry_task(t: dict[str, Any]) -> Task:
                     )
                 )
 
+    # Time logs
+    time_logs = []
+    if isinstance(t.get("time_logs"), list):
+        for tl in t["time_logs"]:
+            if isinstance(tl, dict):
+                time_logs.append(
+                    TimeLog(date=tl.get("date", ""), minutes=tl.get("minutes", 0))
+                )
+
     # Filters
     filters = None
     f = t.get("filters")
@@ -527,6 +557,7 @@ def map_dict_to_strawberry_task(t: dict[str, Any]) -> Task:
         estimated_start_date=parse_iso(t.get("estimated_start_date")),
         estimated_end_date=parse_iso(t.get("estimated_end_date")),
         collaborators=collaborators,
+        time_logs=time_logs,
         use_ai=t.get("use_ai"),
         is_owner=t.get("is_owner", True),
         source=t.get("source", "platform"),

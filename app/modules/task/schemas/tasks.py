@@ -26,6 +26,7 @@ class TaskCreateSchema(BaseModel):
     sync_status: str | None = "synced"
     google_synced_etag: str | None = None
     collaborators: list[dict[str, Any]] = Field(default_factory=list)
+    time_logs: list[dict[str, Any]] = Field(default_factory=list)
     notified: bool | None = False
     lastMinuteNotified: bool | None = False
     use_ai: bool | None = False
@@ -50,6 +51,7 @@ class TaskCreateSchema(BaseModel):
                 "tags": [],
                 "links": [],
                 "collaborators": [],
+                "time_logs": [],
                 "is_owner": True,
             }
             for key, default_val in defaults.items():

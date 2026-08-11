@@ -58,6 +58,7 @@ class TasksService:
             "source": t.source or "platform",
             "sync_status": t.sync_status or "synced",
             "collaborators": t.collaborators or [],
+            "time_logs": t.time_logs or [],
             "notified": t.notified or False,
             "lastMinuteNotified": t.lastMinuteNotified or False,
             "use_ai": t.use_ai or False,
@@ -233,14 +234,8 @@ class TasksService:
         skip_google_sync: bool = False,
     ) -> dict[str, Any]:
         task = await self.repository.get_by_id(id)
-        print("una tarea", task)
         if not task:
-            # If update on non-existent task, we create it
-            return await self.create(
-                update_data,
-                skip_scheduling=skip_scheduling,
-                skip_google_sync=skip_google_sync,
-            )
+            raise ValueError(f"Task with ID {id} not found")
 
         has_changes = False
 
