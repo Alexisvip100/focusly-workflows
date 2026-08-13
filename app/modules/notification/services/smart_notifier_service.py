@@ -652,7 +652,7 @@ async def _run_smart_checks_once() -> None:
 async def run_smart_notifier_loop() -> None:
     """
     Background loop that runs every 5 minutes.
-    Call this once at application startup (see main.py lifespan).
+    Call this once, from the standalone worker process (see app/worker.py).
     """
     while True:
         try:

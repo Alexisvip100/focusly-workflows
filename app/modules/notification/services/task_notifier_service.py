@@ -136,7 +136,7 @@ async def _emit_notification(
 async def run_task_notifier_loop() -> None:
     """
     Background loop that runs every 60 seconds.
-    Call this once at application startup (see main.py lifespan).
+    Call this once, from the standalone worker process (see app/worker.py).
     """
     while True:
         try:

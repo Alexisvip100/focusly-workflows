@@ -1,4 +1,3 @@
-import asyncio
 import jwt
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
@@ -16,12 +15,6 @@ from app.modules.google_calendar.presentation.rest import (
 )
 from app.modules.task.presentation.rest import time_blocks_router
 from app.modules.ai.presentation.rest import ai_router, planner_router
-from app.modules.notification.services.task_notifier_service import (
-    run_task_notifier_loop,
-)
-from app.modules.notification.services.smart_notifier_service import (
-    run_smart_notifier_loop,
-)
 
 
 from app.database import engine, Base
@@ -29,7 +22,12 @@ from app.database import engine, Base
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Start background tasks on startup, clean up on shutdown."""
+    """Connect shared resources on startup, clean up on shutdown.
+
+    The recurring notification loops (task/smart notifier) no longer run
+    here — they run once, in their own process, via app/worker.py — so
+    scaling this web service to multiple replicas doesn't duplicate them.
+    """
     from app.redis import cache
 
     await cache.connect()
@@ -37,19 +35,7 @@ async def lifespan(app: FastAPI):
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 
-    notifier_task = asyncio.create_task(run_task_notifier_loop())
-    smart_notifier_task = asyncio.create_task(run_smart_notifier_loop())
     yield
-    notifier_task.cancel()
-    smart_notifier_task.cancel()
-    try:
-        await notifier_task
-    except asyncio.CancelledError:
-        pass
-    try:
-        await smart_notifier_task
-    except asyncio.CancelledError:
-        pass
     await cache.disconnect()
 
 

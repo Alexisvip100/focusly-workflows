@@ -3,9 +3,17 @@ import socketio
 import urllib.parse
 from typing import Any
 
+from app.config import settings
+
+# Redis-backed manager: without this, connected clients and rooms only
+# exist in this process's memory, so emit() calls from another process
+# (e.g. app/worker.py, or any other web replica) never reach them.
+_client_manager = socketio.AsyncRedisManager(settings.REDIS_URL)
+
 # Create async socketio server
 sio = socketio.AsyncServer(
     async_mode="asgi",
+    client_manager=_client_manager,
     cors_allowed_origins=[
         "https://focusly-front-psi.vercel.app",
         "http://localhost:5173",
