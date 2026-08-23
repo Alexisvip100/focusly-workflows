@@ -41,7 +41,12 @@ class UsersService:
             return None
 
         for key, value in update_data.items():
-            if hasattr(user, key) and value is not None:
+            # `update_data` already only contains fields the caller actually
+            # sent (see UpdateUserSchema.model_dump(exclude_unset=True) in
+            # user/routes.py), so an explicit `None` here means "clear this
+            # field" — it must be applied, not skipped, or callers can never
+            # unset a nullable field (e.g. removing a profile picture).
+            if hasattr(user, key):
                 setattr(user, key, value)
 
         return await self.repository.save(user)
