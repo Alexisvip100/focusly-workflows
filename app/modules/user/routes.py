@@ -6,6 +6,10 @@ import uuid
 
 from app.database import get_db
 from app.modules.user.services.users_service import UsersService
+from app.modules.storage.services.storage_service import (
+    resolve_avatar_url,
+    delete_avatar_object,
+)
 
 router = APIRouter(prefix="/users", tags=["users"])
 
@@ -46,7 +50,7 @@ def map_user_to_dict(user) -> dict[str, Any]:
         "id": user.id,
         "email": user.email,
         "name": user.name,
-        "picture": user.picture,
+        "picture": resolve_avatar_url(user.picture),
         "role": user.role,
         "bio": user.bio,
         "authProvider": user.authProvider,
@@ -93,7 +97,24 @@ async def update_user(
     users_service: UsersService = Depends(get_users_service),
 ):
     update_data = body.model_dump(exclude_unset=True)
+
+    previous_picture = None
+    if "picture" in update_data:
+        existing_user = await users_service.findOne(id)
+        previous_picture = existing_user.picture if existing_user else None
+
     user = await users_service.update(id, update_data)
     if not user:
         raise HTTPException(status_code=404, detail=f"User with ID {id} not found")
+
+    # Only delete objects we own (bare MinIO keys) — never an absolute URL
+    # like a Google profile photo — and only once the new value is safely
+    # persisted, so a failed update never orphans the still-current photo.
+    if (
+        previous_picture
+        and previous_picture != update_data.get("picture")
+        and not previous_picture.startswith(("http://", "https://"))
+    ):
+        delete_avatar_object(previous_picture)
+
     return map_user_to_dict(user)

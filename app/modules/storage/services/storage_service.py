@@ -68,6 +68,24 @@ def ensure_avatars_bucket_ready() -> None:
     )
 
 
+def resolve_avatar_url(picture: str | None) -> str | None:
+    """Expand a stored `picture` value into something a browser can load.
+
+    `picture` may be an absolute external URL (a Google profile photo, set
+    once at account creation and never touched by us) or a bare MinIO object
+    key (e.g. "{user_id}/{uuid}.png") — only the DB, never the storage host,
+    should be the source of truth for which user owns which object, so we
+    keep the stored value host-agnostic and expand it here, at the one place
+    every API response flows through, instead of baking MINIO_PUBLIC_ENDPOINT
+    into the database.
+    """
+    if not picture:
+        return picture
+    if picture.startswith("http://") or picture.startswith("https://"):
+        return picture
+    return f"{settings.MINIO_PUBLIC_ENDPOINT}/{settings.MINIO_BUCKET_AVATARS}/{picture}"
+
+
 def generate_avatar_upload_url(user_id: str, content_type: str) -> dict[str, str]:
     if content_type not in ALLOWED_AVATAR_CONTENT_TYPES:
         raise ValueError(
@@ -77,18 +95,34 @@ def generate_avatar_upload_url(user_id: str, content_type: str) -> dict[str, str
 
     extension = content_type.split("/")[-1]
     object_key = f"{user_id}/{uuid.uuid4()}.{extension}"
-    bucket = settings.MINIO_BUCKET_AVATARS
 
     upload_url = s3_public_client.generate_presigned_url(
         "put_object",
         Params={
-            "Bucket": bucket,
+            "Bucket": settings.MINIO_BUCKET_AVATARS,
             "Key": object_key,
             "ContentType": content_type,
         },
         ExpiresIn=PRESIGNED_URL_EXPIRY_SECONDS,
     )
 
-    public_url = f"{settings.MINIO_PUBLIC_ENDPOINT}/{bucket}/{object_key}"
+    return {
+        "upload_url": upload_url,
+        # The key is what gets persisted in the DB (host-agnostic); the
+        # preview URL is only for the frontend to render an immediate
+        # preview before the profile is actually saved.
+        "object_key": object_key,
+        "preview_url": resolve_avatar_url(object_key),
+    }
 
-    return {"upload_url": upload_url, "public_url": public_url}
+
+def delete_avatar_object(object_key: str) -> None:
+    """Best-effort delete of a replaced avatar. Never call with an absolute
+    URL (e.g. a Google photo) — only with a bare object key we own.
+    """
+    try:
+        s3_client.delete_object(
+            Bucket=settings.MINIO_BUCKET_AVATARS, Key=object_key
+        )
+    except ClientError:
+        pass

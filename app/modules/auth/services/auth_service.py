@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.models import User
 from app.modules.user.repository import UsersRepository
+from app.modules.storage.services.storage_service import resolve_avatar_url
 
 
 class AuthService:
@@ -141,7 +142,7 @@ class AuthService:
             "id": user.id,
             "email": user.email,
             "name": user.name,
-            "picture": user.picture,
+            "picture": resolve_avatar_url(user.picture),
             "role": user.role,
             "bio": user.bio,
             "authProvider": user.authProvider,
