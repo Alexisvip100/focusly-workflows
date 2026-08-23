@@ -37,6 +37,11 @@ class ChatRequestSchema(BaseModel):
     conversationId: str | None = None
     contextType: str | None = None
     contextId: str | None = None
+    # Live, client-supplied document text (e.g. the note currently open in
+    # the editor, including unsaved keystrokes) — distinct from
+    # contextType="workspace", which only sees whatever was last persisted
+    # to the Workspace row in the DB.
+    document_context: str | None = None
 
 
 class GeminiStreamParser:
@@ -296,6 +301,14 @@ async def chat_endpoint(
                 f"- Content/Notes: {ws_obj.content or 'No content'}\n"
                 f"Please focus your response primarily on discussing, explaining, or formatting the information in this specific workspace document."
             )
+
+    if body.document_context:
+        system_context += (
+            "\n\nCRITICAL CONTEXT MODE: The user is currently looking at this exact "
+            "document in the editor right now (this reflects their live, possibly "
+            "unsaved edits — trust it over anything above with the same title):\n"
+            f"{body.document_context}"
+        )
 
     task = body.task
     if task:
