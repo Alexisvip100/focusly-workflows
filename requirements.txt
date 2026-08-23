@@ -12,4 +12,5 @@ python-dotenv==1.0.1
 numpy
 google-genai==0.3.0
 redis>=5.0.1
+boto3==1.35.74
 pre-commit==4.6.1

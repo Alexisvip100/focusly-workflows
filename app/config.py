@@ -40,6 +40,13 @@ class Settings:
     IS_PRODUCTION: bool = os.getenv("ENV", "development") == "production"
     FOCUSLY_AI_URL: str = _normalized_ai_url
     REDIS_URL: str = os.getenv("REDIS_URL", "redis://localhost:6379/0").strip()
+    MINIO_ENDPOINT: str = os.getenv("MINIO_ENDPOINT", "http://localhost:9000").strip()
+    MINIO_PUBLIC_ENDPOINT: str = os.getenv(
+        "MINIO_PUBLIC_ENDPOINT", "http://localhost:9000"
+    ).strip()
+    MINIO_ROOT_USER: str = os.getenv("MINIO_ROOT_USER", "")
+    MINIO_ROOT_PASSWORD: str = os.getenv("MINIO_ROOT_PASSWORD", "")
+    MINIO_BUCKET_AVATARS: str = os.getenv("MINIO_BUCKET_AVATARS", "avatars")
 
 
 settings = Settings()

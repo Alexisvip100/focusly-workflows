@@ -15,6 +15,7 @@ from app.modules.google_calendar.presentation.rest import (
 )
 from app.modules.task.presentation.rest import time_blocks_router
 from app.modules.ai.presentation.rest import ai_router, planner_router
+from app.modules.storage.presentation.rest import router as storage_router
 
 
 from app.database import engine, Base
@@ -29,11 +30,16 @@ async def lifespan(app: FastAPI):
     scaling this web service to multiple replicas doesn't duplicate them.
     """
     from app.redis import cache
+    from app.modules.storage.services.storage_service import (
+        ensure_avatars_bucket_ready,
+    )
 
     await cache.connect()
 
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+
+    ensure_avatars_bucket_ready()
 
     yield
     await cache.disconnect()
@@ -84,6 +90,7 @@ fastapi_app.include_router(google_calendar_router)
 fastapi_app.include_router(time_blocks_router)
 fastapi_app.include_router(ai_router)
 fastapi_app.include_router(planner_router)
+fastapi_app.include_router(storage_router)
 
 
 # 4. GraphQL Setup with session management and auth context
