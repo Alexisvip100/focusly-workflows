@@ -36,6 +36,7 @@ services:
     depends_on:
       - db
       - redis
+      - minio
     networks:
       - default
       - focusly-net

@@ -1,9 +1,10 @@
 import json
+import time
 import uuid
 
 import boto3
 from botocore.client import Config
-from botocore.exceptions import ClientError
+from botocore.exceptions import ClientError, EndpointConnectionError
 
 from app.config import settings
 
@@ -32,10 +33,22 @@ s3_public_client = boto3.client(
 )
 
 
-def ensure_avatars_bucket_ready() -> None:
+def ensure_avatars_bucket_ready(
+    max_attempts: int = 5, retry_delay_seconds: float = 2.0
+) -> None:
     """Idempotently create the avatars bucket and mark it public-read-only.
     Safe to call on every app startup — mirrors the existing
     `Base.metadata.create_all` pattern in app/main.py's lifespan.
+
+    Retries on connection errors: `minio` isn't in this service's
+    `depends_on` in docker-compose.yml (it's a soft dependency — only the
+    avatar feature needs it, not the rest of the API), and even where a
+    `depends_on` exists, that only waits for the container to start, not for
+    MinIO to actually be accepting connections yet. Without a retry, a cold
+    `docker compose up` or host reboot can hit this before MinIO is ready and
+    crash the whole app on startup. The caller (app/main.py's lifespan) also
+    treats a final failure here as non-fatal, so the rest of the API still
+    comes up even if MinIO never becomes reachable.
 
     CORS is NOT configured here: MinIO doesn't implement the standard S3
     `PutBucketCors` REST API that boto3 calls, nor does `mc cors set` work on
@@ -45,27 +58,34 @@ def ensure_avatars_bucket_ready() -> None:
     """
     bucket = settings.MINIO_BUCKET_AVATARS
 
-    try:
-        s3_client.head_bucket(Bucket=bucket)
-    except ClientError:
-        s3_client.create_bucket(Bucket=bucket)
+    for attempt in range(1, max_attempts + 1):
+        try:
+            try:
+                s3_client.head_bucket(Bucket=bucket)
+            except ClientError:
+                s3_client.create_bucket(Bucket=bucket)
 
-    s3_client.put_bucket_policy(
-        Bucket=bucket,
-        Policy=json.dumps(
-            {
-                "Version": "2012-10-17",
-                "Statement": [
+            s3_client.put_bucket_policy(
+                Bucket=bucket,
+                Policy=json.dumps(
                     {
-                        "Effect": "Allow",
-                        "Principal": "*",
-                        "Action": ["s3:GetObject"],
-                        "Resource": [f"arn:aws:s3:::{bucket}/*"],
+                        "Version": "2012-10-17",
+                        "Statement": [
+                            {
+                                "Effect": "Allow",
+                                "Principal": "*",
+                                "Action": ["s3:GetObject"],
+                                "Resource": [f"arn:aws:s3:::{bucket}/*"],
+                            }
+                        ],
                     }
-                ],
-            }
-        ),
-    )
+                ),
+            )
+            return
+        except EndpointConnectionError:
+            if attempt == max_attempts:
+                raise
+            time.sleep(retry_delay_seconds)
 
 
 def resolve_avatar_url(picture: str | None) -> str | None:

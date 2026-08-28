@@ -39,7 +39,13 @@ async def lifespan(app: FastAPI):
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 
-    ensure_avatars_bucket_ready()
+    try:
+        ensure_avatars_bucket_ready()
+    except Exception as e:
+        # Non-fatal: avatar upload/removal will fail until MinIO is
+        # reachable, but the rest of the API (tasks, calendar, AI, etc.)
+        # shouldn't go down over a storage dependency that isn't core.
+        print(f"Warning: could not initialize avatars bucket: {e}", flush=True)
 
     yield
     await cache.disconnect()
