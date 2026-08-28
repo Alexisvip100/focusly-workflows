@@ -42,6 +42,7 @@ services:
       - focusly-net
   minio:
     image: minio/minio:latest
+    restart: always
     command: server /data --console-address ":9001"
     ports:
       - "9000:9000"   # API S3-compatible

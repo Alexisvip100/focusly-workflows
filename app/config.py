@@ -19,6 +19,11 @@ else:
     _normalized_ai_url = _raw_ai_url
 
 
+# Not a real credential — a known sentinel value checked against below to
+# refuse starting in production without a real JWT_SECRET configured.
+_DEFAULT_JWT_SECRET = "default_secret_key_change_me_in_production"  # noqa: S105
+
+
 class Settings:
     _raw_db_url = os.getenv(
         "DATABASE_URL", "postgresql+asyncpg://alexis@localhost:5432/focusly"
@@ -28,9 +33,7 @@ class Settings:
         if _raw_db_url.startswith("postgresql://")
         else _raw_db_url
     )
-    JWT_SECRET: str = os.getenv(
-        "JWT_SECRET", "default_secret_key_change_me_in_production"
-    )
+    JWT_SECRET: str = os.getenv("JWT_SECRET", _DEFAULT_JWT_SECRET)
     GOOGLE_CLIENT_ID: str = os.getenv("GOOGLE_CLIENT_ID", "")
     GOOGLE_CLIENT_SECRET: str = os.getenv("GOOGLE_CLIENT_SECRET", "")
     GOOGLE_REDIRECT_URI: str = os.getenv("GOOGLE_REDIRECT_URI", "postmessage")
@@ -50,3 +53,13 @@ class Settings:
 
 
 settings = Settings()
+
+# A known, source-visible JWT secret lets anyone forge valid access/refresh
+# tokens for any account — fail startup outright in production rather than
+# quietly running with it, instead of only ever mattering the one time it's
+# actually exploited.
+if settings.IS_PRODUCTION and settings.JWT_SECRET == _DEFAULT_JWT_SECRET:
+    raise RuntimeError(
+        "JWT_SECRET is not set. Refusing to start in production with the "
+        "default secret — set a real JWT_SECRET in the environment."
+    )

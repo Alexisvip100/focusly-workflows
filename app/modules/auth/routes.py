@@ -1,3 +1,4 @@
+import jwt
 from fastapi import APIRouter, Response, Request, HTTPException, Depends
 from typing import Any, Literal
 from pydantic import BaseModel
@@ -5,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.config import settings
+from app.routes.common import get_current_user_id
 from app.modules.auth.services.auth_service import AuthService
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -12,14 +14,6 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 class GoogleLoginBody(BaseModel):
     code: str
-
-
-class RefreshBody(BaseModel):
-    userId: str
-
-
-class GoogleRefreshBody(BaseModel):
-    userId: str
 
 
 class MagicLinkBody(BaseModel):
@@ -79,7 +73,6 @@ async def google_login(
 
 @router.post("/refresh")
 async def refresh(
-    body: RefreshBody,
     request: Request,
     response: Response,
     auth_service: AuthService = Depends(get_auth_service),
@@ -94,8 +87,23 @@ async def refresh(
     if not refresh_token:
         raise HTTPException(status_code=401, detail="Refresh token missing")
 
+    # The user identity MUST come from the verified token, never from the
+    # request body — trusting a client-supplied userId here let anyone with
+    # any non-empty refresh_token cookie mint fresh session cookies for an
+    # arbitrary account just by naming its id.
     try:
-        user = await auth_service.refresh_session(body.userId)
+        payload = jwt.decode(refresh_token, settings.JWT_SECRET, algorithms=["HS256"])
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Refresh token expired")
+    except jwt.InvalidTokenError:
+        raise HTTPException(status_code=401, detail="Invalid refresh token")
+
+    user_id = payload.get("sub")
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Invalid refresh token")
+
+    try:
+        user = await auth_service.refresh_session(user_id)
         result = auth_service.generate_jwt(user)
         set_auth_cookies(response, result)
         return {"success": True}
@@ -107,10 +115,11 @@ async def refresh(
 
 @router.post("/google/refresh")
 async def refresh_google_token(
-    body: GoogleRefreshBody, auth_service: AuthService = Depends(get_auth_service)
+    current_user_id: str = Depends(get_current_user_id),
+    auth_service: AuthService = Depends(get_auth_service),
 ):
     try:
-        return await auth_service.refresh_google_access_token(body.userId)
+        return await auth_service.refresh_google_access_token(current_user_id)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception:
