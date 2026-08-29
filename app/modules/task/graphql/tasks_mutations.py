@@ -74,7 +74,9 @@ class TaskMutation:
             "use_ai": create_task_input.use_ai,
         }
 
-        res = await tasks_serv.create(task_data)
+        res = await tasks_serv.create(
+            task_data, skip_scheduling=bool(create_task_input.skip_scheduling)
+        )
         return types.map_dict_to_strawberry_task(res)
 
     @strawberry.mutation

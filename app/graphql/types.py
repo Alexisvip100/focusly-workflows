@@ -383,6 +383,13 @@ class CreateTaskInput:
     )
     use_ai: bool | None = strawberry.field(name="use_ai", default=None)
     is_owner: bool | None = strawberry.field(name="is_owner", default=True)
+    # When true, the auto-scheduler never runs for this task, so its deadline
+    # is never overridden by an auto-assigned estimated_start_date — used by
+    # the AI chat's day-by-day plans, where the exact day was chosen
+    # deliberately (including weekends) and must never be moved.
+    skip_scheduling: bool | None = strawberry.field(
+        name="skip_scheduling", default=False
+    )
 
 
 @strawberry.input
