@@ -104,7 +104,13 @@ class Workspace:
 
         tasks_serv = TasksService(db)
         try:
-            res = await tasks_serv.find_one(self.taskId)
+            # This resolver runs once per Workspace when a list is queried
+            # with a nested `task` selection — sibling fields resolve
+            # concurrently, but they all share one AsyncSession, which
+            # isn't safe for concurrent use. Serialize with the per-request
+            # lock instead of giving every resolver its own session.
+            async with info.context["db_lock"]:
+                res = await tasks_serv.find_one(self.taskId)
             return map_dict_to_strawberry_task(res)
         except:
             return None
@@ -126,11 +132,15 @@ class ProjectGroup:
         from sqlalchemy import select, func
         from app.models import Workspace
 
-        result = await db.execute(
-            select(func.count(Workspace.id))
-            .where(Workspace.userId == self.user_id)
-            .where(Workspace.groupId == str(self.id))
-        )
+        # Runs once per ProjectGroup in a list — see the lock note on
+        # Workspace.task above for why this can't just call db.execute
+        # directly.
+        async with info.context["db_lock"]:
+            result = await db.execute(
+                select(func.count(Workspace.id))
+                .where(Workspace.userId == self.user_id)
+                .where(Workspace.groupId == str(self.id))
+            )
         return result.scalar() or 0
 
     @strawberry.field
@@ -140,7 +150,8 @@ class ProjectGroup:
         from app.modules.workspace.services.workspaces_service import WorkspacesService
 
         ws_serv = WorkspacesService(db)
-        all_ws_res = await ws_serv.find_all(self.user_id, group_id=str(self.id))
+        async with info.context["db_lock"]:
+            all_ws_res = await ws_serv.find_all(self.user_id, group_id=str(self.id))
         all_ws = (
             all_ws_res.get("items", []) if isinstance(all_ws_res, dict) else all_ws_res
         )
@@ -206,7 +217,14 @@ class Task:
         from app.modules.workspace.services.workspaces_service import WorkspacesService
 
         ws_serv = WorkspacesService(db)
-        res = await ws_serv.find_by_task_id(str(self.id))
+        # Runs once per Task in a list (e.g. GET_TASKS_PAGINATED with a
+        # nested `workspace` selection) — sibling Task.workspace resolvers
+        # fire concurrently but share one AsyncSession per request, which
+        # raises "concurrent operations are not permitted" without this
+        # lock. This was the cause of the intermittent "Error al cargar
+        # las tareas" on the Tasks page.
+        async with info.context["db_lock"]:
+            res = await ws_serv.find_by_task_id(str(self.id))
         if res:
             return Workspace(
                 id=strawberry.ID(res.id),

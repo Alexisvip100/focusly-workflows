@@ -21,6 +21,7 @@ from app.modules.ai.services.context_builder import build_context
 from app.modules.ai.services.router import classify_query
 from app.modules.ai.services.memory import extract_and_save_memory
 from app.modules.ai.services.summarizer import check_and_summarize
+from app.modules.ai.services.action_parser import extract_actions, strip_action_tag
 
 router = APIRouter(prefix="/ai", tags=["ai"])
 
@@ -381,7 +382,11 @@ async def get_conversation_messages(
         {
             "id": m.id,
             "role": m.role,
-            "content": m.content,
+            # Raw content may embed an internal `[ACTION: ...]` tool-call tag
+            # (see action_parser.py) — never return that verbatim, it leaks
+            # our internal action protocol and payload field names.
+            "content": strip_action_tag(m.content),
+            "actions": extract_actions(m.content),
             "createdAt": m.createdAt.isoformat(),
         }
         for m in messages

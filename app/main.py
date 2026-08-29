@@ -1,3 +1,4 @@
+import asyncio
 import jwt
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
@@ -105,6 +106,15 @@ async def db_session_middleware(request: Request, call_next):
     if request.url.path.startswith("/graphql"):
         async with async_session_local() as db:
             request.state.db = db
+            # A single AsyncSession is shared by every resolver in this
+            # request (see get_context below). Sibling GraphQL fields —
+            # e.g. each item's nested `workspace`/`workspaces` field when a
+            # list of Tasks/ProjectGroups is queried — resolve concurrently,
+            # and SQLAlchemy's AsyncSession raises InvalidRequestError
+            # ("concurrent operations are not permitted") if two coroutines
+            # call it at once. This lock serializes those DB calls without
+            # requiring a separate session per resolver.
+            request.state.db_lock = asyncio.Lock()
             response = await call_next(request)
             return response
     else:
@@ -113,6 +123,7 @@ async def db_session_middleware(request: Request, call_next):
 
 async def get_context(request: Request):
     db = getattr(request.state, "db", None)
+    db_lock = getattr(request.state, "db_lock", None)
 
     # Extract user ID from cookies or Authorization header
     token = request.cookies.get("access_token")
@@ -129,7 +140,7 @@ async def get_context(request: Request):
         except Exception:
             pass  # Invalid token, keep user_id = None
 
-    return {"db": db, "user_id": user_id, "request": request}
+    return {"db": db, "db_lock": db_lock, "user_id": user_id, "request": request}
 
 
 from typing import Any

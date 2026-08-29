@@ -221,12 +221,28 @@ class SchedulerService:
         minutes_to_add = 5 - (now.minute % 5)
         if minutes_to_add == 5 and now.second == 0:
             minutes_to_add = 0
-        start = now + timedelta(minutes=minutes_to_add)
-        start = start.replace(second=0, microsecond=0)
+        earliest = now + timedelta(minutes=minutes_to_add)
+        earliest = earliest.replace(second=0, microsecond=0)
 
-        end = task.get("hardDeadline") or task.get("deadline")
-        if not end or end > start + timedelta(days=14):
-            end = start + timedelta(days=14)
+        deadline = task.get("hardDeadline") or task.get("deadline")
+
+        # Never schedule earlier than the task's own deadline day: anchor the
+        # window's start to the start of that day (or to "now" if the
+        # deadline has already arrived/passed), so the task is searched for
+        # on/near its deadline instead of at the earliest slot free across
+        # all tasks in this pipeline run. The window then extends 14 days
+        # forward from that anchor so a deadline day that itself has no
+        # working hours (e.g. a weekend) still leaves room to reach the next
+        # working day, instead of the window's end cutting off there.
+        if deadline:
+            deadline_day_start = deadline.replace(
+                hour=0, minute=0, second=0, microsecond=0
+            )
+            start = max(earliest, deadline_day_start)
+        else:
+            start = earliest
+
+        end = start + timedelta(days=14)
 
         return start, end
 
