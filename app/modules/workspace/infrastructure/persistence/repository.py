@@ -269,12 +269,9 @@ class ProjectGroupsRepository:
         if offset is not None:
             query = query.offset(offset)
         result = await self.db.execute(query)
-        groups = {
-            "data": list(result.scalars().all()),
-            "pagination": {"total": await self.get_total(user_id), "limit": limit, "offset": offset},
-        }
+        groups = list(result.scalars().all())
         await cache.set(
-            f"project_groups:user:{user_id}", [serialize_group(g) for g in groups["data"]]
+            f"project_groups:user:{user_id}", [serialize_group(g) for g in groups]
         )
         return groups
 

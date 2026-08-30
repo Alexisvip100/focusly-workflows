@@ -296,10 +296,26 @@ async def chat_endpoint(
             body.contextId, current_user_id
         )
         if ws_obj:
+            # A workspace can be linked to a task via Workspace.taskId (set
+            # when the user attaches this document to a task). This is a
+            # direct FK, not just "shares the same folder" — without this
+            # lookup the model has no way to know the link exists at all,
+            # since neither ws_obj.title nor ws_obj.content mention it.
+            linked_task_info = "None — this document is not linked to any task."
+            if ws_obj.taskId:
+                task_repo = TasksRepository(db)
+                linked_task = await task_repo.get_by_id(ws_obj.taskId)
+                if linked_task:
+                    linked_task_info = (
+                        f'"{linked_task.title}" (status: {linked_task.status}, '
+                        f"priority: {linked_task.priorityLevel}, "
+                        f"deadline: {linked_task.deadline.isoformat() if linked_task.deadline else 'none'})"
+                    )
             system_context += (
                 f"\n\nCRITICAL CONTEXT MODE: The user has selected this specific Workspace/Document as context:\n"
                 f"- Title: {ws_obj.title}\n"
                 f"- Content/Notes: {ws_obj.content or 'No content'}\n"
+                f"- Task linked directly to this document: {linked_task_info}\n"
                 f"Please focus your response primarily on discussing, explaining, or formatting the information in this specific workspace document."
             )
 
