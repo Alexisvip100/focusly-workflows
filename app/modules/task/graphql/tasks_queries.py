@@ -19,7 +19,10 @@ class TaskQuery:
         filters: types.TaskFilterInput | None = None,
         sort: types.TaskSortInput | None = None,
     ) -> list[types.Task]:
-        get_user_id(info)
+        # The authenticated user's own ID is always used, regardless of what
+        # user_id the client passes — otherwise any authenticated user could
+        # read another user's tasks by supplying their userId.
+        user_id = get_user_id(info)
         db = info.context["db"]
         tasks_serv = TasksService(db)
 
@@ -62,7 +65,8 @@ class TaskQuery:
         offset: int = 0,
         limit: int = 24,
     ) -> types.PaginatedTasks:
-        get_user_id(info)
+        # See get_tasks_by_user: always scope to the authenticated user.
+        user_id = get_user_id(info)
         db = info.context["db"]
         tasks_serv = TasksService(db)
 

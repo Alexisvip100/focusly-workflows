@@ -14,7 +14,7 @@ class TaskMutation:
     async def create_task(
         self, info, create_task_input: types.CreateTaskInput
     ) -> types.Task:
-        get_user_id(info)
+        user_id = get_user_id(info)
         db = info.context["db"]
 
         from app.modules.google_calendar.services.google_calendar_service import (
@@ -31,7 +31,10 @@ class TaskMutation:
 
         # Convert input
         task_data = {
-            "userId": create_task_input.user_id,
+            # Always owned by the authenticated caller — never trust a
+            # client-supplied user_id, or one user could create tasks that
+            # appear to belong to someone else.
+            "userId": user_id,
             "title": create_task_input.title,
             "notesEncrypted": create_task_input.notes_encrypted,
             "estimateTimer": create_task_input.estimate_timer,
@@ -98,11 +101,15 @@ class TaskMutation:
         gc_service = GoogleCalendarService(db, auth_serv, tasks_serv, sched_serv)
         tasks_serv.google_calendar_service = gc_service
 
-        update_data: dict[str, Any] = {
-            "userId": update_task_input.user_id
-            if update_task_input.user_id is not None
-            else user_id
-        }
+        # Only the owner may update a task; use the same "not found" message
+        # for both a missing task and one owned by someone else so the
+        # response doesn't reveal whether the ID exists.
+        existing = await tasks_serv.find_one(str(update_task_input.id))
+        if existing.get("userId") != user_id:
+            raise ValueError(f"Task with ID {update_task_input.id} not found")
+
+        # userId is never client-settable — ownership doesn't change via update.
+        update_data: dict[str, Any] = {}
         if update_task_input.title is not None:
             update_data["title"] = update_task_input.title
         if update_task_input.notes_encrypted is not None:
@@ -164,7 +171,7 @@ class TaskMutation:
 
     @strawberry.mutation
     async def delete_task(self, info, id: str) -> bool:
-        get_user_id(info)
+        user_id = get_user_id(info)
         db = info.context["db"]
 
         from app.modules.google_calendar.services.google_calendar_service import (
@@ -178,13 +185,17 @@ class TaskMutation:
         sched_serv = SchedulerService()
         gc_service = GoogleCalendarService(db, auth_serv, tasks_serv, sched_serv)
         tasks_serv.google_calendar_service = gc_service
+
+        existing = await tasks_serv.find_one(id)
+        if existing.get("userId") != user_id:
+            raise ValueError(f"Task with ID {id} not found")
 
         await tasks_serv.delete(id)
         return True
 
     @strawberry.mutation
     async def delete_tasks(self, info, ids: list[str]) -> bool:
-        get_user_id(info)
+        user_id = get_user_id(info)
         db = info.context["db"]
 
         from app.modules.google_calendar.services.google_calendar_service import (
@@ -198,19 +209,27 @@ class TaskMutation:
         sched_serv = SchedulerService()
         gc_service = GoogleCalendarService(db, auth_serv, tasks_serv, sched_serv)
         tasks_serv.google_calendar_service = gc_service
+
+        for task_id in ids:
+            existing = await tasks_serv.find_one(task_id)
+            if existing.get("userId") != user_id:
+                raise ValueError(f"Task with ID {task_id} not found")
 
         await tasks_serv.delete_many(ids)
         return True
 
     @strawberry.mutation
     async def delete_workspace_tasks(self, info, workspace_id: str) -> bool:
-        get_user_id(info)
+        user_id = get_user_id(info)
         db = info.context["db"]
 
         from app.modules.google_calendar.services.google_calendar_service import (
             GoogleCalendarService,
         )
         from app.modules.task.services.scheduler_service import SchedulerService
+        from app.modules.workspace.services.workspaces_service import (
+            WorkspacesService,
+        )
         from app.sockets.realtime import realtime_gateway
 
         auth_serv = AuthService(db)
@@ -218,6 +237,9 @@ class TaskMutation:
         sched_serv = SchedulerService()
         gc_service = GoogleCalendarService(db, auth_serv, tasks_serv, sched_serv)
         tasks_serv.google_calendar_service = gc_service
+
+        # Raises if the workspace doesn't exist or belongs to another user.
+        await WorkspacesService(db).find_one(workspace_id, user_id)
 
         await tasks_serv.delete_workspace_tasks(workspace_id)
         return True

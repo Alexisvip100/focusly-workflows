@@ -188,12 +188,10 @@ class TasksService:
         offset: int = 0,
         limit: int | None = None,
     ) -> tuple[list[dict[str, Any]], int]:
-        res = await self.find_all_by_user(user_id, filters, sort)
-        tasks = res["items"] if isinstance(res, dict) else res
-        total_count = res["total"] if isinstance(res, dict) else len(tasks)
-        end_idx = (offset + limit) if limit is not None else total_count
-        paginated_tasks = tasks[offset:end_idx]
-        return paginated_tasks, total_count
+        res = await self.find_all_by_user(
+            user_id, filters, sort, offset=offset, limit=limit
+        )
+        return res["items"], res["total"]
 
     async def filter_by_status(
         self, filters: dict[str, Any], sort: dict[str, Any] | None = None
