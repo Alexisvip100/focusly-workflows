@@ -134,7 +134,7 @@ class TasksService:
         )
         await self.repository.create(new_task)
 
-        if user_id and not skip_scheduling:
+        if user_id and not skip_scheduling and new_task.status != "Backlog":
             await self.scheduler_service.run_scheduling_pipeline(
                 user_id, self.db, self.socket_server
             )

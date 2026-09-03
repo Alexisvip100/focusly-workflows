@@ -26,7 +26,11 @@ class MigrationService:
             result["workBlock"] = self._migrate_to_work_block(task)
             return result
 
-        # 4. Otherwise, migrate to new Task structure
+        # 4. Tasks in Backlog, Done, or Archived should never be auto-scheduled
+        if task.get("status") in ["Backlog", "Done", "Archived"]:
+            return result
+
+        # 5. Otherwise, migrate to new Task structure
         result["task"] = self._migrate_to_new_task(task)
         return result
 
