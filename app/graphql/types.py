@@ -31,6 +31,24 @@ class TimeLog:
 
 
 @strawberry.type
+class Subtask:
+    id: str
+    title: str
+    completed: bool = False
+    completed_at: str | None = strawberry.field(name="completed_at", default=None)
+    estimate_timer: int | None = strawberry.field(name="estimate_timer", default=None)
+
+
+@strawberry.input
+class SubtaskInput:
+    id: str
+    title: str
+    completed: bool = False
+    completed_at: str | None = strawberry.field(name="completed_at", default=None)
+    estimate_timer: int | None = strawberry.field(name="estimate_timer", default=None)
+
+
+@strawberry.type
 class TaskFilters:
     status: list[str] | None = None
     priority_level: list[int] | None = strawberry.field(
@@ -207,6 +225,9 @@ class Task:
     time_logs: list[TimeLog] = strawberry.field(
         name="time_logs", default_factory=list
     )
+    subtasks: list[Subtask] = strawberry.field(
+        name="subtasks", default_factory=list
+    )
     use_ai: bool | None = strawberry.field(name="use_ai", default=False)
     is_owner: bool | None = strawberry.field(name="is_owner", default=True)
     source: str | None = strawberry.field(name="source", default="platform")
@@ -381,6 +402,9 @@ class CreateTaskInput:
     time_logs: list[TimeLogInput] | None = strawberry.field(
         name="time_logs", default=None
     )
+    subtasks: list[SubtaskInput] | None = strawberry.field(
+        name="subtasks", default=None
+    )
     use_ai: bool | None = strawberry.field(name="use_ai", default=None)
     is_owner: bool | None = strawberry.field(name="is_owner", default=True)
     # When true, the auto-scheduler never runs for this task, so its deadline
@@ -423,6 +447,9 @@ class UpdateTaskInput:
     )
     time_logs: list[TimeLogInput] | None = strawberry.field(
         name="time_logs", default=None
+    )
+    subtasks: list[SubtaskInput] | None = strawberry.field(
+        name="subtasks", default=None
     )
     use_ai: bool | None = strawberry.field(name="use_ai", default=None)
     is_owner: bool | None = strawberry.field(name="is_owner", default=None)
@@ -557,6 +584,21 @@ def map_dict_to_strawberry_task(t: dict[str, Any]) -> Task:
             category=f.get("category"),
         )
 
+    # Subtasks
+    subtasks = []
+    if isinstance(t.get("subtasks"), list):
+        for st in t["subtasks"]:
+            if isinstance(st, dict):
+                subtasks.append(
+                    Subtask(
+                        id=str(st.get("id", "")),
+                        title=st.get("title", ""),
+                        completed=bool(st.get("completed", False)),
+                        completed_at=st.get("completed_at"),
+                        estimate_timer=st.get("estimate_timer"),
+                    )
+                )
+
     return Task(
         id=strawberry.ID(t["id"]),
         user_id=t["userId"],
@@ -583,6 +625,7 @@ def map_dict_to_strawberry_task(t: dict[str, Any]) -> Task:
         estimated_end_date=parse_iso(t.get("estimated_end_date")),
         collaborators=collaborators,
         time_logs=time_logs,
+        subtasks=subtasks,
         use_ai=t.get("use_ai"),
         is_owner=t.get("is_owner", True),
         source=t.get("source", "platform"),

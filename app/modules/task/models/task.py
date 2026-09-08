@@ -14,6 +14,7 @@ class Task(Base):
     id: Mapped[str] = mapped_column(String, primary_key=True, index=True)
     userId: Mapped[str] = mapped_column(String, nullable=False, index=True)
     title: Mapped[str] = mapped_column(String, nullable=False)
+    subtasks: Mapped[Optional[Any]] = mapped_column(JSON, nullable=True, default=list)
     notesEncrypted: Mapped[str] = mapped_column(String, nullable=False)
     estimateTimer: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     realTimer: Mapped[Optional[float]] = mapped_column(Float, nullable=True)

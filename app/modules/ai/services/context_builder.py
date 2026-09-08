@@ -6,7 +6,12 @@ from .memory import search_memories
 
 
 async def build_context(
-    user_id: str, conversation_id: str, query: str, db: AsyncSession
+    user_id: str,
+    conversation_id: str,
+    query: str,
+    db: AsyncSession,
+    client_time: str | None = None,
+    time_zone: str | None = None,
 ) -> str:
     """
     Builds the full prompt context for the LLM.
@@ -14,6 +19,8 @@ async def build_context(
     import datetime
 
     now_utc = datetime.datetime.utcnow()
+    display_time = client_time or now_utc.strftime("%Y-%m-%d %H:%M")
+    tz_info = f" ({time_zone})" if time_zone else " (UTC)"
 
     # Fetch user profile to get their name
     user_res = await db.execute(select(User).filter(User.id == user_id))
@@ -25,7 +32,9 @@ async def build_context(
         f"--- USER PROFILE ---\n"
         f"- Name: {user_name}\n\n"
         f"--- ENVIRONMENT INFO ---\n"
-        f"- Current Date/Time: {now_utc.strftime('%Y-%m-%d %H:%M UTC')}\n\n"
+        f"- Current Local Date/Time: {display_time}{tz_info}\n"
+        f"- Standard Work Hours Window: 09:00 - 19:00\n"
+        f"- CRITICAL SCHEDULING CONSTRAINT: Every task scheduled for TODAY must have its start and deadline strictly AFTER the current time ({display_time}). You must NEVER schedule tasks in the past.\n\n"
     )
 
     # 1. Fetch relevant memories

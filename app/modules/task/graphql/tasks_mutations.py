@@ -74,6 +74,18 @@ class TaskMutation:
             ]
             if create_task_input.time_logs
             else [],
+            "subtasks": [
+                {
+                    "id": s.id,
+                    "title": s.title,
+                    "completed": s.completed,
+                    "completed_at": s.completed_at,
+                    "estimate_timer": s.estimate_timer,
+                }
+                for s in create_task_input.subtasks
+            ]
+            if create_task_input.subtasks
+            else [],
             "use_ai": create_task_input.use_ai,
         }
 
@@ -162,6 +174,17 @@ class TaskMutation:
             update_data["time_logs"] = [
                 {"date": l.date, "minutes": l.minutes}
                 for l in update_task_input.time_logs
+            ]
+        if update_task_input.subtasks is not None:
+            update_data["subtasks"] = [
+                {
+                    "id": s.id,
+                    "title": s.title,
+                    "completed": s.completed,
+                    "completed_at": s.completed_at,
+                    "estimate_timer": s.estimate_timer,
+                }
+                for s in update_task_input.subtasks
             ]
         if update_task_input.use_ai is not None:
             update_data["use_ai"] = update_task_input.use_ai

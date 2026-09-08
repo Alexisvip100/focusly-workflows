@@ -2,9 +2,14 @@ from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from typing import Any
+import asyncio
 import httpx
 import json
+import logging
+import re
 import uuid
+
+logger = logging.getLogger(__name__)
 
 from app.config import settings
 from app.database import get_db
@@ -43,6 +48,8 @@ class ChatRequestSchema(BaseModel):
     # contextType="workspace", which only sees whatever was last persisted
     # to the Workspace row in the DB.
     document_context: str | None = None
+    clientTime: str | None = None
+    timeZone: str | None = None
 
 
 class GeminiStreamParser:
@@ -133,6 +140,51 @@ async def background_post_chat_tasks(
         pass
 
 
+async def fetch_ai_stream_and_persist(
+    url: str,
+    payload: dict,
+    user_id: str,
+    conversation_id: str,
+    user_message: str,
+    db_factory,
+    queue: asyncio.Queue,
+):
+    full_assistant_response = ""
+    try:
+        async with httpx.AsyncClient() as client:
+            async with client.stream("POST", url, json=payload, timeout=90.0) as r:
+                if r.status_code != 200:
+                    error_text = await r.aread()
+                    msg = f"Error calling focusly-ai service: {r.status_code} - {error_text.decode('utf-8', errors='ignore')}"
+                    await queue.put(("chunk", msg))
+                    return
+
+                async for chunk in r.aiter_text():
+                    full_assistant_response += chunk
+                    await queue.put(("chunk", chunk))
+    except Exception as e:
+        logger.error(f"Error streaming from focusly-ai: {e}")
+        await queue.put(("error", f"\nStreaming error from focusly-ai: {str(e)}"))
+    finally:
+        # Signal that the stream is complete
+        await queue.put(("done", None))
+
+        # Persist assistant reply to DB even if client disconnected mid-stream
+        if full_assistant_response:
+            try:
+                async for new_db in db_factory():
+                    await background_post_chat_tasks(
+                        user_id,
+                        conversation_id,
+                        user_message,
+                        full_assistant_response,
+                        new_db,
+                    )
+                    break
+            except Exception as e:
+                logger.error(f"Error in background_post_chat_tasks: {e}")
+
+
 async def stream_gemini_and_save(
     messages: list[dict[str, str]],
     system_context: str,
@@ -146,34 +198,37 @@ async def stream_gemini_and_save(
     url = f"{settings.FOCUSLY_AI_URL}/ai/chat"
     payload = {"messages": messages, "system_context": system_context, "model": model}
 
-    full_assistant_response = ""
+    queue: asyncio.Queue[tuple[str, str | None]] = asyncio.Queue()
 
-    async with httpx.AsyncClient() as client:
-        try:
-            # We connect to focusly-ai's /chat endpoint, which returns clean text/plain stream
-            async with client.stream("POST", url, json=payload, timeout=60.0) as r:
-                if r.status_code != 200:
-                    error_text = await r.aread()
-                    yield f"Error calling focusly-ai service: {r.status_code} - {error_text.decode('utf-8', errors='ignore')}"
-                    return
-
-                async for chunk in r.aiter_text():
-                    full_assistant_response += chunk
-                    yield chunk
-        except Exception as e:
-            yield f"\nStreaming error from focusly-ai: {str(e)}"
-
-    # Enqueue background tasks with a fresh db session
-    async for new_db in db_factory():
-        background_tasks.add_task(
-            background_post_chat_tasks,
+    # Launch background task that runs to completion regardless of client disconnection
+    asyncio.create_task(
+        fetch_ai_stream_and_persist(
+            url,
+            payload,
             user_id,
             conversation_id,
             user_message,
-            full_assistant_response,
-            new_db,
+            db_factory,
+            queue,
         )
-        break
+    )
+
+    try:
+        while True:
+            msg_type, data = await queue.get()
+            if msg_type == "done":
+                break
+            if msg_type == "error":
+                if data:
+                    yield data
+                break
+            if msg_type == "chunk":
+                if data:
+                    yield data
+    except (asyncio.CancelledError, GeneratorExit):
+        # Client disconnected or navigated away — the background task continues
+        # running and will persist the assistant response and tasks to PostgreSQL.
+        pass
 
 
 from app.modules.insights.services.behavioral_analyzer import BehavioralAnalyzer
@@ -239,8 +294,26 @@ async def chat_endpoint(
         if not conversation or conversation.userId != current_user_id:
             raise HTTPException(status_code=404, detail="Conversation not found")
     else:
-        title_snippet = latest_user_message[:30] + (
-            "..." if len(latest_user_message) > 30 else ""
+        clean_user_message = re.sub(
+            r"(?:===|---)\s*ATTACHED FILE:.*", "", latest_user_message, flags=re.DOTALL
+        ).strip()
+        if (
+            not clean_user_message
+            or clean_user_message
+            == "Please review and analyze the following attached file(s):"
+        ):
+            file_match = re.search(
+                r"(?:===|---)\s*ATTACHED FILE:\s*([^\n\r]+?)\s*(?:===|---)",
+                latest_user_message,
+            )
+            clean_user_message = (
+                f"File: {file_match.group(1).strip()}"
+                if file_match
+                else "Document analysis"
+            )
+
+        title_snippet = clean_user_message[:30] + (
+            "..." if len(clean_user_message) > 30 else ""
         )
         conversation = Conversation(
             id=str(uuid.uuid4()),
@@ -270,7 +343,12 @@ async def chat_endpoint(
 
     # 4. Context Builder
     system_context = await build_context(
-        current_user_id, conversation.id, latest_user_message, db
+        current_user_id,
+        conversation.id,
+        latest_user_message,
+        db,
+        client_time=body.clientTime,
+        time_zone=body.timeZone,
     )
 
     # Apply selected context instructions

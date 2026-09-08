@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 from typing import Any
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
+from sqlalchemy.orm.attributes import flag_modified
 
 from app.models import Task, Workspace
 from app.modules.task.services.scheduler_service import SchedulerService
@@ -59,6 +60,8 @@ class TasksService:
             "sync_status": t.sync_status or "synced",
             "collaborators": t.collaborators or [],
             "time_logs": t.time_logs or [],
+            "subtasks": t.subtasks or [],
+            "is_owner": getattr(t, "is_owner", True),
             "notified": t.notified or False,
             "lastMinuteNotified": t.lastMinuteNotified or False,
             "use_ai": t.use_ai or False,
@@ -282,6 +285,15 @@ class TasksService:
                 else:
                     if current_val != value:
                         setattr(task, key, value)
+                        if key in [
+                            "tags",
+                            "filters",
+                            "links",
+                            "collaborators",
+                            "time_logs",
+                            "subtasks",
+                        ]:
+                            flag_modified(task, key)
                         has_changes = True
                         if key == "status":
                             if value == "Done" and not task.completedAt:
