@@ -93,7 +93,7 @@ class TasksService:
 
     async def get_synced_google_ids(self, user_id: str) -> list[str]:
         google_tasks = await self.repository.get_synced_google_tasks_by_user(user_id)
-        return [t.google_event_id for t in google_tasks if t.google_event_id]
+        return [str(t.google_event_id) for t in google_tasks if t.google_event_id]
 
     async def find_one(self, id: str) -> dict[str, Any]:
         task = await self.repository.get_by_id(id)
@@ -219,7 +219,7 @@ class TasksService:
             await self.repository.save(task)
 
         if task.userId and has_changes and not skip_scheduling:
-            await self.sync_service.trigger_scheduler_pipeline(task.userId)
+            await self.sync_service.trigger_scheduler_pipeline(str(task.userId))
 
         result_task = task_to_dict(task)
         result_task["_changed"] = has_changes
@@ -255,14 +255,14 @@ class TasksService:
             raise e
 
         if task.userId and not skip_scheduling:
-            await self.sync_service.trigger_scheduler_pipeline(task.userId)
+            await self.sync_service.trigger_scheduler_pipeline(str(task.userId))
 
     async def delete_many(self, ids: list[str]) -> None:
-        user_ids = set()
+        user_ids: set[str] = set()
         for id in ids:
             task = await self.repository.get_by_id(id)
             if task and task.userId:
-                user_ids.add(task.userId)
+                user_ids.add(str(task.userId))
             await self.delete(id, skip_scheduling=True)
 
         await self.sync_service.trigger_scheduler_pipeline_for_users(user_ids)
@@ -272,9 +272,9 @@ class TasksService:
             select(Task).where(Task.workspaceId == workspace_id, Task.deletedAt == None)
         )
         tasks = result.scalars().all()
-        user_ids = {t.userId for t in tasks if t.userId}
+        user_ids: set[str] = {str(t.userId) for t in tasks if t.userId}
 
         for t in tasks:
-            await self.delete(t.id, skip_scheduling=True)
+            await self.delete(str(t.id), skip_scheduling=True)
 
         await self.sync_service.trigger_scheduler_pipeline_for_users(user_ids)

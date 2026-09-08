@@ -67,8 +67,10 @@ class TasksSyncService:
                 task.userId, task.google_event_id, google_event_body
             )
             task.google_synced_etag = google_event.get("etag")
+            # pyrefly: ignore [bad-assignment]
             task.sync_status = "synced"
         except Exception:
+            # pyrefly: ignore [bad-assignment]
             task.sync_status = "sync_error"
             logger.warning(
                 "Failed to push task %s to Google Calendar event %s",
