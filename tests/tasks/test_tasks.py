@@ -10,6 +10,7 @@ class PriorityLevel:
     URGENT = "URGENT"
 
 class TaskStatus:
+    TODO = "TODO"
     PENDING = "PENDING"
     IN_PROGRESS = "IN_PROGRESS"
     COMPLETED = "COMPLETED"

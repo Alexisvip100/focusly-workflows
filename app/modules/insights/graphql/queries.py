@@ -2,7 +2,7 @@ import strawberry
 
 from app.graphql import types
 from app.graphql.common import get_user_id
-from app.modules.task.services.tasks_service import TasksService
+from app.modules.task.services.tasks.tasks_service import TasksService
 from app.modules.insights.services.insights_service import InsightsService
 
 
