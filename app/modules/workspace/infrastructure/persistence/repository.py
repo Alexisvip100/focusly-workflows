@@ -91,10 +91,13 @@ class WorkspacesRepository:
     def __init__(self, db: AsyncSession):
         self.db = db
 
-    async def create(self, workspace: Workspace) -> Workspace:
+    async def create(self, workspace: Workspace, commit: bool = False) -> Workspace:
         self.db.add(workspace)
-        await self.db.commit()
-        await self.db.refresh(workspace)
+        if commit:
+            await self.db.commit()
+            await self.db.refresh(workspace)
+        else:
+            await self.db.flush()
         await cache.set(f"workspace:id:{workspace.id}", serialize_workspace(workspace))
         await cache.delete(f"workspaces:user:{workspace.userId}")
         await cache.delete(f"signals:user:{workspace.userId}")
@@ -200,7 +203,7 @@ class WorkspacesRepository:
         await cache.delete_pattern("workspace:id:*")
         await cache.delete_pattern("signals:user:*")
 
-    async def save(self, workspace: Workspace, commit: bool = True) -> Workspace:
+    async def save(self, workspace: Workspace, commit: bool = False) -> Workspace:
         if workspace not in self.db:
             workspace = await self.db.merge(workspace)
         if commit:
@@ -213,11 +216,14 @@ class WorkspacesRepository:
         await cache.delete(f"signals:user:{workspace.userId}")
         return workspace
 
-    async def delete(self, workspace: Workspace) -> None:
+    async def delete(self, workspace: Workspace, commit: bool = False) -> None:
         if workspace not in self.db:
             workspace = await self.db.merge(workspace)
         await self.db.delete(workspace)
-        await self.db.commit()
+        if commit:
+            await self.db.commit()
+        else:
+            await self.db.flush()
         await cache.delete(f"workspace:id:{workspace.id}")
         await cache.delete(f"workspaces:user:{workspace.userId}")
         await cache.delete(f"signals:user:{workspace.userId}")
@@ -227,10 +233,13 @@ class ProjectGroupsRepository:
     def __init__(self, db: AsyncSession):
         self.db = db
 
-    async def create(self, group: ProjectGroup) -> ProjectGroup:
+    async def create(self, group: ProjectGroup, commit: bool = False) -> ProjectGroup:
         self.db.add(group)
-        await self.db.commit()
-        await self.db.refresh(group)
+        if commit:
+            await self.db.commit()
+            await self.db.refresh(group)
+        else:
+            await self.db.flush()
         await cache.set(f"project_group:id:{group.id}", serialize_group(group))
         await cache.delete(f"project_groups:user:{group.userId}")
         return group
@@ -305,19 +314,25 @@ class ProjectGroupsRepository:
         await cache.delete_pattern("workspaces:user:*")
         await cache.delete_pattern("workspace:id:*")
 
-    async def save(self, group: ProjectGroup) -> ProjectGroup:
+    async def save(self, group: ProjectGroup, commit: bool = False) -> ProjectGroup:
         if group not in self.db:
             group = await self.db.merge(group)
-        await self.db.commit()
-        await self.db.refresh(group)
+        if commit:
+            await self.db.commit()
+            await self.db.refresh(group)
+        else:
+            await self.db.flush()
         await cache.set(f"project_group:id:{group.id}", serialize_group(group))
         await cache.delete(f"project_groups:user:{group.userId}")
         return group
 
-    async def delete(self, group: ProjectGroup) -> None:
+    async def delete(self, group: ProjectGroup, commit: bool = False) -> None:
         if group not in self.db:
             group = await self.db.merge(group)
         await self.db.delete(group)
-        await self.db.commit()
+        if commit:
+            await self.db.commit()
+        else:
+            await self.db.flush()
         await cache.delete(f"project_group:id:{group.id}")
         await cache.delete(f"project_groups:user:{group.userId}")

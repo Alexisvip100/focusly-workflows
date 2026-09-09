@@ -4,6 +4,7 @@ import uuid
 from typing import Any
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.database import transaction_scope
 from app.models import Tag
 from app.modules.task.schemas.tags import TagCreateSchema
 from app.modules.task.repository import TagsRepository
@@ -19,7 +20,8 @@ class TagsService:
         parsed_tag = TagCreateSchema(**tag_data)
 
         tag = Tag(id=tag_id, **parsed_tag.model_dump())
-        await self.repository.create(tag)
+        async with transaction_scope(self.db):
+            await self.repository.create(tag)
         return tag_id
 
     async def find_all(self) -> list[Tag]:

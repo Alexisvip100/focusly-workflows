@@ -4,6 +4,7 @@ from datetime import datetime, timedelta
 from typing import Any
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.database import transaction_scope
 from app.models import TimeBlock
 from app.modules.user.repository import UsersRepository
 from app.modules.task.repository import TasksRepository, TimeBlocksRepository
@@ -195,7 +196,11 @@ class SchedulerService:
         }
 
     async def run_scheduling_pipeline(
-        self, user_id: str, db: AsyncSession, socket_server=None
+        self,
+        user_id: str,
+        db: AsyncSession,
+        socket_server=None,
+        emit_socket: bool = True,
     ) -> None:
         user_repo = UsersRepository(db)
         tasks_repo = TasksRepository(db)
@@ -315,29 +320,30 @@ class SchedulerService:
                     )
                 )
 
-        await time_blocks_repo.replace_focus_blocks(user_id, new_time_blocks)
+        async with transaction_scope(db):
+            await time_blocks_repo.replace_focus_blocks(user_id, new_time_blocks)
 
-        for st in res["scheduledTasks"]:
-            t_id = st["taskId"]
-            wbs = st["workBlocks"]
-            if wbs:
-                sorted_wbs = sorted(wbs, key=lambda x: x["start"])
-                first_wb = sorted_wbs[0]
-                last_wb = sorted_wbs[-1]
+            for st in res["scheduledTasks"]:
+                t_id = st["taskId"]
+                wbs = st["workBlocks"]
+                if wbs:
+                    sorted_wbs = sorted(wbs, key=lambda x: x["start"])
+                    first_wb = sorted_wbs[0]
+                    last_wb = sorted_wbs[-1]
 
-                t_obj = await tasks_repo.get_by_id(t_id)
-                if t_obj:
-                    new_start = first_wb["start"]
-                    if t_obj.estimated_start_date != new_start:
-                        t_obj.notified = False
-                        t_obj.lastMinuteNotified = False
-                    t_obj.estimated_start_date = new_start
-                    t_obj.estimated_end_date = last_wb["end"]
-                    t_obj.status = "Scheduled"
-                    t_obj.updatedAt = datetime.utcnow()
-                    await tasks_repo.save(t_obj)
+                    t_obj = await tasks_repo.get_by_id(t_id)
+                    if t_obj:
+                        new_start = first_wb["start"]
+                        if t_obj.estimated_start_date != new_start:
+                            t_obj.notified = False
+                            t_obj.lastMinuteNotified = False
+                        t_obj.estimated_start_date = new_start
+                        t_obj.estimated_end_date = last_wb["end"]
+                        t_obj.status = "Scheduled"
+                        t_obj.updatedAt = datetime.utcnow()
+                        await tasks_repo.save(t_obj)
 
-        if socket_server:
+        if socket_server and emit_socket:
             try:
                 await socket_server.emit(
                     "schedule_updated",

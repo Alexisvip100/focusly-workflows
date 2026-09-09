@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy.orm.attributes import flag_modified
 
+from app.database import transaction_scope
 from app.models import Task, Workspace
 from app.modules.task.schemas.tasks import TaskCreateSchema
 from app.modules.task.repository import TasksRepository
@@ -69,7 +70,7 @@ class TasksService:
                     skip_google_sync=skip_google_sync,
                 )
 
-        # 2. Sync to Google Calendar
+        # 2. Sync to Google Calendar (performed outside DB transaction)
         if user_id and not skip_google_sync and not google_event_id:
             await self.sync_service.sync_create_to_google(user_id, task_data)
 
@@ -83,11 +84,32 @@ class TasksService:
             deadline=task_input.deadline or now,
             **task_input.model_dump(exclude={"deadline"}),
         )
-        await self.repository.create(new_task)
 
-        # 3. Trigger scheduler pipeline
-        if user_id and not skip_scheduling and new_task.status != "Backlog":
-            await self.sync_service.trigger_scheduler_pipeline(user_id)
+        should_schedule = user_id and not skip_scheduling and new_task.status != "Backlog"
+
+        try:
+            async with transaction_scope(self.db):
+                await self.repository.create(new_task)
+
+                # 3. Trigger scheduler pipeline (within transaction, socket emission deferred)
+                if should_schedule:
+                    await self.sync_service.trigger_scheduler_pipeline(
+                        user_id, emit_socket=False
+                    )
+        except Exception as e:
+            # Compensating action: if Google Calendar event was created but DB transaction rolled back, delete event from Google
+            if new_task.google_event_id and user_id and self.google_calendar_service:
+                try:
+                    await self.google_calendar_service.delete_event(
+                        user_id, new_task.google_event_id
+                    )
+                except Exception:
+                    pass
+            raise e
+
+        # 4. Emit Socket.IO only after DB transaction is successfully committed!
+        if should_schedule:
+            await self.sync_service.emit_schedule_updated(user_id)
 
         return task_to_dict(new_task)
 
@@ -209,17 +231,24 @@ class TasksService:
                             elif value != "Done" and task.completedAt:
                                 task.completedAt = None
 
+        should_schedule = task.userId and has_changes and not skip_scheduling
+
         if has_changes:
             task.updatedAt = datetime.now(timezone.utc).replace(tzinfo=None)
 
-            # Sync update back to Google Calendar
+            # Sync update back to Google Calendar (performed outside DB transaction)
             if not skip_google_sync:
                 await self.sync_service.sync_update_to_google(task)
 
-            await self.repository.save(task)
+            async with transaction_scope(self.db):
+                await self.repository.save(task)
+                if should_schedule:
+                    await self.sync_service.trigger_scheduler_pipeline(
+                        str(task.userId), emit_socket=False
+                    )
 
-        if task.userId and has_changes and not skip_scheduling:
-            await self.sync_service.trigger_scheduler_pipeline(str(task.userId))
+        if should_schedule:
+            await self.sync_service.emit_schedule_updated(str(task.userId))
 
         result_task = task_to_dict(task)
         result_task["_changed"] = has_changes
@@ -232,12 +261,14 @@ class TasksService:
         if not task:
             raise ValueError(f"Task with ID {id} not found")
 
-        # Sync deletion to Google Calendar
+        # Sync deletion to Google Calendar (outside DB transaction)
         if not skip_google_sync:
             await self.sync_service.sync_delete_to_google(task)
 
-        # Release task references from workspaces and delete task atomically
-        try:
+        should_schedule = task.userId and not skip_scheduling
+
+        # Release task references from workspaces, delete task, and recalculate scheduler atomically
+        async with transaction_scope(self.db):
             workspaces_res = await self.db.execute(
                 select(Workspace).where(Workspace.taskId == id)
             )
@@ -245,17 +276,18 @@ class TasksService:
             for w in workspaces_res.scalars().all():
                 w.taskId = None
                 w.updatedAt = datetime.now(timezone.utc).replace(tzinfo=None)
-                await workspaces_repo.save(w, commit=False)
+                await workspaces_repo.save(w)
 
             # Hard delete (Físico)
-            await self.repository.delete(task, commit=False)
-            await self.db.commit()
-        except Exception as e:
-            await self.db.rollback()
-            raise e
+            await self.repository.delete(task)
 
-        if task.userId and not skip_scheduling:
-            await self.sync_service.trigger_scheduler_pipeline(str(task.userId))
+            if should_schedule:
+                await self.sync_service.trigger_scheduler_pipeline(
+                    str(task.userId), emit_socket=False
+                )
+
+        if should_schedule:
+            await self.sync_service.emit_schedule_updated(str(task.userId))
 
     async def delete_many(self, ids: list[str]) -> None:
         user_ids: set[str] = set()

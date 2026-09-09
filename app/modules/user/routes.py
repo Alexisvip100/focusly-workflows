@@ -1,10 +1,12 @@
-from fastapi import APIRouter, HTTPException, Depends
 from typing import Any
-from pydantic import BaseModel, EmailStr
-from sqlalchemy.ext.asyncio import AsyncSession
 import uuid
 
+from fastapi import APIRouter, HTTPException, Depends
+from pydantic import BaseModel, EmailStr
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.database import get_db
+from app.routes.common import get_current_user_id
 from app.modules.user.services.users_service import UsersService
 from app.modules.storage.services.storage_service import (
     resolve_avatar_url,
@@ -21,7 +23,6 @@ class CreateUserSchema(BaseModel):
     role: str | None = "user"
     bio: str | None = None
     authProvider: str | None = None
-    googleRefreshToken: str | None = None
     subscriptionStatus: str | None = "free"
     settings: dict[str, Any] | None = None
     externalId: str | None = None
@@ -34,7 +35,6 @@ class UpdateUserSchema(BaseModel):
     role: str | None = None
     bio: str | None = None
     authProvider: str | None = None
-    googleRefreshToken: str | None = None
     subscriptionStatus: str | None = None
     settings: dict[str, Any] | None = None
     externalId: str | None = None
@@ -59,14 +59,20 @@ def map_user_to_dict(user) -> dict[str, Any]:
         "fcmToken": user.fcmToken,
         "createdAt": user.createdAt.isoformat() if user.createdAt else None,
         "updatedAt": user.updatedAt.isoformat() if user.updatedAt else None,
-        "googleRefreshToken": user.googleRefreshToken,
     }
 
 
 @router.post("", response_model=dict[str, Any])
 async def create_user(
-    body: CreateUserSchema, users_service: UsersService = Depends(get_users_service)
+    body: CreateUserSchema,
+    current_user_id: str = Depends(get_current_user_id),
+    users_service: UsersService = Depends(get_users_service),
 ):
+    current_user = await users_service.findOne(current_user_id)
+    if not current_user or current_user.role != "admin":
+        raise HTTPException(
+            status_code=403, detail="Admin privileges required to create users manually"
+        )
     try:
         user_data = body.model_dump()
         user_data["id"] = str(uuid.uuid4())
@@ -77,14 +83,53 @@ async def create_user(
 
 
 @router.get("", response_model=list[dict[str, Any]])
-async def find_all_users(users_service: UsersService = Depends(get_users_service)):
+async def find_all_users(
+    current_user_id: str = Depends(get_current_user_id),
+    users_service: UsersService = Depends(get_users_service),
+):
+    current_user = await users_service.findOne(current_user_id)
+    if not current_user or current_user.role != "admin":
+        raise HTTPException(
+            status_code=403, detail="Admin privileges required"
+        )
     users = await users_service.find()
     return [map_user_to_dict(u) for u in users]
 
 
-@router.get("/{id}", response_model=dict[str, Any])
-async def find_user(id: str, users_service: UsersService = Depends(get_users_service)):
+@router.get("/{id}/public-profile", response_model=dict[str, Any])
+async def find_public_profile(
+    id: str,
+    current_user_id: str = Depends(get_current_user_id),
+    users_service: UsersService = Depends(get_users_service),
+):
     user = await users_service.findOne(id)
+    if not user:
+        raise HTTPException(status_code=404, detail=f"User with ID {id} not found")
+    return {
+        "id": user.id,
+        "name": user.name,
+        "picture": resolve_avatar_url(user.picture),
+        "bio": user.bio,
+    }
+
+
+@router.get("/{id}", response_model=dict[str, Any])
+async def find_user(
+    id: str,
+    current_user_id: str = Depends(get_current_user_id),
+    users_service: UsersService = Depends(get_users_service),
+):
+    current_user = await users_service.findOne(current_user_id)
+    if not current_user:
+        raise HTTPException(status_code=401, detail="User not found")
+
+    if id != current_user_id and current_user.role != "admin":
+        raise HTTPException(
+            status_code=403,
+            detail="You do not have permission to view this user profile",
+        )
+
+    user = current_user if id == current_user_id else await users_service.findOne(id)
     if not user:
         raise HTTPException(status_code=404, detail=f"User with ID {id} not found")
     return map_user_to_dict(user)
@@ -94,14 +139,44 @@ async def find_user(id: str, users_service: UsersService = Depends(get_users_ser
 async def update_user(
     id: str,
     body: UpdateUserSchema,
+    current_user_id: str = Depends(get_current_user_id),
     users_service: UsersService = Depends(get_users_service),
 ):
-    update_data = body.model_dump(exclude_unset=True)
+    current_user = await users_service.findOne(current_user_id)
+    if not current_user:
+        raise HTTPException(status_code=401, detail="User not found")
 
-    previous_picture = None
-    if "picture" in update_data:
-        existing_user = await users_service.findOne(id)
-        previous_picture = existing_user.picture if existing_user else None
+    is_admin = current_user.role == "admin"
+    if id != current_user_id and not is_admin:
+        raise HTTPException(
+            status_code=403,
+            detail="You do not have permission to modify this user account",
+        )
+
+    target_user = current_user if id == current_user_id else await users_service.findOne(id)
+    if not target_user:
+        raise HTTPException(status_code=404, detail=f"User with ID {id} not found")
+
+    update_data = body.model_dump(exclude_unset=True)
+    if not is_admin:
+        if "role" in update_data and update_data["role"] != target_user.role:
+            raise HTTPException(
+                status_code=403,
+                detail="Forbidden: Only administrators can modify user roles",
+            )
+        if (
+            "subscriptionStatus" in update_data
+            and update_data["subscriptionStatus"] != target_user.subscriptionStatus
+        ):
+            raise HTTPException(
+                status_code=403,
+                detail="Forbidden: Only administrators can modify subscription status",
+            )
+        # Discard redundant echoes so update query never touches them
+        update_data.pop("role", None)
+        update_data.pop("subscriptionStatus", None)
+
+    previous_picture = target_user.picture
 
     user = await users_service.update(id, update_data)
     if not user:
@@ -111,7 +186,8 @@ async def update_user(
     # like a Google profile photo — and only once the new value is safely
     # persisted, so a failed update never orphans the still-current photo.
     if (
-        previous_picture
+        "picture" in update_data
+        and previous_picture
         and previous_picture != update_data.get("picture")
         and not previous_picture.startswith(("http://", "https://"))
     ):

@@ -4,6 +4,7 @@ from datetime import datetime
 from typing import Any
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.database import transaction_scope
 from app.models import Workspace
 from app.modules.workspace.schemas.workspaces import WorkspaceCreateSchema
 from app.modules.workspace.repository import WorkspacesRepository
@@ -26,7 +27,8 @@ class WorkspacesService:
             groupId=group_id,
             **workspace_data.model_dump(),
         )
-        return await self.repository.create(workspace)
+        async with transaction_scope(self.db):
+            return await self.repository.create(workspace)
 
     async def find_all(
         self,
@@ -61,49 +63,50 @@ class WorkspacesService:
     async def update(
         self, id: str, update_input: dict[str, Any], user_id: str
     ) -> Workspace:
-        workspace = await self.repository.get_by_id_and_user(id, user_id)
-        if not workspace:
-            raise ValueError(f"Workspace with ID {id} not found")
+        async with transaction_scope(self.db):
+            workspace = await self.repository.get_by_id_and_user(id, user_id)
+            if not workspace:
+                raise ValueError(f"Workspace with ID {id} not found")
 
-        now = datetime.utcnow()
+            now = datetime.utcnow()
 
-        # Handle exclusive taskId: if this workspace is taking a taskId, other workspaces must release it
-        task_id = update_input.get("taskId")
-        if task_id:
-            await self.repository.release_taskId_for_other_workspaces(task_id, id, now)
+            # Handle exclusive taskId: if this workspace is taking a taskId, other workspaces must release it
+            task_id = update_input.get("taskId")
+            if task_id:
+                await self.repository.release_taskId_for_other_workspaces(task_id, id, now)
 
-        if "title" in update_input:
-            workspace.title = update_input["title"]
-        if "content" in update_input:
-            workspace.content = update_input["content"]
-        if "saveStatus" in update_input:
-            workspace.saveStatus = update_input["saveStatus"]
+            if "title" in update_input:
+                workspace.title = update_input["title"]
+            if "content" in update_input:
+                workspace.content = update_input["content"]
+            if "saveStatus" in update_input:
+                workspace.saveStatus = update_input["saveStatus"]
 
-        # Handle emoji removal/persistence
-        emoji = update_input.get("emoji")
-        if emoji == "" or emoji is None:
-            workspace.emoji = None
-        else:
-            workspace.emoji = emoji
+            # Handle emoji removal/persistence
+            emoji = update_input.get("emoji")
+            if emoji == "" or emoji is None:
+                workspace.emoji = None
+            else:
+                workspace.emoji = emoji
 
-        # Handle background color
-        bg = update_input.get("background_color")
-        if bg == "none" or bg is None:
-            workspace.background_color = None
-        else:
-            workspace.background_color = bg
+            # Handle background color
+            bg = update_input.get("background_color")
+            if bg == "none" or bg is None:
+                workspace.background_color = None
+            else:
+                workspace.background_color = bg
 
-        if "card_show_background" in update_input:
-            workspace.card_show_background = update_input["card_show_background"]
+            if "card_show_background" in update_input:
+                workspace.card_show_background = update_input["card_show_background"]
 
-        # Handle taskId updates (which can be explicitly set to None)
-        if "taskId" in update_input:
-            workspace.taskId = update_input["taskId"]
-        if "groupId" in update_input:
-            workspace.groupId = update_input["groupId"]
+            # Handle taskId updates (which can be explicitly set to None)
+            if "taskId" in update_input:
+                workspace.taskId = update_input["taskId"]
+            if "groupId" in update_input:
+                workspace.groupId = update_input["groupId"]
 
-        workspace.updatedAt = now
-        saved = await self.repository.save(workspace)
+            workspace.updatedAt = now
+            saved = await self.repository.save(workspace)
 
         # ── Trigger: Automatización TODO ─────────────────────────────────────
         # Solo se ejecuta si el contenido del workspace cambió.
@@ -133,12 +136,13 @@ class WorkspacesService:
         return saved
 
     async def remove(self, id: str, user_id: str) -> bool:
-        workspace = await self.repository.get_by_id_and_user(id, user_id)
-        if not workspace:
-            raise ValueError(f"Workspace with ID {id} not found")
+        async with transaction_scope(self.db):
+            workspace = await self.repository.get_by_id_and_user(id, user_id)
+            if not workspace:
+                raise ValueError(f"Workspace with ID {id} not found")
 
-        await self.repository.delete(workspace)
-        return True
+            await self.repository.delete(workspace)
+            return True
 
     async def find_by_task_id(self, task_id: str) -> Workspace | None:
         return await self.repository.get_by_task_id(task_id)

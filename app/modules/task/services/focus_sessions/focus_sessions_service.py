@@ -4,6 +4,7 @@ import uuid
 from typing import Any
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.database import transaction_scope
 from app.models import FocusSession
 from app.modules.task.schemas.focus_sessions import FocusSessionCreateSchema
 from app.modules.task.repository import FocusSessionsRepository
@@ -19,7 +20,8 @@ class FocusSessionsService:
         parsed_session = FocusSessionCreateSchema(**session_data)
 
         new_session = FocusSession(id=session_id, **parsed_session.model_dump())
-        return await self.repository.create(new_session)
+        async with transaction_scope(self.db):
+            return await self.repository.create(new_session)
 
     async def findAll(self) -> list[FocusSession]:
         return await self.repository.get_all()

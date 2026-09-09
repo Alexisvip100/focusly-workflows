@@ -155,7 +155,7 @@ class GoogleCalendarService:
         if sync_token and not existing_google_tasks:
             sync_token = None
             user.googleCalendarSyncToken = None
-            await user_repo.save(user)
+            await user_repo.save(user, commit=True)
 
         next_page_token = None
         new_sync_token = None
@@ -185,7 +185,7 @@ class GoogleCalendarService:
 
                     if res.status_code == 410:
                         user.googleCalendarSyncToken = None
-                        await user_repo.save(user)
+                        await user_repo.save(user, commit=True)
                         sync_token = None
                         next_page_token = None
                         continue
@@ -285,7 +285,7 @@ class GoogleCalendarService:
 
                 if new_sync_token:
                     user.googleCalendarSyncToken = new_sync_token
-                    await user_repo.save(user)
+                    await user_repo.save(user, commit=True)
 
                 if has_changes:
                     # In python tasks service, scheduler pipeline uses the socket server we injected or default
@@ -358,7 +358,7 @@ class GoogleCalendarService:
             user.googleChannelExpiration = int(
                 data.get("expiration") or expiration_time
             )
-            await user_repo.save(user)
+            await user_repo.save(user, commit=True)
 
             pass
 
@@ -395,7 +395,7 @@ class GoogleCalendarService:
                     user.googleChannelId = None
                     user.googleResourceId = None
                     user.googleChannelExpiration = None
-                    await user_repo.save(user)
+                    await user_repo.save(user, commit=True)
                     print(f"Stopped watching calendar for user {user_id}")
                 else:
                     print(

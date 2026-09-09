@@ -1,5 +1,6 @@
 from typing import Any
 from sqlalchemy.ext.asyncio import AsyncSession
+from app.database import transaction_scope
 from app.models import User
 from app.modules.user.repository import UsersRepository
 
@@ -24,7 +25,8 @@ class UsersService:
             externalId=user_data.get("externalId"),
             fcmToken=user_data.get("fcmToken"),
         )
-        return await self.repository.create(user)
+        async with transaction_scope(self.db):
+            return await self.repository.create(user)
 
     async def findOne(self, id: str) -> User | None:
         return await self.repository.get_by_id(id)
@@ -36,23 +38,25 @@ class UsersService:
         return await self.repository.get_all()
 
     async def update(self, id: str, update_data: dict[str, Any]) -> User | None:
-        user = await self.repository.get_by_id(id)
-        if not user:
-            return None
+        async with transaction_scope(self.db):
+            user = await self.repository.get_by_id(id)
+            if not user:
+                return None
 
-        for key, value in update_data.items():
-            # `update_data` already only contains fields the caller actually
-            # sent (see UpdateUserSchema.model_dump(exclude_unset=True) in
-            # user/routes.py), so an explicit `None` here means "clear this
-            # field" — it must be applied, not skipped, or callers can never
-            # unset a nullable field (e.g. removing a profile picture).
-            if hasattr(user, key):
-                setattr(user, key, value)
+            for key, value in update_data.items():
+                # `update_data` already only contains fields the caller actually
+                # sent (see UpdateUserSchema.model_dump(exclude_unset=True) in
+                # user/routes.py), so an explicit `None` here means "clear this
+                # field" — it must be applied, not skipped, or callers can never
+                # unset a nullable field (e.g. removing a profile picture).
+                if hasattr(user, key):
+                    setattr(user, key, value)
 
-        return await self.repository.save(user)
+            return await self.repository.save(user)
 
     async def updateGoogleRefreshToken(self, id: str, token: str) -> None:
-        user = await self.repository.get_by_id(id)
-        if user:
-            user.googleRefreshToken = token
-            await self.repository.save(user)
+        async with transaction_scope(self.db):
+            user = await self.repository.get_by_id(id)
+            if user:
+                user.googleRefreshToken = token
+                await self.repository.save(user)

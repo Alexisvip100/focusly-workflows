@@ -34,7 +34,6 @@ class AuthMutation:
                 picture=u.get("picture"),
                 role=u.get("role"),
                 auth_provider=u.get("authProvider"),
-                google_refresh_token=u.get("googleRefreshToken"),
                 subscription_status=u.get("subscriptionStatus", "free"),
                 settings=u_settings,
                 bio=u.get("bio"),

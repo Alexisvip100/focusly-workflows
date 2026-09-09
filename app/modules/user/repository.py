@@ -74,10 +74,13 @@ class UsersRepository:
     def __init__(self, db: AsyncSession):
         self.db = db
 
-    async def create(self, user: User) -> User:
+    async def create(self, user: User, commit: bool = False) -> User:
         self.db.add(user)
-        await self.db.commit()
-        await self.db.refresh(user)
+        if commit:
+            await self.db.commit()
+            await self.db.refresh(user)
+        else:
+            await self.db.flush()
         await cache.set(f"user:id:{user.id}", serialize_user(user))
         await cache.set(f"user:email:{user.email}", serialize_user(user))
         return user
@@ -108,19 +111,25 @@ class UsersRepository:
         result = await self.db.execute(select(User))
         return list(result.scalars().all())
 
-    async def save(self, user: User) -> User:
+    async def save(self, user: User, commit: bool = False) -> User:
         if user not in self.db:
             user = await self.db.merge(user)
-        await self.db.commit()
-        await self.db.refresh(user)
+        if commit:
+            await self.db.commit()
+            await self.db.refresh(user)
+        else:
+            await self.db.flush()
         await cache.set(f"user:id:{user.id}", serialize_user(user))
         await cache.set(f"user:email:{user.email}", serialize_user(user))
         return user
 
-    async def delete(self, user: User) -> None:
+    async def delete(self, user: User, commit: bool = False) -> None:
         if user not in self.db:
             user = await self.db.merge(user)
         await self.db.delete(user)
-        await self.db.commit()
+        if commit:
+            await self.db.commit()
+        else:
+            await self.db.flush()
         await cache.delete(f"user:id:{user.id}")
         await cache.delete(f"user:email:{user.email}")

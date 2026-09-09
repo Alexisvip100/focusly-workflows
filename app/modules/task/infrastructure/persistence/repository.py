@@ -42,7 +42,7 @@ class TasksRepository:
     def __init__(self, db: AsyncSession):
         self.db = db
 
-    async def create(self, task: Task, commit: bool = True) -> Task:
+    async def create(self, task: Task, commit: bool = False) -> Task:
         self.db.add(task)
         if commit:
             await self.db.commit()
@@ -99,25 +99,24 @@ class TasksRepository:
         )
         return list(result.scalars().all())
 
+    async def get_active_non_google_tasks(self) -> list[Task]:
+        result = await self.db.execute(
+            select(Task).where(
+                Task.deletedAt == None,
+                or_(Task.source != "google", Task.source == None),
+            )
+        )
+        return list(result.scalars().all())
+
     async def get_synced_google_tasks_by_user(self, user_id: str) -> list[Task]:
         result = await self.db.execute(
             select(Task).where(
                 Task.userId == user_id,
                 Task.deletedAt == None,
                 Task.google_event_id != None,
+                Task.source == "google",
             )
         )
-        return list(result.scalars().all())
-
-    async def get_active_non_google_tasks(
-        self, user_id: str | None = None
-    ) -> list[Task]:
-        query = select(Task).where(
-            Task.deletedAt == None, or_(Task.source != "google", Task.source == None)
-        )
-        if user_id is not None:
-            query = query.where(Task.userId == user_id)
-        result = await self.db.execute(query)
         return list(result.scalars().all())
 
     async def get_upcoming_tasks(
@@ -148,7 +147,7 @@ class TasksRepository:
         )
         return list(result.scalars().all())
 
-    async def save(self, task: Task, commit: bool = True) -> Task:
+    async def save(self, task: Task, commit: bool = False) -> Task:
         if task not in self.db:
             task = await self.db.merge(task)
         if commit:
@@ -161,7 +160,7 @@ class TasksRepository:
         await cache.delete(f"signals:user:{task.userId}")
         return task
 
-    async def delete(self, task: Task, commit: bool = True) -> None:
+    async def delete(self, task: Task, commit: bool = False) -> None:
         if task not in self.db:
             task = await self.db.merge(task)
         await self.db.delete(task)
@@ -180,7 +179,7 @@ class TasksRepository:
             .returning(Task.id)
         )
         deleted_ids = list(result.scalars().all())
-        await self.db.commit()
+        await self.db.flush()
         await cache.delete(f"tasks:active:user:{user_id}")
         for t_id in deleted_ids:
             await cache.delete(f"task:id:{t_id}")
@@ -222,10 +221,13 @@ class TagsRepository:
     def __init__(self, db: AsyncSession):
         self.db = db
 
-    async def create(self, tag: Tag) -> Tag:
+    async def create(self, tag: Tag, commit: bool = False) -> Tag:
         self.db.add(tag)
-        await self.db.commit()
-        await self.db.refresh(tag)
+        if commit:
+            await self.db.commit()
+            await self.db.refresh(tag)
+        else:
+            await self.db.flush()
         return tag
 
     async def get_by_id_or_name(self, name: str) -> Tag | None:
@@ -247,18 +249,24 @@ class TimeBlocksRepository:
     def __init__(self, db: AsyncSession):
         self.db = db
 
-    async def create(self, time_block: TimeBlock) -> TimeBlock:
+    async def create(self, time_block: TimeBlock, commit: bool = False) -> TimeBlock:
         self.db.add(time_block)
-        await self.db.commit()
-        await self.db.refresh(time_block)
+        if commit:
+            await self.db.commit()
+            await self.db.refresh(time_block)
+        else:
+            await self.db.flush()
         return time_block
 
-    async def create_many(self, time_blocks: list[TimeBlock]) -> None:
+    async def create_many(self, time_blocks: list[TimeBlock], commit: bool = False) -> None:
         self.db.add_all(time_blocks)
-        await self.db.commit()
+        if commit:
+            await self.db.commit()
+        else:
+            await self.db.flush()
 
     async def replace_focus_blocks(
-        self, user_id: str, new_blocks: list[TimeBlock]
+        self, user_id: str, new_blocks: list[TimeBlock], commit: bool = False
     ) -> None:
         await self.db.execute(
             delete(TimeBlock).where(
@@ -267,7 +275,10 @@ class TimeBlocksRepository:
         )
         if new_blocks:
             self.db.add_all(new_blocks)
-        await self.db.commit()
+        if commit:
+            await self.db.commit()
+        else:
+            await self.db.flush()
 
     async def get_by_id(self, block_id: str) -> TimeBlock | None:
         result = await self.db.execute(
@@ -293,42 +304,57 @@ class TimeBlocksRepository:
         )
         return [r for r in result.scalars().all() if r]
 
-    async def delete_many_focus_blocks(self, user_id: str) -> None:
+    async def delete_many_focus_blocks(self, user_id: str, commit: bool = False) -> None:
         await self.db.execute(
             delete(TimeBlock).where(
                 TimeBlock.userId == user_id, TimeBlock.blockType == "Focus_Block"
             )
         )
-        await self.db.commit()
+        if commit:
+            await self.db.commit()
+        else:
+            await self.db.flush()
 
     async def delete_many_by_external_ids(
-        self, user_id: str, external_ids: list[str]
+        self, user_id: str, external_ids: list[str], commit: bool = False
     ) -> None:
         await self.db.execute(
             delete(TimeBlock).where(
                 TimeBlock.userId == user_id, TimeBlock.externalEventId.in_(external_ids)
             )
         )
-        await self.db.commit()
+        if commit:
+            await self.db.commit()
+        else:
+            await self.db.flush()
 
-    async def save(self, time_block: TimeBlock) -> TimeBlock:
-        await self.db.commit()
-        await self.db.refresh(time_block)
+    async def save(self, time_block: TimeBlock, commit: bool = False) -> TimeBlock:
+        if commit:
+            await self.db.commit()
+            await self.db.refresh(time_block)
+        else:
+            await self.db.flush()
         return time_block
 
-    async def delete(self, time_block: TimeBlock) -> None:
+    async def delete(self, time_block: TimeBlock, commit: bool = False) -> None:
         await self.db.delete(time_block)
-        await self.db.commit()
+        if commit:
+            await self.db.commit()
+        else:
+            await self.db.flush()
 
 
 class FocusSessionsRepository:
     def __init__(self, db: AsyncSession):
         self.db = db
 
-    async def create(self, session: FocusSession) -> FocusSession:
+    async def create(self, session: FocusSession, commit: bool = False) -> FocusSession:
         self.db.add(session)
-        await self.db.commit()
-        await self.db.refresh(session)
+        if commit:
+            await self.db.commit()
+            await self.db.refresh(session)
+        else:
+            await self.db.flush()
         return session
 
     async def get_by_id(self, session_id: str) -> FocusSession | None:
@@ -347,11 +373,21 @@ class FocusSessionsRepository:
         )
         return list(result.scalars().all())
 
-    async def save(self, session: FocusSession) -> FocusSession:
-        await self.db.commit()
-        await self.db.refresh(session)
+    async def save(self, session: FocusSession, commit: bool = False) -> FocusSession:
+        if session not in self.db:
+            session = await self.db.merge(session)
+        if commit:
+            await self.db.commit()
+            await self.db.refresh(session)
+        else:
+            await self.db.flush()
         return session
 
-    async def delete(self, session: FocusSession) -> None:
+    async def delete(self, session: FocusSession, commit: bool = False) -> None:
+        if session not in self.db:
+            session = await self.db.merge(session)
         await self.db.delete(session)
-        await self.db.commit()
+        if commit:
+            await self.db.commit()
+        else:
+            await self.db.flush()

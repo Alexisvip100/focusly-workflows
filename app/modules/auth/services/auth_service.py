@@ -1,3 +1,4 @@
+import logging
 import time
 from typing import Any
 import jwt
@@ -5,9 +6,12 @@ import httpx
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
+from app.database import transaction_scope
 from app.models import User
 from app.modules.user.repository import UsersRepository
 from app.modules.storage.services.storage_service import resolve_avatar_url
+
+logger = logging.getLogger(__name__)
 
 
 class AuthService:
@@ -58,23 +62,24 @@ class AuthService:
 
             refresh_token = tokens.get("refresh_token")
 
-            if not user:
-                import uuid
+            async with transaction_scope(self.db):
+                if not user:
+                    import uuid
 
-                user = User(
-                    id=str(uuid.uuid4()),
-                    email=email,
-                    name=name,
-                    picture=picture,
-                    authProvider="google",
-                    role="user",
-                    subscriptionStatus="free",
-                    googleRefreshToken=refresh_token,
-                )
-                await user_repo.create(user)
-            elif refresh_token:
-                user.googleRefreshToken = refresh_token
-                await user_repo.save(user)
+                    user = User(
+                        id=str(uuid.uuid4()),
+                        email=email,
+                        name=name,
+                        picture=picture,
+                        authProvider="google",
+                        role="user",
+                        subscriptionStatus="free",
+                        googleRefreshToken=refresh_token,
+                    )
+                    await user_repo.create(user)
+                elif refresh_token:
+                    user.googleRefreshToken = refresh_token
+                    await user_repo.save(user)
 
             jwt_data = self.generate_jwt(user)
             jwt_data["google_access_token"] = access_token
@@ -151,7 +156,6 @@ class AuthService:
             "fcmToken": user.fcmToken,
             "createdAt": user.createdAt.isoformat() if user.createdAt else None,
             "updatedAt": user.updatedAt.isoformat() if user.updatedAt else None,
-            "googleRefreshToken": user.googleRefreshToken,
         }
 
         return {
@@ -174,7 +178,7 @@ class AuthService:
         return jwt.encode(payload, settings.JWT_SECRET, algorithm="HS256")
 
     async def send_magic_link(self, email: str, token: str) -> None:
-        magic_link = f"http://localhost:5173/login?token={token}"
+        magic_link = f"{settings.FRONTEND_URL}/login?token={token}"
 
         if settings.RESEND_API_KEY:
             async with httpx.AsyncClient() as client:
@@ -205,8 +209,24 @@ class AuthService:
                     )
                     if response.status_code in (200, 201):
                         return
-                except Exception:
-                    pass
+                    logger.error(
+                        "Failed to send magic link to %s. Resend responded with status %s: %s",
+                        email,
+                        response.status_code,
+                        response.text,
+                    )
+                except Exception as e:
+                    logger.exception("Error sending magic link to %s: %s", email, e)
+        else:
+            if not settings.IS_PRODUCTION:
+                logger.warning(
+                    "RESEND_API_KEY is not set. Magic link for %s: %s", email, magic_link
+                )
+            else:
+                logger.error(
+                    "RESEND_API_KEY is not configured in production. Cannot deliver magic link to %s.",
+                    email,
+                )
 
     async def verify_magic_link_token(self, token: str) -> dict[str, Any]:
         try:
@@ -240,6 +260,7 @@ class AuthService:
                 role="user",
                 subscriptionStatus="free",
             )
-            await user_repo.create(user)
+            async with transaction_scope(self.db):
+                await user_repo.create(user)
 
         return self.generate_jwt(user)

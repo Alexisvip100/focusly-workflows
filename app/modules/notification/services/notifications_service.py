@@ -2,6 +2,7 @@ import uuid
 from typing import Any
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.database import transaction_scope
 from app.models import Notification
 from app.modules.notification.schemas.notifications import NotificationCreateSchema
 from app.modules.notification.repository import NotificationsRepository
@@ -17,7 +18,8 @@ class NotificationsService:
         parsed_notif = NotificationCreateSchema(**notification_data)
 
         new_notif = Notification(id=notif_id, **parsed_notif.model_dump())
-        return await self.repository.create(new_notif)
+        async with transaction_scope(self.db):
+            return await self.repository.create(new_notif)
 
     async def findAll(self) -> list[Notification]:
         return await self.repository.get_all()

@@ -78,9 +78,6 @@ class User:
     picture: str | None = None
     role: str | None = None
     auth_provider: str | None = strawberry.field(name="authProvider", default=None)
-    google_refresh_token: str | None = strawberry.field(
-        name="googleRefreshToken", default=None
-    )
     subscription_status: str = strawberry.field(name="subscriptionStatus")
     settings: UserSettings | None = None
     bio: str | None = None

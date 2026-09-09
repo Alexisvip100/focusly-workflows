@@ -93,14 +93,37 @@ class TasksSyncService:
             except Exception:
                 pass
 
-    async def trigger_scheduler_pipeline(self, user_id: str | None) -> None:
+    async def trigger_scheduler_pipeline(
+        self, user_id: str | None, emit_socket: bool = True
+    ) -> None:
         """Runs the scheduling optimizer pipeline for a specific user."""
         if user_id:
             await self.scheduler_service.run_scheduling_pipeline(
-                user_id, self.db, self.socket_server
+                user_id, self.db, self.socket_server, emit_socket=emit_socket
             )
 
-    async def trigger_scheduler_pipeline_for_users(self, user_ids: set[str]) -> None:
+    async def emit_schedule_updated(self, user_id: str | None) -> None:
+        """Emits schedule_updated event after transaction commit."""
+        if user_id and self.socket_server:
+            try:
+                from datetime import datetime
+                await self.socket_server.emit(
+                    "schedule_updated",
+                    {
+                        "type": "SCHEDULE_RECALCULATED",
+                        "timestamp": datetime.utcnow().isoformat(),
+                    },
+                    room=f"user_{user_id}",
+                    namespace="/realtime",
+                )
+            except Exception:
+                pass
+
+    async def trigger_scheduler_pipeline_for_users(
+        self, user_ids: set[str], emit_socket: bool = True
+    ) -> None:
         """Runs the scheduler pipeline for multiple users."""
         for u_id in user_ids:
-            await self.trigger_scheduler_pipeline(u_id)
+            await self.trigger_scheduler_pipeline(u_id, emit_socket=emit_socket)
+            if not emit_socket:
+                await self.emit_schedule_updated(u_id)

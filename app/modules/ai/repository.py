@@ -181,12 +181,15 @@ class MessageRepository:
         conv_id = messages[0].conversationId
         await cache.delete(f"conversation:messages:{conv_id}")
 
-    async def delete(self, message: Message) -> None:
+    async def delete(self, message: Message, commit: bool = False) -> None:
         conversation_id = message.conversationId
         if message not in self.db:
             message = await self.db.merge(message)
         await self.db.delete(message)
-        await self.db.commit()
+        if commit:
+            await self.db.commit()
+        else:
+            await self.db.flush()
         await cache.delete(f"conversation:messages:{conversation_id}")
 
 

@@ -1,7 +1,8 @@
-# pyrefly: ignore [missing-import]
-import socketio
-import urllib.parse
+from http.cookies import SimpleCookie
 from typing import Any
+import jwt
+import socketio
+from socketio.exceptions import ConnectionRefusedError
 
 from app.config import settings
 
@@ -25,15 +26,52 @@ sio = socketio.AsyncServer(
 socket_app = socketio.ASGIApp(sio, socketio_path="socket.io")
 
 
+def _extract_token_from_handshake(environ: dict, auth: Any = None) -> str | None:
+    # 1. Check socket.io auth dict (e.g. auth={"token": "..."})
+    if auth:
+        if isinstance(auth, dict):
+            token = auth.get("token") or auth.get("access_token")
+            if token:
+                return token
+        elif isinstance(auth, str) and auth.strip():
+            return auth.strip()
+
+    # 2. Check HTTP_COOKIE (set as httpOnly access_token cookie by /auth)
+    cookie_str = environ.get("HTTP_COOKIE")
+    if cookie_str:
+        cookie = SimpleCookie()
+        try:
+            cookie.load(cookie_str)
+            if "access_token" in cookie:
+                return cookie["access_token"].value
+        except Exception:
+            pass
+
+    # 3. Check HTTP_AUTHORIZATION header (Bearer <token>)
+    auth_header = environ.get("HTTP_AUTHORIZATION")
+    if auth_header and auth_header.startswith("Bearer "):
+        return auth_header.split(" ")[1]
+
+    return None
+
+
 @sio.event(namespace="/realtime")
 async def connect(sid, environ, auth=None):
-    query_string = environ.get("QUERY_STRING", "")
-    query_params = urllib.parse.parse_qs(query_string)
-    user_id_list = query_params.get("userId")
-    user_id = user_id_list[0] if user_id_list else None
+    token = _extract_token_from_handshake(environ, auth)
+    if not token:
+        raise ConnectionRefusedError("Authentication required: no token provided")
 
-    if user_id:
-        await sio.enter_room(sid, f"user_{user_id}", namespace="/realtime")
+    try:
+        payload = jwt.decode(token, settings.JWT_SECRET, algorithms=["HS256"])
+        user_id = payload.get("sub")
+        if not user_id:
+            raise ConnectionRefusedError("Invalid token: sub missing")
+    except jwt.ExpiredSignatureError:
+        raise ConnectionRefusedError("Token expired")
+    except jwt.InvalidTokenError:
+        raise ConnectionRefusedError("Invalid token")
+
+    await sio.enter_room(sid, f"user_{user_id}", namespace="/realtime")
 
 
 @sio.event(namespace="/realtime")

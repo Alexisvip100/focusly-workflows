@@ -24,6 +24,7 @@ services:
     build: .
     container_name: focusly-web
     restart: always
+    command: uvicorn app.main:app --host 0.0.0.0 --port 3000 --reload
     ports:
       - '8000:3000'
     volumes:

@@ -1,4 +1,5 @@
 import strawberry
+from app.graphql.extensions import TransactionalMutationExtension
 from app.modules.task.presentation.graphql import TaskQuery, TaskMutation, TagQuery
 from app.modules.workspace.presentation.graphql import (
     WorkspaceQuery,
@@ -41,4 +42,8 @@ class Mutation(
     pass
 
 
-schema = strawberry.Schema(query=Query, mutation=Mutation)
+schema = strawberry.Schema(
+    query=Query,
+    mutation=Mutation,
+    extensions=[TransactionalMutationExtension],
+)
