@@ -62,6 +62,7 @@ def task_to_dict(t: Task) -> dict[str, Any]:
         "lastMinuteNotified": t.lastMinuteNotified or False,
         "use_ai": t.use_ai or False,
         "workspaceId": t.workspaceId,
+        "projectId": getattr(t, "projectId", None),
     }
 
 

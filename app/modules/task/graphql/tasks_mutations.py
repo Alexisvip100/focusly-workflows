@@ -4,7 +4,7 @@ import strawberry
 
 from app.graphql import types
 from app.graphql.common import get_user_id
-from app.modules.task.services.tasks_service import TasksService
+from app.modules.task.services.tasks.tasks_service import TasksService
 from app.modules.auth.services.auth_service import AuthService
 
 
@@ -44,6 +44,8 @@ class TaskMutation:
             "deadline": create_task_input.deadline,
             "category": create_task_input.category,
             "color": create_task_input.color,
+            "workspaceId": create_task_input.workspace_id,
+            "projectId": create_task_input.project_id,
             "status": create_task_input.status,
             "tags": [{"name": t} for t in create_task_input.tags]
             if create_task_input.tags
@@ -188,6 +190,10 @@ class TaskMutation:
             ]
         if update_task_input.use_ai is not None:
             update_data["use_ai"] = update_task_input.use_ai
+        if update_task_input.workspace_id is not None:
+            update_data["workspaceId"] = update_task_input.workspace_id
+        if update_task_input.project_id is not None:
+            update_data["projectId"] = update_task_input.project_id
 
         res = await tasks_serv.update(str(update_task_input.id), update_data)
         return types.map_dict_to_strawberry_task(res)

@@ -100,7 +100,14 @@ class TasksFilterService:
                     if term in t.get("title", "").lower()
                     or term in (t.get("notesEncrypted") or "").lower()
                 ]
+            
+            target_ws = filters.get("workspace_id") or filters.get("workspaceId")
+            if target_ws:
+                mapped = [t for t in mapped if t.get("workspaceId") == target_ws]
 
+            target_proj = filters.get("project_id") or filters.get("projectId")
+            if target_proj:
+                mapped = [t for t in mapped if t.get("projectId") == target_proj]
         if sort and sort.get("sort"):
             field_map = {
                 "deadline": "deadline",

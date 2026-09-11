@@ -194,6 +194,8 @@ class Task:
     id: strawberry.ID
     user_id: str = strawberry.field(name="user_id")
     title: str
+    workspace_id:  str | None = strawberry.field(name="workspace_id", default=None)
+    project_id: str | None = strawberry.field(name="project_id", default=None)
     notes_encrypted: str = strawberry.field(name="notes_encrypted")
     estimate_timer: int | None = strawberry.field(name="estimate_timer", default=None)
     real_timer: float | None = strawberry.field(name="real_timer", default=None)
@@ -258,6 +260,33 @@ class Task:
                 createdAt=res.createdAt,
                 updatedAt=res.updatedAt,
             )
+        return None
+
+    @strawberry.field
+    async def project(self, info) -> Optional["ProjectGroup"]:
+        if not self.project_id:
+            return None
+        db = info.context["db"]
+        from app.modules.workspace.services.project_groups_service import (
+            ProjectGroupsService,
+        )
+
+        pg_serv = ProjectGroupsService(db)
+        async with info.context["db_lock"]:
+            try:
+                res = await pg_serv.find_one(str(self.project_id), self.user_id)
+                if res:
+                    return ProjectGroup(
+                        id=strawberry.ID(res.id),
+                        name=res.name,
+                        user_id=res.userId,
+                        color=res.color,
+                        emoji=res.emoji,
+                        created_at=res.createdAt,
+                        updated_at=res.updatedAt,
+                    )
+            except Exception:
+                return None
         return None
 
 
@@ -372,6 +401,8 @@ class TimeLogInput:
 class CreateTaskInput:
     user_id: str = strawberry.field(name="user_id")
     title: str
+    workspace_id: str | None = strawberry.field(name="workspace_id", default=None)
+    project_id: str | None = strawberry.field(name="project_id", default=None)
     notes_encrypted: str = strawberry.field(name="notes_encrypted")
     estimate_timer: int | None = strawberry.field(name="estimate_timer", default=None)
     real_timer: float | None = strawberry.field(name="real_timer", default=None)
@@ -418,6 +449,8 @@ class UpdateTaskInput:
     id: strawberry.ID
     user_id: str | None = strawberry.field(name="user_id", default=None)
     title: str | None = strawberry.field(name="title", default=None)
+    workspace_id: str | None = strawberry.field(name="workspace_id", default=None)
+    project_id: str | None = strawberry.field(name="project_id", default=None)
     notes_encrypted: str | None = strawberry.field(name="notes_encrypted", default=None)
     estimate_timer: int | None = strawberry.field(name="estimate_timer", default=None)
     real_timer: float | None = strawberry.field(name="real_timer", default=None)
@@ -455,6 +488,8 @@ class UpdateTaskInput:
 @strawberry.input
 class TaskFilterInput:
     status: list[str] | None = None
+    workspace_id: str | None = None
+    project_id: str | None = None
     priorityLevel: list[int] | None = None
     category: list[str] | None = None
     startDate: str | None = None
@@ -616,6 +651,8 @@ def map_dict_to_strawberry_task(t: dict[str, Any]) -> Task:
         tags=tags,
         filters=filters,
         links=links,
+        workspace_id=t.get("workspaceId") or t.get("workspace_id"),
+        project_id=t.get("projectId") or t.get("project_id"),
         task_type=t.get("task_type"),
         google_event_id=t.get("google_event_id"),
         estimated_start_date=parse_iso(t.get("estimated_start_date")),

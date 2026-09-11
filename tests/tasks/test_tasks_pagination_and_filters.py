@@ -4,6 +4,8 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 from app.modules.task.services.tasks_service import TasksService
+from app.modules.task.services.tasks.tasks_filter_services import TasksFilterService
+
 
 
 NOW = datetime(2026, 8, 29, 12, 0, 0)
@@ -180,3 +182,85 @@ def test_date_filter_naive_vs_aware_does_not_crash():
         None,
     )
     assert len(filtered) == 1
+
+
+def test_workspace_id_filter():
+    svc = TasksService.__new__(TasksService)
+    svc.tasksFilter = TasksFilterService()
+    tasks = [
+        {"id": "t1", "workspaceId": "ws-1", "title": "A", "notesEncrypted": ""},
+        {"id": "t2", "workspaceId": "ws-2", "title": "B", "notesEncrypted": ""},
+        {"id": "t3", "workspaceId": None, "title": "C", "notesEncrypted": ""},
+    ]
+    filtered_1 = svc._apply_filters_and_sorting(
+        tasks, {"workspace_id": "ws-1"}, None
+    )
+    assert [t["id"] for t in filtered_1] == ["t1"]
+
+    filtered_2 = svc._apply_filters_and_sorting(
+        tasks, {"workspaceId": "ws-2"}, None
+    )
+    assert [t["id"] for t in filtered_2] == ["t2"]
+
+
+def test_map_dict_to_strawberry_task_workspace_id():
+    from app.graphql.types import map_dict_to_strawberry_task
+
+    sample_dict = {
+        "id": "task-123",
+        "userId": "user-1",
+        "title": "Sample Task",
+        "notesEncrypted": "",
+        "priorityLevel": 2,
+        "deadline": "2026-09-09T10:00:00",
+        "status": "Todo",
+        "createdAt": "2026-09-09T10:00:00",
+        "updatedAt": "2026-09-09T10:00:00",
+        "tags": [],
+        "links": [],
+        "workspaceId": "ws-abc-123",
+    }
+    strawberry_task = map_dict_to_strawberry_task(sample_dict)
+    assert strawberry_task.workspace_id == "ws-abc-123"
+
+
+def test_project_id_filter():
+    svc = TasksService.__new__(TasksService)
+    svc.tasksFilter = TasksFilterService()
+    tasks = [
+        {"id": "t1", "projectId": "proj-1", "title": "A", "notesEncrypted": ""},
+        {"id": "t2", "projectId": "proj-2", "title": "B", "notesEncrypted": ""},
+        {"id": "t3", "projectId": None, "title": "C", "notesEncrypted": ""},
+    ]
+    filtered_1 = svc._apply_filters_and_sorting(
+        tasks, {"project_id": "proj-1"}, None
+    )
+    assert [t["id"] for t in filtered_1] == ["t1"]
+
+    filtered_2 = svc._apply_filters_and_sorting(
+        tasks, {"projectId": "proj-2"}, None
+    )
+    assert [t["id"] for t in filtered_2] == ["t2"]
+
+
+def test_map_dict_to_strawberry_task_project_id():
+    from app.graphql.types import map_dict_to_strawberry_task
+
+    sample_dict = {
+        "id": "task-123",
+        "userId": "user-1",
+        "title": "Sample Task",
+        "notesEncrypted": "",
+        "priorityLevel": 2,
+        "deadline": "2026-09-09T10:00:00",
+        "status": "Todo",
+        "createdAt": "2026-09-09T10:00:00",
+        "updatedAt": "2026-09-09T10:00:00",
+        "tags": [],
+        "links": [],
+        "projectId": "proj-abc-123",
+    }
+    strawberry_task = map_dict_to_strawberry_task(sample_dict)
+    assert strawberry_task.project_id == "proj-abc-123"
+
+

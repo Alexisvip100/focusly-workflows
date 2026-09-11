@@ -4,7 +4,7 @@ import strawberry
 
 from app.graphql import types
 from app.graphql.common import get_user_id
-from app.modules.task.services.tasks_service import TasksService
+from app.modules.task.services.tasks.tasks_service import TasksService
 
 
 @strawberry.type
@@ -44,6 +44,10 @@ class TaskQuery:
                 filters_dict["searchTerm"] = filters.searchTerm
             if filters.tags is not None:
                 filters_dict["tags"] = filters.tags
+            if filters.workspace_id is not None:
+                filters_dict["workspace_id"] = filters.workspace_id
+            if filters.project_id is not None:
+                filters_dict["project_id"] = filters.project_id
 
         sort_dict = None
         if sort:
@@ -87,6 +91,10 @@ class TaskQuery:
                 filters_dict["searchTerm"] = filters.searchTerm
             if filters.tags is not None:
                 filters_dict["tags"] = filters.tags
+            if filters.workspace_id is not None:
+                filters_dict["workspace_id"] = filters.workspace_id
+            if filters.project_id is not None:
+                filters_dict["project_id"] = filters.project_id
 
         sort_dict = None
         if sort:

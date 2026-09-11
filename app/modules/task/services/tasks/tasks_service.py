@@ -206,6 +206,11 @@ class TasksService:
 
         has_changes = False
 
+        if "workspace_id" in update_data and "workspaceId" not in update_data:
+            update_data["workspaceId"] = update_data.pop("workspace_id")
+        if "project_id" in update_data and "projectId" not in update_data:
+            update_data["projectId"] = update_data.pop("project_id")
+
         for key, value in update_data.items():
             if hasattr(task, key):
                 current_value = getattr(task, key)

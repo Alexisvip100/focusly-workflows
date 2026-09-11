@@ -32,6 +32,7 @@ class TaskCreateSchema(BaseModel):
     lastMinuteNotified: bool | None = False
     use_ai: bool | None = False
     workspaceId: str | None = None
+    projectId: str | None = None
     is_owner: bool | None = True
 
     @model_validator(mode="before")
@@ -56,6 +57,10 @@ class TaskCreateSchema(BaseModel):
                 "subtasks": [],
                 "is_owner": True,
             }
+            if "workspace_id" in data and not data.get("workspaceId"):
+                data["workspaceId"] = data["workspace_id"]
+            if "project_id" in data and not data.get("projectId"):
+                data["projectId"] = data["project_id"]
             for key, default_val in defaults.items():
                 if data.get(key) is None:
                     data[key] = default_val

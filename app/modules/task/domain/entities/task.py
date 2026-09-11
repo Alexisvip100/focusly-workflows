@@ -60,6 +60,7 @@ class Task(Base):
         Boolean, nullable=True, default=False
     )
     workspaceId: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    projectId: Mapped[Optional[str]] = mapped_column(String, nullable=True, index=True)
     is_owner: Mapped[Optional[bool]] = mapped_column(
         Boolean, nullable=True, default=False
     )
