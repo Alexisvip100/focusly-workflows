@@ -27,9 +27,9 @@ class ProjectGroupsService:
         return await self.repository.get_all_by_user(user_id, limit, offset)
 
     async def find_all_paginated(
-        self, user_id: str, limit: int = 8, offset: int = 0
+        self, user_id: str, limit: int = 8, offset: int = 0, search: str = ""
     ) -> dict[str, Any]:
-        res = await self.repository.find_all_paginated(user_id, limit, offset)
+        res = await self.repository.find_all_paginated(user_id, limit, offset, search)
         total = res["total"]
         return {
             "items": res["items"],

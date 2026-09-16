@@ -28,12 +28,12 @@ class ProjectGroupQuery:
 
     @strawberry.field
     async def project_groups_paginated(
-        self, info, limit: int = 8, offset: int = 0
+        self, info, limit: int = 8, offset: int = 0, search:str = ""
     ) -> types.PaginatedProjectGroups:
         user_id = get_user_id(info)
         db = info.context["db"]
         pg_serv = ProjectGroupsService(db)
-        res = await pg_serv.find_all_paginated(user_id, limit, offset)
+        res = await pg_serv.find_all_paginated(user_id, limit, offset, search)
         mapped = [
             types.ProjectGroup(
                 id=strawberry.ID(g.id),
