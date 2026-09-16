@@ -1,9 +1,69 @@
+from datetime import datetime, timezone
+from typing import Any, Optional
 import strawberry
-from datetime import datetime
-from typing import Optional, Any
+from sqlalchemy import func, select
 
-# Types
+from app.models import Workspace as WorkspaceModel
+from app.modules.workspace.services.workspaces_service import WorkspacesService
 
+# ==============================================================================
+# Helpers de Mapeo (DB / Dict -> Strawberry Types)
+# ==============================================================================
+
+def parse_iso_datetime(dt_val: str | datetime | None) -> datetime | None:
+    if not dt_val:
+        return None
+    if isinstance(dt_val, datetime):
+        return dt_val if dt_val.tzinfo else dt_val.replace(tzinfo=timezone.utc)
+    dt = datetime.fromisoformat(dt_val.replace("Z", "+00:00"))
+    return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+
+
+def map_model_to_strawberry_workspace(w: Any) -> "Workspace":
+    # Soporta tanto modelos ORM de SQLAlchemy como diccionarios
+    def get_val(key, default=None):
+        return w.get(key, default) if isinstance(w, dict) else getattr(w, key, default)
+
+    raw_created = get_val("createdAt") or get_val("created_at")
+    raw_updated = get_val("updatedAt") or get_val("updated_at")
+    
+    return Workspace(
+        id=strawberry.ID(str(get_val("id"))),
+        userId=str(get_val("userId") or get_val("user_id")),
+        taskId=get_val("taskId") or get_val("task_id"),
+        title=str(get_val("title", " ")),
+        emoji=get_val("emoji"),
+        background_color=get_val("background_color"),
+        card_show_background=get_val("card_show_background"),
+        projectId=get_val("groupId") or get_val("group_id") or get_val("projectId"),
+        content=str(get_val("content", "")),  
+        saveStatus=get_val("saveStatus") or get_val("save_status"),
+        createdAt=parse_iso_datetime(raw_created) or datetime.now(timezone.utc),
+        updatedAt=parse_iso_datetime(raw_updated) or datetime.now(timezone.utc),
+    )
+
+
+def map_model_to_strawberry_project_group(pg: Any) -> "ProjectGroup":
+    def get_val(key, default=None):
+        return pg.get(key, default) if isinstance(pg, dict) else getattr(pg, key, default)
+
+    raw_created = get_val("createdAt") or get_val("created_at")
+    raw_updated = get_val("updatedAt") or get_val("updated_at")
+
+    return ProjectGroup(
+        id=strawberry.ID(str(get_val("id"))),
+        name=str(get_val("name", "")),
+        user_id=str(get_val("userId") or get_val("user_id")),
+        color=get_val("color"),
+        emoji=get_val("emoji"),
+        created_at=parse_iso_datetime(raw_created) or datetime.now(timezone.utc),
+        updated_at=parse_iso_datetime(raw_updated) or datetime.now(timezone.utc),
+    )
+
+
+# ==============================================================================
+# Tipos Base y Auxiliares
+# ==============================================================================
 
 @strawberry.type
 class Tag:
@@ -32,15 +92,6 @@ class TimeLog:
 
 @strawberry.type
 class Subtask:
-    id: str
-    title: str
-    completed: bool = False
-    completed_at: str | None = strawberry.field(name="completed_at", default=None)
-    estimate_timer: int | None = strawberry.field(name="estimate_timer", default=None)
-
-
-@strawberry.input
-class SubtaskInput:
     id: str
     title: str
     completed: bool = False
@@ -90,6 +141,10 @@ class AuthResponse:
     google_access_token: str | None = None
 
 
+# ==============================================================================
+# Tipos Principales con Resolvers
+# ==============================================================================
+
 @strawberry.type
 class Workspace:
     id: strawberry.ID
@@ -109,9 +164,8 @@ class Workspace:
     createdAt: datetime
     updatedAt: datetime
 
-    # Resolved fields will be in the resolver/queries
     @strawberry.field
-    async def task(self, info) -> Optional["Task"]:
+    async def task(self, info: strawberry.types.Info) -> Optional["Task"]:
         if not self.taskId:
             return None
         db = info.context["db"]
@@ -119,15 +173,10 @@ class Workspace:
 
         tasks_serv = TasksService(db)
         try:
-            # This resolver runs once per Workspace when a list is queried
-            # with a nested `task` selection — sibling fields resolve
-            # concurrently, but they all share one AsyncSession, which
-            # isn't safe for concurrent use. Serialize with the per-request
-            # lock instead of giving every resolver its own session.
             async with info.context["db_lock"]:
                 res = await tasks_serv.find_one(self.taskId)
-            return map_dict_to_strawberry_task(res)
-        except:
+            return map_dict_to_strawberry_task(res) if res else None
+        except Exception:
             return None
 
 
@@ -142,51 +191,27 @@ class ProjectGroup:
     updated_at: datetime = strawberry.field(name="updatedAt")
 
     @strawberry.field(name="workspaceCount")
-    async def workspace_count(self, info) -> int:
+    async def workspace_count(self, info: strawberry.types.Info) -> int:
         db = info.context["db"]
-        from sqlalchemy import select, func
-        from app.models import Workspace
-
-        # Runs once per ProjectGroup in a list — see the lock note on
-        # Workspace.task above for why this can't just call db.execute
-        # directly.
         async with info.context["db_lock"]:
             result = await db.execute(
-                select(func.count(Workspace.id))
-                .where(Workspace.userId == self.user_id)
-                .where(Workspace.groupId == str(self.id))
+                select(func.count(WorkspaceModel.id))
+                .where(WorkspaceModel.userId == self.user_id)
+                .where(WorkspaceModel.groupId == self.id)
             )
         return result.scalar() or 0
 
     @strawberry.field
-    async def workspaces(self, info) -> list[Workspace]:
-        """Workspaces that belong to this group."""
+    async def workspaces(self, info: strawberry.types.Info) -> list[Workspace]:
         db = info.context["db"]
-        from app.modules.workspace.services.workspaces_service import WorkspacesService
-
         ws_serv = WorkspacesService(db)
         async with info.context["db_lock"]:
-            all_ws_res = await ws_serv.find_all(self.user_id, group_id=str(self.id))
+            all_ws_res = await ws_serv.find_all(self.user_id, group_id=self.id)
+
         all_ws = (
             all_ws_res.get("items", []) if isinstance(all_ws_res, dict) else all_ws_res
         )
-        return [
-            Workspace(
-                id=strawberry.ID(w.id),
-                userId=w.userId,
-                taskId=w.taskId,
-                title=w.title,
-                emoji=w.emoji,
-                background_color=w.background_color,
-                card_show_background=w.card_show_background,
-                projectId=w.groupId,
-                content=w.content,
-                saveStatus=w.saveStatus,
-                createdAt=w.createdAt,
-                updatedAt=w.updatedAt,
-            )
-            for w in all_ws
-        ]
+        return [map_model_to_strawberry_workspace(w) for w in all_ws]
 
 
 @strawberry.type
@@ -194,7 +219,7 @@ class Task:
     id: strawberry.ID
     user_id: str = strawberry.field(name="user_id")
     title: str
-    workspace_id:  str | None = strawberry.field(name="workspace_id", default=None)
+    workspace_id: str | None = strawberry.field(name="workspace_id", default=None)
     project_id: str | None = strawberry.field(name="project_id", default=None)
     notes_encrypted: str = strawberry.field(name="notes_encrypted")
     estimate_timer: int | None = strawberry.field(name="estimate_timer", default=None)
@@ -232,63 +257,53 @@ class Task:
     source: str | None = strawberry.field(name="source", default="platform")
 
     @strawberry.field
-    async def workspace(self, info) -> Workspace | None:
-        db = info.context["db"]
-        from app.modules.workspace.services.workspaces_service import WorkspacesService
+    async def workspace(self, info: strawberry.types.Info) -> Workspace | None:
+        ws_loader = info.context.get("task_workspace_loader")
+        res = None
+        if ws_loader:
+            res = await ws_loader.load((self.id, self.workspace_id))
+        else:
+            db = info.context.get("db")
+            db_lock = info.context.get("db_lock")
+            if db and db_lock:
+                ws_serv = WorkspacesService(db)
+                async with db_lock:
+                    res = await ws_serv.find_by_task_id(self.id)
+                    if not res and self.workspace_id:
+                        # Pasa user_id si tu firma lo exige para evitar missing-argument
+                        res = await ws_serv.find_one(self.workspace_id, self.user_id)
 
-        ws_serv = WorkspacesService(db)
-        # Runs once per Task in a list (e.g. GET_TASKS_PAGINATED with a
-        # nested `workspace` selection) — sibling Task.workspace resolvers
-        # fire concurrently but share one AsyncSession per request, which
-        # raises "concurrent operations are not permitted" without this
-        # lock. This was the cause of the intermittent "Error al cargar
-        # las tareas" on the Tasks page.
-        async with info.context["db_lock"]:
-            res = await ws_serv.find_by_task_id(str(self.id))
-        if res:
-            return Workspace(
-                id=strawberry.ID(res.id),
-                userId=res.userId,
-                taskId=res.taskId,
-                title=res.title,
-                emoji=res.emoji,
-                background_color=res.background_color,
-                card_show_background=res.card_show_background,
-                projectId=res.groupId,
-                content=res.content,
-                saveStatus=res.saveStatus,
-                createdAt=res.createdAt,
-                updatedAt=res.updatedAt,
-            )
-        return None
+        return map_model_to_strawberry_workspace(res) if res else None
 
     @strawberry.field
-    async def project(self, info) -> Optional["ProjectGroup"]:
+    async def project(self, info: strawberry.types.Info) -> ProjectGroup | None:
         if not self.project_id:
             return None
-        db = info.context["db"]
-        from app.modules.workspace.services.project_groups_service import (
-            ProjectGroupsService,
-        )
+        proj_loader = info.context.get("project_by_id_loader")
+        res = None
+        if proj_loader:
+            res = await proj_loader.load(self.project_id)
+        else:
+            db = info.context.get("db")
+            db_lock = info.context.get("db_lock")
+            if db and db_lock:
+                from app.modules.workspace.services.project_groups_service import (
+                    ProjectGroupsService,
+                )
 
-        pg_serv = ProjectGroupsService(db)
-        async with info.context["db_lock"]:
-            try:
-                res = await pg_serv.find_one(str(self.project_id), self.user_id)
-                if res:
-                    return ProjectGroup(
-                        id=strawberry.ID(res.id),
-                        name=res.name,
-                        user_id=res.userId,
-                        color=res.color,
-                        emoji=res.emoji,
-                        created_at=res.createdAt,
-                        updated_at=res.updatedAt,
-                    )
-            except Exception:
-                return None
-        return None
+                pg_serv = ProjectGroupsService(db)
+                async with db_lock:
+                    try:
+                        res = await pg_serv.find_one(self.project_id, self.user_id)
+                    except Exception:
+                        res = None
 
+        return map_model_to_strawberry_project_group(res) if res else None
+
+
+# ==============================================================================
+# Paginación
+# ==============================================================================
 
 @strawberry.type
 class PaginatedTasks:
@@ -310,8 +325,9 @@ class PaginatedProjectGroups:
     hasMore: bool | None = None
 
 
+# ==============================================================================
 # Insights Types
-
+# ==============================================================================
 
 @strawberry.type
 class StatCardValue:
@@ -374,7 +390,17 @@ class InsightsResponse:
     )
 
 
+# ==============================================================================
 # Inputs
+# ==============================================================================
+
+@strawberry.input
+class SubtaskInput:
+    id: str
+    title: str
+    completed: bool = False
+    completed_at: str | None = strawberry.field(name="completed_at", default=None)
+    estimate_timer: int | None = strawberry.field(name="estimate_timer", default=None)
 
 
 @strawberry.input
@@ -435,10 +461,6 @@ class CreateTaskInput:
     )
     use_ai: bool | None = strawberry.field(name="use_ai", default=None)
     is_owner: bool | None = strawberry.field(name="is_owner", default=True)
-    # When true, the auto-scheduler never runs for this task, so its deadline
-    # is never overridden by an auto-assigned estimated_start_date — used by
-    # the AI chat's day-by-day plans, where the exact day was chosen
-    # deliberately (including weekends) and must never be moved.
     skip_scheduling: bool | None = strawberry.field(
         name="skip_scheduling", default=False
     )
@@ -488,8 +510,10 @@ class UpdateTaskInput:
 @strawberry.input
 class TaskFilterInput:
     status: list[str] | None = None
-    workspace_id: str | None = None
-    project_id: str | None = None
+    workspace_id: str | None = strawberry.field(name="workspace_id", default=None)
+    workspaceId: str | None = strawberry.field(name="workspaceId", default=None)
+    project_id: str | None = strawberry.field(name="project_id", default=None)
+    projectId: str | None = strawberry.field(name="projectId", default=None)
     priorityLevel: list[int] | None = None
     category: list[str] | None = None
     startDate: str | None = None
@@ -552,38 +576,22 @@ class UpdateProjectGroupInput:
     emoji: str | None = None
 
 
-# Helper functions to convert DB/dict data to strawberry types
-
+# ==============================================================================
+# Helper de Mapeo Task & Notificaciones
+# ==============================================================================
 
 def map_dict_to_strawberry_task(t: dict[str, Any]) -> Task:
-    from datetime import timezone as _tz
-
-    def parse_iso(dt_str: str | None) -> datetime | None:
-        if not dt_str:
-            return None
-        # Parse the string; if it has no timezone info (naive), treat it as UTC.
-        dt = datetime.fromisoformat(dt_str.replace("Z", "+00:00"))
-        if dt.tzinfo is None:
-            dt = dt.replace(tzinfo=_tz.utc)
-        return dt
-
-    # Tags list
     tags = []
     if isinstance(t.get("tags"), list):
         for tg in t["tags"]:
-            if isinstance(tg, dict):
-                tags.append(Tag(name=tg.get("name", "")))
-            elif isinstance(tg, str):
-                tags.append(Tag(name=tg))
+            tags.append(Tag(name=tg.get("name", "") if isinstance(tg, dict) else str(tg)))
 
-    # Links list
     links = []
     if isinstance(t.get("links"), list):
         for l in t["links"]:
             if isinstance(l, dict):
                 links.append(TaskLink(title=l.get("title", ""), url=l.get("url", "")))
 
-    # Collaborators list
     collaborators = []
     if isinstance(t.get("collaborators"), list):
         for c in t["collaborators"]:
@@ -597,7 +605,6 @@ def map_dict_to_strawberry_task(t: dict[str, Any]) -> Task:
                     )
                 )
 
-    # Time logs
     time_logs = []
     if isinstance(t.get("time_logs"), list):
         for tl in t["time_logs"]:
@@ -606,7 +613,6 @@ def map_dict_to_strawberry_task(t: dict[str, Any]) -> Task:
                     TimeLog(date=tl.get("date", ""), minutes=tl.get("minutes", 0))
                 )
 
-    # Filters
     filters = None
     f = t.get("filters")
     if isinstance(f, dict):
@@ -616,7 +622,6 @@ def map_dict_to_strawberry_task(t: dict[str, Any]) -> Task:
             category=f.get("category"),
         )
 
-    # Subtasks
     subtasks = []
     if isinstance(t.get("subtasks"), list):
         for st in t["subtasks"]:
@@ -632,8 +637,8 @@ def map_dict_to_strawberry_task(t: dict[str, Any]) -> Task:
                 )
 
     return Task(
-        id=strawberry.ID(t["id"]),
-        user_id=t["userId"],
+        id=strawberry.ID(str(t["id"])),
+        user_id=str(t["userId"]),
         title=t["title"],
         notes_encrypted=t["notesEncrypted"],
         estimate_timer=t.get("estimateTimer"),
@@ -641,13 +646,13 @@ def map_dict_to_strawberry_task(t: dict[str, Any]) -> Task:
         priority_level=t["priorityLevel"],
         category=t.get("category"),
         color=t.get("color"),
-        deadline=parse_iso(t["deadline"]) or datetime.now(_tz.utc),
+        deadline=parse_iso_datetime(t.get("deadline")) or datetime.now(timezone.utc),
         status=t["status"],
-        completed_at=parse_iso(t.get("completedAt")),
-        duration=parse_iso(t.get("duration")),
-        created_at=parse_iso(t["createdAt"]) or datetime.now(_tz.utc),
-        updated_at=parse_iso(t["updatedAt"]) or datetime.now(_tz.utc),
-        deleted_at=parse_iso(t.get("deletedAt")),
+        completed_at=parse_iso_datetime(t.get("completedAt")),
+        duration=parse_iso_datetime(t.get("duration")),
+        created_at=parse_iso_datetime(t.get("createdAt")) or datetime.now(timezone.utc),
+        updated_at=parse_iso_datetime(t.get("updatedAt")) or datetime.now(timezone.utc),
+        deleted_at=parse_iso_datetime(t.get("deletedAt")),
         tags=tags,
         filters=filters,
         links=links,
@@ -655,8 +660,8 @@ def map_dict_to_strawberry_task(t: dict[str, Any]) -> Task:
         project_id=t.get("projectId") or t.get("project_id"),
         task_type=t.get("task_type"),
         google_event_id=t.get("google_event_id"),
-        estimated_start_date=parse_iso(t.get("estimated_start_date")),
-        estimated_end_date=parse_iso(t.get("estimated_end_date")),
+        estimated_start_date=parse_iso_datetime(t.get("estimated_start_date")),
+        estimated_end_date=parse_iso_datetime(t.get("estimated_end_date")),
         collaborators=collaborators,
         time_logs=time_logs,
         subtasks=subtasks,
@@ -680,9 +685,9 @@ class NotificationType:
     updatedAt: datetime = strawberry.field(name="updatedAt")
 
 
-def map_model_to_strawberry_notification(n) -> NotificationType:
+def map_model_to_strawberry_notification(n: Any) -> NotificationType:
     return NotificationType(
-        id=strawberry.ID(n.id),
+        id=strawberry.ID(str(n.id)),
         userId=n.userId,
         relatedTaskId=n.relatedTaskId,
         type=n.type,

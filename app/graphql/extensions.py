@@ -1,4 +1,4 @@
-from typing import AsyncIterator
+from collections.abc import AsyncIterator
 from strawberry.extensions import SchemaExtension
 from graphql.language.ast import OperationType
 from app.database import transaction_scope

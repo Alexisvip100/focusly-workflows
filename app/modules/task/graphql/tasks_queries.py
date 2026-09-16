@@ -44,10 +44,12 @@ class TaskQuery:
                 filters_dict["searchTerm"] = filters.searchTerm
             if filters.tags is not None:
                 filters_dict["tags"] = filters.tags
-            if filters.workspace_id is not None:
-                filters_dict["workspace_id"] = filters.workspace_id
-            if filters.project_id is not None:
-                filters_dict["project_id"] = filters.project_id
+            ws = filters.workspace_id or filters.workspaceId
+            if ws is not None:
+                filters_dict["workspace_id"] = ws
+            prj = filters.project_id or filters.projectId
+            if prj is not None:
+                filters_dict["project_id"] = prj
 
         sort_dict = None
         if sort:
@@ -91,10 +93,12 @@ class TaskQuery:
                 filters_dict["searchTerm"] = filters.searchTerm
             if filters.tags is not None:
                 filters_dict["tags"] = filters.tags
-            if filters.workspace_id is not None:
-                filters_dict["workspace_id"] = filters.workspace_id
-            if filters.project_id is not None:
-                filters_dict["project_id"] = filters.project_id
+            ws = filters.workspace_id or filters.workspaceId
+            if ws is not None:
+                filters_dict["workspace_id"] = ws
+            prj = filters.project_id or filters.projectId
+            if prj is not None:
+                filters_dict["project_id"] = prj
 
         sort_dict = None
         if sort:

@@ -1,5 +1,4 @@
 from datetime import datetime
-from typing import Optional
 
 from sqlalchemy import DateTime, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column
@@ -15,7 +14,7 @@ class Message(Base):
     conversationId: Mapped[str] = mapped_column(String, nullable=False, index=True)
     role: Mapped[str] = mapped_column(String, nullable=False)
     content: Mapped[str] = mapped_column(String, nullable=False)
-    tokenUsage: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, default=0)
+    tokenUsage: Mapped[int | None] = mapped_column(Integer, nullable=True, default=0)
     createdAt: Mapped[datetime] = mapped_column(
         DateTime, default=func.now(), nullable=False
     )

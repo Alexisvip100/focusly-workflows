@@ -140,7 +140,16 @@ async def get_context(request: Request):
         except Exception:
             pass  # Invalid token, keep user_id = None
 
-    return {"db": db, "db_lock": db_lock, "user_id": user_id, "request": request}
+    from app.graphql.dataloaders import get_loaders
+
+    loaders = get_loaders(db, db_lock) if db and db_lock else {}
+    return {
+        "db": db,
+        "db_lock": db_lock,
+        "user_id": user_id,
+        "request": request,
+        **loaders,
+    }
 
 
 from typing import Any

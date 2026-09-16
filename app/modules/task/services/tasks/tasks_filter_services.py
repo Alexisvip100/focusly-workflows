@@ -3,9 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
  
-from sqlalchemy import func, select
  
-from app.models import Task
 
 class TasksFilterService:
     def apply_filters_and_sorting(
