@@ -134,12 +134,15 @@ class TasksService:
         sort: dict[str, Any] | None = None,
         offset: int = 0,
         limit: int | None = 24,
+        search: str = "",
     ) -> dict[str, Any]:
         result = await self.repository.get_all_active_by_user(user_id)
         tasks = [task_to_dict(t) for t in result]
 
         # Aplicar filtros y orden
-        tasks = self.tasksFilter.apply_filters_and_sorting(tasks, filters, sort)
+        tasks = self.tasksFilter.apply_filters_and_sorting(
+            tasks, filters, sort, search
+        )
 
         total = len(tasks)
         items = tasks[offset : offset + limit] if limit is not None else tasks[offset:]
@@ -156,9 +159,10 @@ class TasksService:
         sort: dict[str, Any] | None = None,
         offset: int = 0,
         limit: int | None = None,
+        search: str = "",
     ) -> tuple[list[dict[str, Any]], int]:
         res = await self.find_all_by_user(
-            user_id, filters, sort, offset=offset, limit=limit
+            user_id, filters, sort, offset=offset, limit=limit, search=search
         )
         return res["items"], res["total"]
 

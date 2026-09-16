@@ -70,6 +70,7 @@ class TaskQuery:
         sort: types.TaskSortInput | None = None,
         offset: int = 0,
         limit: int = 24,
+        search: str = ""
     ) -> types.PaginatedTasks:
         # See get_tasks_by_user: always scope to the authenticated user.
         user_id = get_user_id(info)
@@ -110,6 +111,7 @@ class TaskQuery:
             sort=sort_dict,
             offset=offset or 0,
             limit=limit,
+            search=search
         )
 
         return types.PaginatedTasks(
