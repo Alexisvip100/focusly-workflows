@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any
 
 from sqlalchemy import Boolean, DateTime, Float, Index, Integer, JSON, String, text
 from sqlalchemy.orm import Mapped, mapped_column
@@ -22,53 +22,53 @@ class Task(Base):
     id: Mapped[str] = mapped_column(String, primary_key=True, index=True)
     userId: Mapped[str] = mapped_column(String, nullable=False, index=True)
     title: Mapped[str] = mapped_column(String, nullable=False)
-    subtasks: Mapped[Optional[Any]] = mapped_column(JSON, nullable=True, default=list)
+    subtasks: Mapped[Any | None] = mapped_column(JSON, nullable=True, default=list)
     notesEncrypted: Mapped[str] = mapped_column(String, nullable=False)
-    estimateTimer: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
-    realTimer: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
-    duration: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    estimateTimer: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    realTimer: Mapped[float | None] = mapped_column(Float, nullable=True)
+    duration: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     priorityLevel: Mapped[int] = mapped_column(Integer, nullable=False, default=2)
-    category: Mapped[Optional[str]] = mapped_column(String, nullable=True)
-    color: Mapped[Optional[str]] = mapped_column(String, nullable=True)
-    estimated_start_date: Mapped[Optional[datetime]] = mapped_column(
+    category: Mapped[str | None] = mapped_column(String, nullable=True)
+    color: Mapped[str | None] = mapped_column(String, nullable=True)
+    estimated_start_date: Mapped[datetime | None] = mapped_column(
         DateTime, nullable=True
     )
-    estimated_end_date: Mapped[Optional[datetime]] = mapped_column(
+    estimated_end_date: Mapped[datetime | None] = mapped_column(
         DateTime, nullable=True
     )
     deadline: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     status: Mapped[str] = mapped_column(String, nullable=False, default="Todo")
-    completedAt: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    completedAt: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     createdAt: Mapped[datetime] = mapped_column(
         DateTime, default=func.now(), nullable=False
     )
     updatedAt: Mapped[datetime] = mapped_column(
         DateTime, default=func.now(), onupdate=func.now(), nullable=False
     )
-    deletedAt: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
-    tags: Mapped[Optional[Any]] = mapped_column(JSON, nullable=True)
-    filters: Mapped[Optional[Any]] = mapped_column(JSON, nullable=True)
-    links: Mapped[Optional[Any]] = mapped_column(JSON, nullable=True)
-    task_type: Mapped[Optional[str]] = mapped_column(String, nullable=True)
-    google_event_id: Mapped[Optional[str]] = mapped_column(
+    deletedAt: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    tags: Mapped[Any | None] = mapped_column(JSON, nullable=True)
+    filters: Mapped[Any | None] = mapped_column(JSON, nullable=True)
+    links: Mapped[Any | None] = mapped_column(JSON, nullable=True)
+    task_type: Mapped[str | None] = mapped_column(String, nullable=True)
+    google_event_id: Mapped[str | None] = mapped_column(
         String, nullable=True, index=True
     )
-    source: Mapped[Optional[str]] = mapped_column(String, nullable=True)
-    sync_status: Mapped[Optional[str]] = mapped_column(String, nullable=True)
-    google_synced_etag: Mapped[Optional[str]] = mapped_column(String, nullable=True)
-    collaborators: Mapped[Optional[Any]] = mapped_column(JSON, nullable=True)
-    time_logs: Mapped[Optional[Any]] = mapped_column(JSON, nullable=True, default=list)
-    notified: Mapped[Optional[bool]] = mapped_column(
+    source: Mapped[str | None] = mapped_column(String, nullable=True)
+    sync_status: Mapped[str | None] = mapped_column(String, nullable=True)
+    google_synced_etag: Mapped[str | None] = mapped_column(String, nullable=True)
+    collaborators: Mapped[Any | None] = mapped_column(JSON, nullable=True)
+    time_logs: Mapped[Any | None] = mapped_column(JSON, nullable=True, default=list)
+    notified: Mapped[bool | None] = mapped_column(
         Boolean, nullable=True, default=False
     )
-    lastMinuteNotified: Mapped[Optional[bool]] = mapped_column(
+    lastMinuteNotified: Mapped[bool | None] = mapped_column(
         Boolean, nullable=True, default=False
     )
-    use_ai: Mapped[Optional[bool]] = mapped_column(
+    use_ai: Mapped[bool | None] = mapped_column(
         Boolean, nullable=True, default=False
     )
-    workspaceId: Mapped[Optional[str]] = mapped_column(String, nullable=True, index=True)
-    projectId: Mapped[Optional[str]] = mapped_column(String, nullable=True, index=True)
-    is_owner: Mapped[Optional[bool]] = mapped_column(
+    workspaceId: Mapped[str | None] = mapped_column(String, nullable=True, index=True)
+    projectId: Mapped[str | None] = mapped_column(String, nullable=True, index=True)
+    is_owner: Mapped[bool | None] = mapped_column(
         Boolean, nullable=True, default=False
     )

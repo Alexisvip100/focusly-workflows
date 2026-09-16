@@ -1,5 +1,4 @@
 from datetime import datetime
-from typing import Optional
 
 from sqlalchemy import DateTime, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column
@@ -15,8 +14,8 @@ class AutomationLog(Base):
     workspaceId: Mapped[str] = mapped_column(String, nullable=False, index=True)
     userId: Mapped[str] = mapped_column(String, nullable=False, index=True)
     todoHash: Mapped[str] = mapped_column(String, nullable=False, index=True)
-    taskTitle: Mapped[Optional[str]] = mapped_column(String, nullable=True)
-    taskId: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    taskTitle: Mapped[str | None] = mapped_column(String, nullable=True)
+    taskId: Mapped[str | None] = mapped_column(String, nullable=True)
     createdAt: Mapped[datetime] = mapped_column(
         DateTime, default=func.now(), nullable=False
     )

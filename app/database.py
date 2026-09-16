@@ -36,7 +36,7 @@ async def get_db():
 
 
 from contextlib import asynccontextmanager
-from typing import AsyncGenerator
+from collections.abc import AsyncGenerator
 
 
 @asynccontextmanager

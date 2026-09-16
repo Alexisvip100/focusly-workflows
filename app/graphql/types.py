@@ -21,9 +21,9 @@ def parse_iso_datetime(dt_val: str | datetime | None) -> datetime | None:
 
 def map_model_to_strawberry_workspace(w: Any) -> "Workspace":
     # Soporta tanto modelos ORM de SQLAlchemy como diccionarios
-    get_val = lambda key, default=None: (
-        w.get(key, default) if isinstance(w, dict) else getattr(w, key, default)
-    )
+    def get_val(key, default=None):
+        return w.get(key, default) if isinstance(w, dict) else getattr(w, key, default)
+
     raw_created = get_val("createdAt") or get_val("created_at")
     raw_updated = get_val("updatedAt") or get_val("updated_at")
     
@@ -44,9 +44,9 @@ def map_model_to_strawberry_workspace(w: Any) -> "Workspace":
 
 
 def map_model_to_strawberry_project_group(pg: Any) -> "ProjectGroup":
-    get_val = lambda key, default=None: (
-        pg.get(key, default) if isinstance(pg, dict) else getattr(pg, key, default)
-    )
+    def get_val(key, default=None):
+        return pg.get(key, default) if isinstance(pg, dict) else getattr(pg, key, default)
+
     raw_created = get_val("createdAt") or get_val("created_at")
     raw_updated = get_val("updatedAt") or get_val("updated_at")
 
@@ -276,7 +276,7 @@ class Task:
         return map_model_to_strawberry_workspace(res) if res else None
 
     @strawberry.field
-    async def project(self, info: strawberry.types.Info) -> Optional[ProjectGroup]:
+    async def project(self, info: strawberry.types.Info) -> ProjectGroup | None:
         if not self.project_id:
             return None
         proj_loader = info.context.get("project_by_id_loader")
