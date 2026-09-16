@@ -13,6 +13,7 @@ class ProjectGroupQuery:
         db = info.context["db"]
         pg_serv = ProjectGroupsService(db)
         res = await pg_serv.find_all(user_id, limit, offset)
+        
         return [
             types.ProjectGroup(
                 id=strawberry.ID(g.id),

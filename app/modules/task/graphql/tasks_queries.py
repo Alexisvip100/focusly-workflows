@@ -18,6 +18,7 @@ class TaskQuery:
         offset: int = 0,
         filters: types.TaskFilterInput | None = None,
         sort: types.TaskSortInput | None = None,
+        search: str = "",
     ) -> list[types.Task]:
         # The authenticated user's own ID is always used, regardless of what
         # user_id the client passes — otherwise any authenticated user could
@@ -56,7 +57,7 @@ class TaskQuery:
             sort_dict = {"sort": sort.sort, "order": sort.order or "asc"}
 
         res = await tasks_serv.find_all_by_user(
-            user_id, filters_dict, sort_dict, limit=limit, offset=offset
+            user_id, filters_dict, sort_dict, limit=limit, offset=offset, search=search
         )
         items = res["items"] if isinstance(res, dict) else res
         return [types.map_dict_to_strawberry_task(t) for t in items]
@@ -70,6 +71,7 @@ class TaskQuery:
         sort: types.TaskSortInput | None = None,
         offset: int = 0,
         limit: int = 24,
+        search: str = ""
     ) -> types.PaginatedTasks:
         # See get_tasks_by_user: always scope to the authenticated user.
         user_id = get_user_id(info)
@@ -110,6 +112,7 @@ class TaskQuery:
             sort=sort_dict,
             offset=offset or 0,
             limit=limit,
+            search=search
         )
 
         return types.PaginatedTasks(
