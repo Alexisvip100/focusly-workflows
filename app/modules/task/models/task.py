@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Any, Optional
 
-from sqlalchemy import Boolean, DateTime, Float, Integer, JSON, String
+from sqlalchemy import Boolean, DateTime, Float, Index, Integer, JSON, String, text
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import func
 
@@ -10,6 +10,14 @@ from app.database import Base
 
 class Task(Base):
     __tablename__ = "Task"
+    __table_args__ = (
+        Index(
+            "ix_Task_active_user",
+            "userId",
+            "createdAt",
+            postgresql_where=text('"deletedAt" IS NULL'),
+        ),
+    )
 
     id: Mapped[str] = mapped_column(String, primary_key=True, index=True)
     userId: Mapped[str] = mapped_column(String, nullable=False, index=True)
@@ -49,6 +57,7 @@ class Task(Base):
     sync_status: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     google_synced_etag: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     collaborators: Mapped[Optional[Any]] = mapped_column(JSON, nullable=True)
+    time_logs: Mapped[Optional[Any]] = mapped_column(JSON, nullable=True, default=list)
     notified: Mapped[Optional[bool]] = mapped_column(
         Boolean, nullable=True, default=False
     )
@@ -58,7 +67,7 @@ class Task(Base):
     use_ai: Mapped[Optional[bool]] = mapped_column(
         Boolean, nullable=True, default=False
     )
-    workspaceId: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    workspaceId: Mapped[Optional[str]] = mapped_column(String, nullable=True, index=True)
     projectId: Mapped[Optional[str]] = mapped_column(String, nullable=True, index=True)
     is_owner: Mapped[Optional[bool]] = mapped_column(
         Boolean, nullable=True, default=False

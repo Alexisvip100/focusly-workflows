@@ -13,12 +13,12 @@ class Workspace(Base):
 
     id: Mapped[str] = mapped_column(String, primary_key=True, index=True)
     userId: Mapped[str] = mapped_column(String, nullable=False, index=True)
-    taskId: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    taskId: Mapped[Optional[str]] = mapped_column(String, nullable=True, index=True)
     title: Mapped[str] = mapped_column(String, nullable=False)
     emoji: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     background_color: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     card_show_background: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
-    groupId: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    groupId: Mapped[Optional[str]] = mapped_column(String, nullable=True, index=True)
     content: Mapped[str] = mapped_column(String, nullable=False)
     saveStatus: Mapped[Optional[bool]] = mapped_column(
         Boolean, nullable=True, default=False
