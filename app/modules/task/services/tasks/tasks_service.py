@@ -38,8 +38,11 @@ class TasksService:
         tasks: list[dict[str, Any]],
         filters: dict[str, Any] | None = None,
         sort: dict[str, Any] | None = None,
+        search: str = "",
     ) -> list[dict[str, Any]]:
-        return self.tasksFilter.apply_filters_and_sorting(tasks, filters, sort)
+        return self.tasksFilter.apply_filters_and_sorting(
+            tasks, filters, sort, search
+        )
 
     def _map_to_dict(self, t: Task) -> dict[str, Any]:
         return task_to_dict(t)

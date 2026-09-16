@@ -6,7 +6,11 @@ from typing import Any
  
 class TasksFilterService:
 
-    def add_mapped_filters(self, tasks: list[dict[str, Any]], filters: dict[str, Any] | None = None) -> list[dict[str, Any]]:
+    def add_mapped_filters(
+        self,
+        tasks: list[dict[str, Any]],
+        filters: dict[str, Any] | None = None,
+    ) -> list[dict[str, Any]]:
         mapped = list(tasks)
         for task in mapped:
             # Normalizamos IDs para asegurar que siempre sean strings limpios si existen
@@ -18,17 +22,30 @@ class TasksFilterService:
                 task["workspaceId"] = str(task["workspaceId"])
             if task.get("workspace_id") is not None:
                 task["workspace_id"] = str(task["workspace_id"])
-        
-        # Si se pasó un workspace en los filtros, filtramos de una vez
+
         if filters:
             target_ws = filters.get("workspace_id") or filters.get("workspaceId")
-            if target_ws:
+            if target_ws is not None:
+                target_ws = str(target_ws)
                 mapped = [
-                    t for t in mapped 
-                    if t.get("workspaceId") == target_ws or t.get("workspace_id") == target_ws
+                    t
+                    for t in mapped
+                    if t.get("workspaceId") == target_ws
+                    or t.get("workspace_id") == target_ws
                 ]
-        return mapped   
-        
+
+            target_proj = filters.get("project_id") or filters.get("projectId")
+            if target_proj is not None:
+                target_proj = str(target_proj)
+                mapped = [
+                    t
+                    for t in mapped
+                    if t.get("projectId") == target_proj
+                    or t.get("project_id") == target_proj
+                ]
+
+        return mapped
+
 
     def apply_filters_and_sorting(
         self,
@@ -44,9 +61,9 @@ class TasksFilterService:
         tasks: list[dict[str, Any]],
         filters: dict[str, Any] | None = None,
         sort: dict[str, Any] | None = None,
-        search: str = ""
+        search: str = "",
     ) -> list[dict[str, Any]]:
-        mapped = list(tasks)
+        mapped = self.add_mapped_filters(tasks, filters)
         
         if search:
             search_lower = search.lower()
@@ -91,6 +108,10 @@ class TasksFilterService:
 
                 start_date = parse_date(filters.get("startDate"))
                 end_date = parse_date(filters.get("endDate"))
+                if start_date and start_date.tzinfo is None:
+                    start_date = start_date.replace(tzinfo=timezone.utc)
+                if end_date and end_date.tzinfo is None:
+                    end_date = end_date.replace(tzinfo=timezone.utc)
 
                 filtered_by_date = []
                 for t in mapped:
@@ -102,17 +123,14 @@ class TasksFilterService:
                     )
                     if not date_to_use_str:
                         continue
-                    
+
                     try:
                         date_to_use = datetime.fromisoformat(date_to_use_str.replace("Z", "+00:00"))
-                    except Exception:
+                    except (ValueError, TypeError):
                         continue
 
-                    # Unificar tzinfo para evitar errores de comparación naive vs aware
-                    if date_to_use.tzinfo is not None and start_date and start_date.tzinfo is None:
-                        start_date = start_date.replace(tzinfo=timezone.utc)
-                    if date_to_use.tzinfo is not None and end_date and end_date.tzinfo is None:
-                        end_date = end_date.replace(tzinfo=timezone.utc)
+                    if date_to_use.tzinfo is None:
+                        date_to_use = date_to_use.replace(tzinfo=timezone.utc)
 
                     if start_date and date_to_use < start_date:
                         continue
@@ -128,21 +146,7 @@ class TasksFilterService:
                     if term in t.get("title", "").lower()
                     or term in (t.get("notesEncrypted") or "").lower()
                 ]
-            
-            target_ws = filters.get("workspace_id") or filters.get("workspaceId")
-            if target_ws:
-                mapped = [
-                    t for t in mapped 
-                    if t.get("workspaceId") == target_ws or t.get("workspace_id") == target_ws
-                ]
 
-            target_proj = filters.get("project_id") or filters.get("projectId")
-            if target_proj:
-                mapped = [
-                    t for t in mapped 
-                    if t.get("projectId") == target_proj or t.get("project_id") == target_proj
-                ]
-                
         if sort and sort.get("sort"):
             field_map = {
                 "deadline": "deadline",
