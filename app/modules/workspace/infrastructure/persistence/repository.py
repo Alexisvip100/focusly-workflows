@@ -291,7 +291,7 @@ class ProjectGroupsRepository:
         return result.scalar() or 0
 
     async def find_all_paginated(
-        self, user_id: str, limit: int = 8, offset: int = 0
+        self, user_id: str, limit: int = 8, offset: int = 0, search: str = ""
     ) -> dict[str, Any]:
         """Uncached page read — get_all_by_user's cache stores whole-list
         snapshots per user, which doesn't fit a limit/offset query, so this
@@ -300,8 +300,13 @@ class ProjectGroupsRepository:
         count_query = select(func.count(ProjectGroup.id)).where(
             ProjectGroup.userId == user_id
         )
-        query = query.order_by(ProjectGroup.createdAt).limit(limit).offset(offset)
-
+        if search:
+            search_pattern = f"%{search}%"
+            filter_cond = (ProjectGroup.name.ilike(search_pattern))
+            query = query.where(filter_cond)
+            count_query = count_query.where(filter_cond)
+            
+        query = query.order_by(ProjectGroup.createdAt.desc(), ProjectGroup.id.desc()).limit(limit).offset(offset)
         result = await self.db.execute(query)
         total_res = await self.db.execute(count_query)
         total = total_res.scalar() or 0
