@@ -520,6 +520,8 @@ class TaskFilterInput:
     endDate: str | None = None
     searchTerm: str | None = None
     tags: list[str] | None = None
+    has_project: bool | None = strawberry.field(name="has_project", default=None)
+    hasProject: bool | None = strawberry.field(name="hasProject", default=None)
 
 
 @strawberry.input

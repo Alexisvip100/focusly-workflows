@@ -264,3 +264,19 @@ def test_map_dict_to_strawberry_task_project_id():
     assert strawberry_task.project_id == "proj-abc-123"
 
 
+def test_has_project_filter():
+    svc = TasksService.__new__(TasksService)
+    svc.tasksFilter = TasksFilterService()
+    tasks = [
+        {"id": "t1", "projectId": "proj-1", "title": "A", "notesEncrypted": ""},
+        {"id": "t2", "projectId": "", "title": "B", "notesEncrypted": ""},
+        {"id": "t3", "projectId": None, "title": "C", "notesEncrypted": ""},
+        {"id": "t4", "project_id": "proj-2", "title": "D", "notesEncrypted": ""},
+    ]
+    filtered = svc._apply_filters_and_sorting(
+        tasks, {"has_project": True}, None
+    )
+    assert [t["id"] for t in filtered] == ["t1", "t4"]
+
+
+

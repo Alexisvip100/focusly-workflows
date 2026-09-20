@@ -11,7 +11,7 @@ prevent notification spam.
 
 import asyncio
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from sqlalchemy import func, select, cast, Date
@@ -71,7 +71,7 @@ def _save_notif(
         userId=user_id,
         relatedTaskId=task_id,
         type=notif_type,
-        scheduledAt=scheduled_at or datetime.utcnow(),
+        scheduledAt=scheduled_at or datetime.now(timezone.utc).replace(tzinfo=None),
         status="unread",
         title=title,
         body=body,
@@ -617,7 +617,7 @@ async def _check_achievements(db, now: datetime) -> None:
 
 async def _run_smart_checks_once() -> None:
     """Execute all smart notification checks in a single sweep."""
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
 
     checks = [
         ("overdue_tasks", _check_overdue_tasks),

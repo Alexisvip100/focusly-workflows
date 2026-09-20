@@ -1,6 +1,6 @@
 import pytest
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, List
 
 class PriorityLevel:
@@ -24,7 +24,7 @@ class Task:
     priority: str = PriorityLevel.MEDIUM
     status: str = TaskStatus.TODO
     estimated_minutes: int = 30
-    created_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
     def __post_init__(self):
         # Validation rules applied upon task instantiation
         if not self.title or not self.title.strip():

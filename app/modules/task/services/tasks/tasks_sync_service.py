@@ -8,6 +8,7 @@ from app.models import Task
 from app.modules.task.services.scheduler_service import SchedulerService
 from app.modules.user.repository import UsersRepository
 from .tasks_mapper import map_task_to_google_event, task_to_dict
+from datetime import datetime, timezone
 
 logger = logging.getLogger(__name__)
 
@@ -106,12 +107,12 @@ class TasksSyncService:
         """Emits schedule_updated event after transaction commit."""
         if user_id and self.socket_server:
             try:
-                from datetime import datetime
+
                 await self.socket_server.emit(
                     "schedule_updated",
                     {
                         "type": "SCHEDULE_RECALCULATED",
-                        "timestamp": datetime.utcnow().isoformat(),
+                        "timestamp": datetime.now(timezone.utc).isoformat(),
                     },
                     room=f"user_{user_id}",
                     namespace="/realtime",

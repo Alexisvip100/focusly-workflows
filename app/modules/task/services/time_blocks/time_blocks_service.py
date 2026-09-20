@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -69,7 +69,7 @@ class TimeBlocksService:
                 else:
                     setattr(tb, key, value)
 
-        tb.updatedAt = datetime.utcnow()
+        tb.updatedAt = datetime.now(timezone.utc).replace(tzinfo=None)
         await self.repository.save(tb)
         return time_block_to_dict(tb)
 

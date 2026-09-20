@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy import or_, delete, func, DateTime
@@ -189,7 +189,7 @@ class TasksRepository:
     async def get_tasks_for_warning(
         self, start_min: float, end_min: float, is_last_minute: bool = False
     ) -> list[tuple[Task, User]]:
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
         notif_time = func.coalesce(Task.estimated_start_date, Task.deadline)
 
         query = (

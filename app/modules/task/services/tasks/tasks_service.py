@@ -62,12 +62,13 @@ class TasksService:
 
         # 1. Upsert check
         if google_event_id and user_id and not skip_existing_check:
-            existing = await self.repository.get_by_google_event_id(
+            existing: Task | None = await self.repository.get_by_google_event_id(
                 user_id, google_event_id
             )
+
             if existing:
                 return await self.update(
-                    existing.id,
+                    str(existing.id),
                     task_data,
                     skip_scheduling=skip_scheduling,
                     skip_google_sync=skip_google_sync,
