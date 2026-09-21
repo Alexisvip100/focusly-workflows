@@ -5,7 +5,6 @@ from sqlalchemy.future import select
 from sqlalchemy import or_, and_, delete, func, DateTime
 from app.models import Task, Tag, TimeBlock, FocusSession, User
 from app.redis import cache
-from app.modules.task.services.tasks.tasks_filter_services import TasksFilterService
 
 INACTIVE_STATUSES = ["completed", "cancelled", "Completed"]
 
@@ -208,6 +207,7 @@ class TasksRepository:
 
         if not user_sorted_created_at:
             order_clauses.append(Task.createdAt.desc().nulls_last())
+        # pyrefly: ignore [bad-argument-type]
         order_clauses.append(Task.id.asc())
 
         has_tags_filter = bool(filters and filters.get("tags") and len(filters["tags"]) > 0)
@@ -230,6 +230,8 @@ class TasksRepository:
             items = list(items_res.scalars().all())
             return items, total
         else:
+            from app.modules.task.services.tasks.tasks_filter_services import TasksFilterService
+
             # Opción B: SQL pre-filtra todos los criterios no-tags con ORDER BY determinista sin limit/offset
             items_query = (
                 select(Task)
@@ -239,7 +241,7 @@ class TasksRepository:
             candidates_res = await self.db.execute(items_query)
             candidates = list(candidates_res.scalars().all())
 
-            filtered = TasksFilterService.filter_tags_only(candidates, filters["tags"])
+            filtered = TasksFilterService.filter_tags_only(candidates, filters.get("tags"))
             total = len(filtered)
             items = filtered[offset : offset + limit] if limit is not None else filtered[offset:]
             return items, total
