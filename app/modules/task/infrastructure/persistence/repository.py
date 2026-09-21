@@ -1,9 +1,11 @@
 from datetime import datetime, timedelta, timezone
+from typing import Any
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
-from sqlalchemy import or_, delete, func, DateTime
+from sqlalchemy import or_, and_, delete, func, DateTime
 from app.models import Task, Tag, TimeBlock, FocusSession, User
 from app.redis import cache
+from app.modules.task.services.tasks.tasks_filter_services import TasksFilterService
 
 INACTIVE_STATUSES = ["completed", "cancelled", "Completed"]
 
@@ -36,6 +38,24 @@ def deserialize_task(data: dict) -> Task:
             value = datetime.fromisoformat(value)
         kwargs[column.name] = value
     return Task(**kwargs)
+
+
+def parse_filter_date(val: Any) -> datetime | None:
+    if not val:
+        return None
+    if isinstance(val, str):
+        try:
+            dt = datetime.fromisoformat(val.replace("Z", "+00:00"))
+        except (ValueError, TypeError):
+            return None
+    elif isinstance(val, datetime):
+        dt = val
+    else:
+        return None
+
+    if dt.tzinfo is not None:
+        return dt.astimezone(timezone.utc).replace(tzinfo=None)
+    return dt
 
 
 class TasksRepository:
@@ -92,6 +112,137 @@ class TasksRepository:
             f"tasks:active:user:{user_id}", [serialize_task(t) for t in tasks]
         )
         return tasks
+
+    async def query_tasks_by_user(
+        self,
+        user_id: str,
+        filters: dict[str, Any] | None = None,
+        sort: dict[str, Any] | None = None,
+        offset: int = 0,
+        limit: int | None = None,
+        search: str = "",
+    ) -> tuple[list[Task], int]:
+        conditions = [
+            Task.userId == user_id,
+            Task.deletedAt == None,
+            or_(Task.source != "google", Task.source == None),
+        ]
+
+        if filters:
+            if filters.get("status") and len(filters["status"]) > 0:
+                conditions.append(Task.status.in_(filters["status"]))
+
+            target_ws = filters.get("workspace_id") or filters.get("workspaceId")
+            if target_ws is not None:
+                conditions.append(Task.workspaceId == str(target_ws))
+
+            target_proj = filters.get("project_id") or filters.get("projectId")
+            if target_proj is not None:
+                conditions.append(Task.projectId == str(target_proj))
+
+            if filters.get("has_project") is True or filters.get("hasProject") is True:
+                conditions.append(
+                    and_(
+                        Task.projectId.is_not(None),
+                        Task.projectId != "",
+                        func.trim(Task.projectId) != "",
+                    )
+                )
+
+            if filters.get("category") and len(filters["category"]) > 0:
+                conditions.append(Task.category.in_(filters["category"]))
+
+            if filters.get("priorityLevel") and len(filters["priorityLevel"]) > 0:
+                levels = [int(p) for p in filters["priorityLevel"]]
+                if any(p >= 3 for p in levels):
+                    conditions.append(or_(Task.priorityLevel >= 3, Task.priorityLevel.in_(levels)))
+                else:
+                    conditions.append(Task.priorityLevel.in_(levels))
+
+            if filters.get("searchTerm"):
+                term = str(filters["searchTerm"]).strip()
+                if term:
+                    conditions.append(
+                        or_(
+                            Task.title.ilike(f"%{term}%"),
+                            Task.notesEncrypted.ilike(f"%{term}%"),
+                        )
+                    )
+
+            if filters.get("startDate") or filters.get("endDate"):
+                effective_date = func.coalesce(
+                    Task.estimated_start_date,
+                    Task.deadline,
+                    Task.completedAt,
+                    Task.createdAt,
+                )
+                start_dt = parse_filter_date(filters.get("startDate"))
+                if start_dt is not None:
+                    conditions.append(effective_date >= start_dt)
+
+                end_dt = parse_filter_date(filters.get("endDate"))
+                if end_dt is not None:
+                    conditions.append(effective_date <= end_dt)
+
+        if search and search.strip():
+            conditions.append(Task.title.ilike(f"%{search.strip()}%"))
+
+        order_clauses = []
+        user_sorted_created_at = False
+        if sort and sort.get("sort"):
+            field_map = {
+                "deadline": Task.deadline,
+                "priority_level": Task.priorityLevel,
+                "estimate_minutes": Task.estimateTimer,
+                "created_at": Task.createdAt,
+            }
+            col = field_map.get(sort["sort"])
+            if col is not None:
+                if sort["sort"] == "created_at":
+                    user_sorted_created_at = True
+                direction = sort.get("order", "asc").lower()
+                if direction == "desc":
+                    order_clauses.append(col.desc().nulls_last())
+                else:
+                    order_clauses.append(col.asc().nulls_last())
+
+        if not user_sorted_created_at:
+            order_clauses.append(Task.createdAt.desc().nulls_last())
+        order_clauses.append(Task.id.asc())
+
+        has_tags_filter = bool(filters and filters.get("tags") and len(filters["tags"]) > 0)
+
+        if not has_tags_filter:
+            count_query = select(func.count()).select_from(Task).where(*conditions)
+            count_res = await self.db.execute(count_query)
+            total = count_res.scalar() or 0
+
+            items_query = (
+                select(Task)
+                .where(*conditions)
+                .order_by(*order_clauses)
+                .offset(offset)
+            )
+            if limit is not None:
+                items_query = items_query.limit(limit)
+
+            items_res = await self.db.execute(items_query)
+            items = list(items_res.scalars().all())
+            return items, total
+        else:
+            # Opción B: SQL pre-filtra todos los criterios no-tags con ORDER BY determinista sin limit/offset
+            items_query = (
+                select(Task)
+                .where(*conditions)
+                .order_by(*order_clauses)
+            )
+            candidates_res = await self.db.execute(items_query)
+            candidates = list(candidates_res.scalars().all())
+
+            filtered = TasksFilterService.filter_tags_only(candidates, filters["tags"])
+            total = len(filtered)
+            items = filtered[offset : offset + limit] if limit is not None else filtered[offset:]
+            return items, total
 
     async def get_all_non_deleted_by_user(self, user_id: str) -> list[Task]:
         result = await self.db.execute(

@@ -140,6 +140,21 @@ class TasksService:
         limit: int | None = 24,
         search: str = "",
     ) -> dict[str, Any]:
+        # All filters (status, workspaceId, projectId, has_project, category, priorityLevel, search, searchTerm, startDate, endDate, tags) are supported via query_tasks_by_user
+        if getattr(self, "db", None) is not None and hasattr(self.repository, "query_tasks_by_user"):
+            items, total = await self.repository.query_tasks_by_user(
+                user_id=user_id,
+                filters=filters,
+                sort=sort,
+                offset=offset,
+                limit=limit,
+                search=search,
+            )
+            return {
+                "items": [task_to_dict(t) for t in items],
+                "total": total,
+            }
+
         result = await self.repository.get_all_active_by_user(user_id)
         tasks = [task_to_dict(t) for t in result]
 

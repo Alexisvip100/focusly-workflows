@@ -1,5 +1,6 @@
 [dependency-groups]
 dev = [
+    "aiosqlite>=0.20.0",
     "mypy>=2.3.0",
     "pre-commit>=4.6.1",
     "pytest>=9.1.1",

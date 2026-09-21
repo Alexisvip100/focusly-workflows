@@ -95,17 +95,7 @@ class TasksFilterService:
                 mapped = [t for t in mapped if t.get("category") in filters["category"]]
 
             if filters.get("tags") and len(filters["tags"]) > 0:
-                target_tags = {t_tag.lower() for t_tag in filters["tags"]}
-
-                def has_matching_tag(task):
-                    task_tags = task.get("tags") or []
-                    for tag in task_tags:
-                        tag_name = tag if isinstance(tag, str) else tag.get("name", "")
-                        if tag_name.lower() in target_tags:
-                            return True
-                    return False
-
-                mapped = [t for t in mapped if has_matching_tag(t)]
+                mapped = self.filter_tags_only(mapped, filters["tags"])
 
             if filters.get("startDate") or filters.get("endDate"):
                 def parse_date(d_str):
@@ -177,5 +167,21 @@ class TasksFilterService:
                 return val
 
             mapped.sort(key=sort_key, reverse=(direction == -1))
-
         return mapped
+
+    @classmethod
+    def has_matching_tag(cls, task: dict[str, Any] | Any, target_tags: set[str]) -> bool:
+        task_tags = task.get("tags") if isinstance(task, dict) else getattr(task, "tags", None)
+        task_tags = task_tags or []
+        for tag in task_tags:
+            tag_name = tag if isinstance(tag, str) else (tag.get("name", "") if isinstance(tag, dict) else "")
+            if tag_name and tag_name.lower() in target_tags:
+                return True
+        return False
+
+    @classmethod
+    def filter_tags_only(cls, tasks: list[Any], tags: list[str]) -> list[Any]:
+        if not tags:
+            return list(tasks)
+        target_tags = {t.lower() for t in tags if isinstance(t, str)}
+        return [t for t in tasks if cls.has_matching_tag(t, target_tags)]
