@@ -1,5 +1,5 @@
 import re
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -61,9 +61,9 @@ class InsightsService:
             try:
                 now = datetime.strptime(base_date.split("T")[0], "%Y-%m-%d")
             except ValueError:
-                now = datetime.utcnow() - timedelta(minutes=timezone_offset_minutes)
+                now = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(minutes=timezone_offset_minutes)
         else:
-            now = datetime.utcnow() - timedelta(minutes=timezone_offset_minutes)
+            now = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(minutes=timezone_offset_minutes)
 
         start_date = datetime(now.year, now.month, now.day)
 
@@ -248,7 +248,7 @@ class InsightsService:
         now = (
             ref_now
             if ref_now is not None
-            else (datetime.utcnow() - timedelta(minutes=timezone_offset_minutes))
+            else (datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(minutes=timezone_offset_minutes))
         )
         completed_tasks = [
             t for t in tasks if self._get_completion_datetime(t) is not None
@@ -601,7 +601,7 @@ class InsightsService:
         filter_type: str,
         ref_now: datetime | None = None,
     ) -> list[dict[str, Any]]:
-        now = ref_now if ref_now is not None else datetime.utcnow()
+        now = ref_now if ref_now is not None else datetime.now(timezone.utc).replace(tzinfo=None)
         if filter_type == "Daily":
             return self.build_daily_trends(tasks, sessions, now)
         elif filter_type == "Monthly":

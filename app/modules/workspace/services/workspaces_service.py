@@ -1,6 +1,6 @@
 import uuid
 import asyncio
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -68,7 +68,7 @@ class WorkspacesService:
             if not workspace:
                 raise ValueError(f"Workspace with ID {id} not found")
 
-            now = datetime.utcnow()
+            now = datetime.now(timezone.utc).replace(tzinfo=None)
 
             # Handle exclusive taskId: if this workspace is taking a taskId, other workspaces must release it
             task_id = update_input.get("taskId")

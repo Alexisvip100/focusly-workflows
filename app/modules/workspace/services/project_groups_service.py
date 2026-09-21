@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -58,7 +58,7 @@ class ProjectGroupsService:
             if "emoji" in update_input:
                 group.emoji = update_input["emoji"]
 
-            group.updatedAt = datetime.utcnow()
+            group.updatedAt = datetime.now(timezone.utc).replace(tzinfo=None)
             return await self.repository.save(group)
 
     async def remove(self, id: str, user_id: str) -> bool:

@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 
@@ -230,7 +230,7 @@ class MigrationService:
         if not deadline:
             return "flexible"
         # Always compare naive datetimes (deadline is stored without tzinfo)
-        diff = deadline - datetime.utcnow()
+        diff = deadline - datetime.now(timezone.utc).replace(tzinfo=None)
         diff_hours = diff.total_seconds() / 3600.0
         diff_days = diff_hours / 24.0
 

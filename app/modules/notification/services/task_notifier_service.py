@@ -16,7 +16,7 @@ Payload: { taskId, title, deadline, minutesLeft, type: "5min" | "1min" }
 
 import asyncio
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 
 from app.database import async_session_local
 from app.models import Task, Notification
@@ -31,7 +31,7 @@ def _task_start_at(task: Task) -> datetime:
 
 async def _check_and_notify_once() -> None:
     """Run a single notification sweep across all active users and tasks."""
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
 
     async with async_session_local() as db:
         tasks_repo = TasksRepository(db)

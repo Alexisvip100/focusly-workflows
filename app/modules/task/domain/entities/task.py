@@ -59,7 +59,7 @@ class Task(Base):
     use_ai: Mapped[bool | None] = mapped_column(
         Boolean, nullable=True, default=False
     )
-    workspaceId: Mapped[str | None] = mapped_column(String, nullable=True)
+    workspaceId: Mapped[str | None] = mapped_column(String, nullable=True, index=True)
     projectId: Mapped[str | None] = mapped_column(String, nullable=True, index=True)
     is_owner: Mapped[bool | None] = mapped_column(
         Boolean, nullable=True, default=False

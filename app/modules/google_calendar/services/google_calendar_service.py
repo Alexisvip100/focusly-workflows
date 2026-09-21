@@ -1,7 +1,7 @@
 import uuid
 import time
 import re
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any
 from urllib.parse import urlencode
 import httpx
@@ -40,7 +40,7 @@ class GoogleCalendarService:
         if time_min:
             params["timeMin"] = time_min
         else:
-            default_min = datetime.utcnow() - timedelta(days=30)
+            default_min = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=30)
             params["timeMin"] = default_min.isoformat() + "Z"
 
         if time_max:
@@ -171,7 +171,7 @@ class GoogleCalendarService:
                     if sync_token:
                         params["syncToken"] = sync_token
                     else:
-                        default_min = datetime.utcnow() - timedelta(days=30)
+                        default_min = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=30)
                         params["timeMin"] = default_min.isoformat() + "Z"
                         params["singleEvents"] = "true"
 
@@ -427,7 +427,7 @@ class GoogleCalendarService:
                 dt = dt.astimezone(timezone.utc)
             start = dt.replace(tzinfo=None)
         else:
-            start = datetime.utcnow()
+            start = datetime.now(timezone.utc).replace(tzinfo=None)
 
         end_val = end_obj.get("dateTime") or end_obj.get("date")
         if end_val:

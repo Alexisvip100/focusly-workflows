@@ -1,13 +1,17 @@
 from pydantic import BaseModel, Field, field_validator, model_validator
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
+
+
+def _utcnow_naive() -> datetime:
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
 class NotificationCreateSchema(BaseModel):
     userId: str
     relatedTaskId: str | None = None
     type: str | None = "task_reminder"
-    scheduledAt: datetime = Field(default_factory=datetime.utcnow)
+    scheduledAt: datetime = Field(default_factory=_utcnow_naive)
     status: str | None = "pending"
     title: str | None = ""
     body: str | None = ""
@@ -31,7 +35,7 @@ class NotificationCreateSchema(BaseModel):
     @classmethod
     def parse_datetime(cls, val):
         if not val:
-            return datetime.utcnow()
+            return _utcnow_naive()
         if isinstance(val, datetime):
             return val.replace(tzinfo=None)
         if isinstance(val, str):
@@ -39,5 +43,5 @@ class NotificationCreateSchema(BaseModel):
                 val = val.replace("Z", "+00:00")
                 return datetime.fromisoformat(val).replace(tzinfo=None)
             except:
-                return datetime.utcnow()
-        return datetime.utcnow()
+                return _utcnow_naive()
+        return _utcnow_naive()

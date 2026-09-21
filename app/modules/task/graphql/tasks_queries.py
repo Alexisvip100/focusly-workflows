@@ -51,6 +51,9 @@ class TaskQuery:
             prj = filters.project_id or filters.projectId
             if prj is not None:
                 filters_dict["project_id"] = prj
+            has_prj = filters.has_project if filters.has_project is not None else filters.hasProject
+            if has_prj is not None:
+                filters_dict["has_project"] = has_prj
 
         sort_dict = None
         if sort:
@@ -101,6 +104,9 @@ class TaskQuery:
             prj = filters.project_id or filters.projectId
             if prj is not None:
                 filters_dict["project_id"] = prj
+            has_prj = filters.has_project if filters.has_project is not None else filters.hasProject
+            if has_prj is not None:
+                filters_dict["has_project"] = has_prj
 
         sort_dict = None
         if sort:

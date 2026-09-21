@@ -62,12 +62,13 @@ class TasksService:
 
         # 1. Upsert check
         if google_event_id and user_id and not skip_existing_check:
-            existing = await self.repository.get_by_google_event_id(
+            existing: Task | None = await self.repository.get_by_google_event_id(
                 user_id, google_event_id
             )
+
             if existing:
                 return await self.update(
-                    existing.id,
+                    str(existing.id),
                     task_data,
                     skip_scheduling=skip_scheduling,
                     skip_google_sync=skip_google_sync,
@@ -139,6 +140,21 @@ class TasksService:
         limit: int | None = 24,
         search: str = "",
     ) -> dict[str, Any]:
+        # All filters (status, workspaceId, projectId, has_project, category, priorityLevel, search, searchTerm, startDate, endDate, tags) are supported via query_tasks_by_user
+        if getattr(self, "db", None) is not None and hasattr(self.repository, "query_tasks_by_user"):
+            items, total = await self.repository.query_tasks_by_user(
+                user_id=user_id,
+                filters=filters,
+                sort=sort,
+                offset=offset,
+                limit=limit,
+                search=search,
+            )
+            return {
+                "items": [task_to_dict(t) for t in items],
+                "total": total,
+            }
+
         result = await self.repository.get_all_active_by_user(user_id)
         tasks = [task_to_dict(t) for t in result]
 

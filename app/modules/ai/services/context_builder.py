@@ -18,7 +18,7 @@ async def build_context(
     """
     import datetime
 
-    now_utc = datetime.datetime.utcnow()
+    now_utc = datetime.datetime.now(datetime.timezone.utc)
     display_time = client_time or now_utc.strftime("%Y-%m-%d %H:%M")
     tz_info = f" ({time_zone})" if time_zone else " (UTC)"
 

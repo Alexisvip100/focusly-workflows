@@ -6,7 +6,7 @@ into hourly statistics. These aggregated (never raw) stats are used as input
 for the AI pattern analysis — keeping user data private.
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -120,7 +120,7 @@ class BehavioralAnalyzer:
             for h in range(24)
         }
 
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
         stale_threshold = now - timedelta(hours=72)
 
         # --- Tasks ---
@@ -189,7 +189,7 @@ class BehavioralAnalyzer:
                 "avg_real_minutes": 0,
             }
 
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
         stale_threshold = now - timedelta(hours=72)
 
         completed = sum(1 for t in tasks if t.status == "Done")

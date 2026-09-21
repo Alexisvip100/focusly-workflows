@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -69,7 +69,7 @@ class SchedulerService:
 
         # Check if deadline passed
         hard_deadline = task.get("hardDeadline")
-        if hard_deadline and hard_deadline < datetime.utcnow():
+        if hard_deadline and hard_deadline < datetime.now(timezone.utc):
             return {
                 "taskId": task["id"],
                 "workBlocks": [],
@@ -340,7 +340,7 @@ class SchedulerService:
                         t_obj.estimated_start_date = new_start
                         t_obj.estimated_end_date = last_wb["end"]
                         t_obj.status = "Scheduled"
-                        t_obj.updatedAt = datetime.utcnow()
+                        t_obj.updatedAt = datetime.now(timezone.utc)
                         await tasks_repo.save(t_obj)
 
         if socket_server and emit_socket:
@@ -349,7 +349,7 @@ class SchedulerService:
                     "schedule_updated",
                     {
                         "type": "SCHEDULE_RECALCULATED",
-                        "timestamp": datetime.utcnow().isoformat(),
+                        "timestamp": datetime.now(timezone.utc).isoformat(),
                     },
                     room=f"user_{user_id}",
                     namespace="/realtime",
