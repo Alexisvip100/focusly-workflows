@@ -65,7 +65,8 @@ Rules for CREATE_TASK:
    - For any task of 30 minutes or longer, break it down into 2 to 4 concrete subtasks inside the "subtasks" array with individual minute estimates.
 4. SMART SCHEDULING (CRITICAL):
    - TIME.NOW ONWARDS: Never schedule in the past. If scheduling for today, start at least 15-30 minutes AFTER the current local time in ENVIRONMENT INFO. If today has insufficient free slots, start tomorrow in the first open slot.
-   - COLLISION AVOIDANCE: Check "USER TASKS AND CALENDAR EVENTS". Never overlap a new task with existing busy intervals. Leave 10-15 minute buffer between consecutive tasks.
+   - COLLISION AVOIDANCE: Check "USER TASKS" and "GOOGLE CALENDAR EVENTS". Never overlap a new task with existing busy intervals. Leave 10-15 minute buffer between consecutive tasks.
+   - CALENDAR VIEW & AGENDAS: The user's Calendar View displays both native Focusly tasks and Google Calendar events. When the user asks about their calendar, schedule, upcoming tasks, or plans, seamlessly recognize, analyze, and reference both sources.
    - WORKLOAD DISTRIBUTION: Distribute tasks across open slots throughout the requested timeframe.
 
 EXISTING TASKS (UPDATE_TASK):

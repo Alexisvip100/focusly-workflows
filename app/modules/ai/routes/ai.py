@@ -352,11 +352,14 @@ async def chat_endpoint(
     )
 
     # Apply selected context instructions
-    if body.contextType == "tasks":
-        system_context += "\n\nCRITICAL CONTEXT MODE: The user has selected the 'Tasks' context. Focus your answer primarily on analyzing, organizing, or answering questions about their tasks list."
+    if body.contextType in ("tasks", "calendar"):
+        system_context += (
+            "\n\nCRITICAL CONTEXT MODE: The user has selected the 'Tasks / Calendar' context. "
+            "Focus your answer primarily on analyzing, organizing, or answering questions about their tasks list and calendar events."
+        )
     elif body.contextType == "workspaces":
         system_context += "\n\nCRITICAL CONTEXT MODE: The user has selected the 'Workspaces' context. Focus your answer primarily on their workspaces, document notes, and organizing projects."
-    elif body.contextType == "task" and body.contextId:
+    elif body.contextType in ("task", "event") and body.contextId:
         task_repo = TasksRepository(db)
         task_obj = await task_repo.get_by_id(body.contextId)
         if task_obj and task_obj.userId == current_user_id:
@@ -368,6 +371,35 @@ async def chat_endpoint(
                 f"- Priority: {task_obj.priorityLevel}\n"
                 f"Please focus your response primarily on helping the user with this specific task."
             )
+        else:
+            try:
+                from app.modules.google_calendar.routes import get_google_calendar_service
+
+                gc_service = get_google_calendar_service(db)
+                events_data = await gc_service.get_events(current_user_id)
+                items = events_data.get("items", [])
+                match_ev = next(
+                    (it for it in items if it.get("id") == body.contextId), None
+                )
+                if match_ev:
+                    summary = match_ev.get("summary") or "Sin título"
+                    desc = match_ev.get("description") or "No description"
+                    start_val = (match_ev.get("start") or {}).get("dateTime") or (
+                        match_ev.get("start") or {}
+                    ).get("date")
+                    end_val = (match_ev.get("end") or {}).get("dateTime") or (
+                        match_ev.get("end") or {}
+                    ).get("date")
+                    system_context += (
+                        f"\n\nCRITICAL CONTEXT MODE: The user has selected this specific Calendar Event as context:\n"
+                        f"- Title: {summary}\n"
+                        f"- Start: {start_val}\n"
+                        f"- End: {end_val}\n"
+                        f"- Notes/Description: {desc}\n"
+                        f"Please focus your response primarily on helping the user with this calendar event."
+                    )
+            except Exception:
+                pass
     elif body.contextType == "workspace" and body.contextId:
         workspace_repo = WorkspacesRepository(db)
         ws_obj = await workspace_repo.get_by_id_and_user(

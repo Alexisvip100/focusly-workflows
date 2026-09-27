@@ -46,8 +46,7 @@ from datetime import datetime, timezone
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 
-from app.modules.task.models.task import Task
-from app.modules.automation.models.automation_log import AutomationLog
+from app.models import Task, AutomationLog
 from app.modules.automation.services.todo_detector import detect_todos
 from app.sockets.realtime import realtime_gateway
 

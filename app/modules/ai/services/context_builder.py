@@ -101,6 +101,65 @@ async def build_context(
                 f"  Notes/Description: {clean_notes or 'None'}\n\n"
             )
 
+    # 4b. Fetch user's Google Calendar events (Virtual / External Calendar Events in Calendar View)
+    user_settings = user.settings if (user and isinstance(user.settings, dict)) else {}
+    is_calendar_connected = bool(
+        user
+        and (
+            user_settings.get("calendarConnected")
+            or user.googleRefreshToken
+            or user.authProvider == "google"
+        )
+    )
+    if is_calendar_connected:
+        try:
+            import asyncio
+            from app.modules.google_calendar.routes import get_google_calendar_service
+
+            gc_service = get_google_calendar_service(db)
+            t_min = (now_utc - datetime.timedelta(days=7)).isoformat()
+            t_max = (now_utc + datetime.timedelta(days=45)).isoformat()
+
+            events_data = await asyncio.wait_for(
+                gc_service.get_events(user_id, time_min=t_min, time_max=t_max),
+                timeout=5.0,
+            )
+            items = events_data.get("items", [])
+            synced_ids = {t.google_event_id for t in tasks if t.google_event_id}
+
+            valid_calendar_events = []
+            for item in items:
+                if item.get("status") == "cancelled":
+                    continue
+                ev_id = item.get("id")
+                if ev_id and ev_id in synced_ids:
+                    continue
+                valid_calendar_events.append(item)
+
+            if valid_calendar_events:
+                context += "--- GOOGLE CALENDAR EVENTS (SHOWN IN CALENDAR VIEW) ---\n"
+                for item in valid_calendar_events:
+                    ev_id = item.get("id") or "None"
+                    summary = (item.get("summary") or "Sin título").replace("\n", " ").strip()
+                    desc = (item.get("description") or "None").replace("\n", " ").strip()
+                    start_obj = item.get("start") or {}
+                    end_obj = item.get("end") or {}
+                    start_val = start_obj.get("dateTime") or start_obj.get("date") or "None"
+                    end_val = end_obj.get("dateTime") or end_obj.get("date") or "None"
+                    all_day = "Yes" if start_obj.get("date") else "No"
+
+                    context += (
+                        f"- ID: {ev_id}\n"
+                        f"  Title: {summary}\n"
+                        f"  Source: Google Calendar (Virtual Event)\n"
+                        f"  Start: {start_val}\n"
+                        f"  End: {end_val}\n"
+                        f"  All Day: {all_day}\n"
+                        f"  Notes/Description: {desc}\n\n"
+                    )
+        except Exception:
+            pass
+
     # 5. Fetch user's productivity insights (weekly stats)
     try:
         from app.modules.insights.services.insights_service import InsightsService

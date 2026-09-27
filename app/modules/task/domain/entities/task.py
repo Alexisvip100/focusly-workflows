@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import Boolean, DateTime, Float, Integer, JSON, String
+from sqlalchemy import Boolean, DateTime, Float, Index, Integer, JSON, String, text
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import func
 
@@ -10,6 +10,14 @@ from app.database import Base
 
 class Task(Base):
     __tablename__ = "Task"
+    __table_args__ = (
+        Index(
+            "ix_Task_active_user",
+            "userId",
+            "createdAt",
+            postgresql_where=text('"deletedAt" IS NULL'),
+        ),
+    )
 
     id: Mapped[str] = mapped_column(String, primary_key=True, index=True)
     userId: Mapped[str] = mapped_column(String, nullable=False, index=True)
@@ -49,7 +57,7 @@ class Task(Base):
     sync_status: Mapped[str | None] = mapped_column(String, nullable=True)
     google_synced_etag: Mapped[str | None] = mapped_column(String, nullable=True)
     collaborators: Mapped[Any | None] = mapped_column(JSON, nullable=True)
-    time_logs: Mapped[Any | None] = mapped_column(JSON, nullable=True)
+    time_logs: Mapped[Any | None] = mapped_column(JSON, nullable=True, default=list)
     notified: Mapped[bool | None] = mapped_column(
         Boolean, nullable=True, default=False
     )
