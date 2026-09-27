@@ -136,7 +136,9 @@ class WorkspacesRepository:
         if cached is not None:
             return [deserialize_workspace(w) for w in cached]
         result = await self.db.execute(
-            select(Workspace).where(Workspace.userId == user_id)
+            select(Workspace)
+            .where(Workspace.userId == user_id)
+            .order_by(Workspace.updatedAt.desc(), Workspace.id.desc())
         )
         workspaces = list(result.scalars().all())
         await cache.set(
@@ -272,7 +274,7 @@ class ProjectGroupsRepository:
             return [deserialize_group(g) for g in cached]
         query = select(ProjectGroup)
         query = query.where(ProjectGroup.userId == user_id)
-        query = query.order_by(ProjectGroup.createdAt)
+        query = query.order_by(ProjectGroup.updatedAt.desc(), ProjectGroup.id.desc())
         if limit is not None:
             query = query.limit(limit)
         if offset is not None:
@@ -306,7 +308,7 @@ class ProjectGroupsRepository:
             query = query.where(filter_cond)
             count_query = count_query.where(filter_cond)
             
-        query = query.order_by(ProjectGroup.createdAt.desc(), ProjectGroup.id.desc()).limit(limit).offset(offset)
+        query = query.order_by(ProjectGroup.updatedAt.desc(), ProjectGroup.id.desc()).limit(limit).offset(offset)
         result = await self.db.execute(query)
         total_res = await self.db.execute(count_query)
         total = total_res.scalar() or 0
