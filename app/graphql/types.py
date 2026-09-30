@@ -179,6 +179,34 @@ class Workspace:
         except Exception:
             return None
 
+    @strawberry.field
+    async def tasks(self, info: strawberry.types.Info) -> list["Task"]:
+        db = info.context.get("db")
+        db_lock = info.context.get("db_lock")
+        if not db or not db_lock:
+            return []
+        from app.modules.task.services.tasks_service import TasksService
+
+        tasks_serv = TasksService(db)
+        try:
+            async with db_lock:
+                res = await tasks_serv.find_all_by_user(
+                    self.userId,
+                    filters={"workspace_id": str(self.id)},
+                    limit=None,
+                )
+                items = res.get("items", []) if isinstance(res, dict) else res
+                all_tasks = [map_dict_to_strawberry_task(t) for t in items]
+
+                if self.taskId and not any(str(t.id) == str(self.taskId) for t in all_tasks):
+                    p_res = await tasks_serv.find_one(self.taskId)
+                    if p_res:
+                        all_tasks.insert(0, map_dict_to_strawberry_task(p_res))
+
+                return all_tasks
+        except Exception:
+            return []
+
 
 @strawberry.type
 class ProjectGroup:

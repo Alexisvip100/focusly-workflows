@@ -191,7 +191,8 @@ class TaskMutation:
         if update_task_input.use_ai is not None:
             update_data["use_ai"] = update_task_input.use_ai
         if update_task_input.workspace_id is not None:
-            update_data["workspaceId"] = update_task_input.workspace_id
+            val = str(update_task_input.workspace_id).strip()
+            update_data["workspaceId"] = val if val and val.lower() != "null" and val.lower() != "none" else None
         if update_task_input.project_id is not None:
             update_data["projectId"] = update_task_input.project_id
 
