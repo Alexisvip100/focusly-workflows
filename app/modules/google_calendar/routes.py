@@ -1,9 +1,10 @@
+import logging
 from fastapi import APIRouter, HTTPException, Depends, Header, Request, Body
 from typing import Any
 from sqlalchemy.ext.asyncio import AsyncSession
 import asyncio
 
-from app.database import get_db
+from app.database import get_db, safe_attr
 from app.routes.common import get_current_user_id
 from app.modules.google_calendar.services.google_calendar_service import (
     GoogleCalendarService,
@@ -11,6 +12,9 @@ from app.modules.google_calendar.services.google_calendar_service import (
 from sqlalchemy import select
 from app.models import User
 from app.sockets.realtime import realtime_gateway
+from app.modules.user.repository import UsersRepository
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/google-calendar", tags=["google-calendar"])
 
@@ -46,15 +50,19 @@ async def get_events(
     gc_service: GoogleCalendarService = Depends(get_google_calendar_service),
 ):
     try:
+        user = await UsersRepository(gc_service.db).get_by_id(user_id)
+        if not user or not safe_attr(user, "googleRefreshToken"):
+            return []
+
         # 1. Run calendar sync (performs cleanup and updates watches/synced tasks, but does NOT persist new events)
-        await gc_service.sync_calendar(user_id)
+        try:
+            await gc_service.sync_calendar(user_id)
+        except Exception as sync_err:
+            logger.warning("Calendar sync skipped or failed for user %s: %s", user_id, sync_err)
 
-        # 2. Fetch user's email to determine is_owner
-        user_res = await gc_service.db.execute(select(User).where(User.id == user_id))
-        user = user_res.scalars().first()
-        user_email = user.email if user else None
+        user_email = safe_attr(user, "email")
 
-        # 3. Query Google Calendar directly (read-only, not persisting)
+        # 2. Query Google Calendar directly (read-only, not persisting)
         events_data = await gc_service.get_events(
             user_id, time_min=timeMin, time_max=timeMax
         )
@@ -89,10 +97,9 @@ async def get_events(
             )
 
         return mapped_events
-    except Exception:
-        raise HTTPException(
-            status_code=500, detail="Failed to retrieve Google Calendar events"
-        )
+    except Exception as e:
+        logger.exception("Failed to retrieve Google Calendar events: %s", e)
+        return []
 
 
 @router.post("/events")

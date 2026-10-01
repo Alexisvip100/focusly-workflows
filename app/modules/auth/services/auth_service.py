@@ -124,10 +124,14 @@ class AuthService:
 
     def generate_jwt(self, user: User) -> dict[str, Any]:
         now = time.time()
+        user_id = _safe_attr(user, "id")
+        user_email = _safe_attr(user, "email")
+        user_role = _safe_attr(user, "role")
+
         payload = {
-            "email": user.email,
-            "sub": user.id,
-            "role": user.role,
+            "email": user_email,
+            "sub": user_id,
+            "role": user_role,
             "iat": int(now),
         }
 
@@ -150,18 +154,26 @@ class AuthService:
 
         # Map to dict matches IUser interface
         user_dict = {
-            "id": user.id,
-            "email": user.email,
+            "id": user_id,
+            "email": user_email,
             "name": _safe_attr(user, "name"),
             "picture": resolve_avatar_url(_safe_attr(user, "picture")),
-            "role": _safe_attr(user, "role"),
+            "role": user_role,
             "bio": _safe_attr(user, "bio"),
             "authProvider": _safe_attr(user, "authProvider"),
             "subscriptionStatus": _safe_attr(user, "subscriptionStatus", "free"),
             "settings": _safe_attr(user, "settings"),
             "fcmToken": _safe_attr(user, "fcmToken"),
-            "createdAt": created_at.isoformat() if created_at else None,
-            "updatedAt": updated_at.isoformat() if updated_at else None,
+            "createdAt": (
+                created_at.isoformat()
+                if created_at and hasattr(created_at, "isoformat")
+                else (str(created_at) if created_at else None)
+            ),
+            "updatedAt": (
+                updated_at.isoformat()
+                if updated_at and hasattr(updated_at, "isoformat")
+                else (str(updated_at) if updated_at else None)
+            ),
         }
 
         return {

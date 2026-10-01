@@ -5,7 +5,7 @@ from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel, EmailStr
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.database import get_db
+from app.database import get_db, safe_attr
 from app.routes.common import get_current_user_id
 from app.modules.user.services.users_service import UsersService
 from app.modules.storage.services.storage_service import (
@@ -45,20 +45,30 @@ def get_users_service(db: AsyncSession = Depends(get_db)) -> UsersService:
     return UsersService(db)
 
 
-def map_user_to_dict(user) -> dict[str, Any]:
+def map_user_to_dict(user: Any) -> dict[str, Any]:
+    created_at = safe_attr(user, "createdAt")
+    updated_at = safe_attr(user, "updatedAt")
     return {
-        "id": user.id,
-        "email": user.email,
-        "name": user.name,
-        "picture": resolve_avatar_url(user.picture),
-        "role": user.role,
-        "bio": user.bio,
-        "authProvider": user.authProvider,
-        "subscriptionStatus": user.subscriptionStatus,
-        "settings": user.settings,
-        "fcmToken": user.fcmToken,
-        "createdAt": user.createdAt.isoformat() if user.createdAt else None,
-        "updatedAt": user.updatedAt.isoformat() if user.updatedAt else None,
+        "id": safe_attr(user, "id"),
+        "email": safe_attr(user, "email"),
+        "name": safe_attr(user, "name"),
+        "picture": resolve_avatar_url(safe_attr(user, "picture")),
+        "role": safe_attr(user, "role"),
+        "bio": safe_attr(user, "bio"),
+        "authProvider": safe_attr(user, "authProvider"),
+        "subscriptionStatus": safe_attr(user, "subscriptionStatus", "free"),
+        "settings": safe_attr(user, "settings"),
+        "fcmToken": safe_attr(user, "fcmToken"),
+        "createdAt": (
+            created_at.isoformat()
+            if created_at and hasattr(created_at, "isoformat")
+            else (str(created_at) if created_at else None)
+        ),
+        "updatedAt": (
+            updated_at.isoformat()
+            if updated_at and hasattr(updated_at, "isoformat")
+            else (str(updated_at) if updated_at else None)
+        ),
     }
 
 

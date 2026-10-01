@@ -5,6 +5,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from app.models import Task
+from app.database import safe_attr
 
 
 def parse_naive_dt(val: Any) -> datetime | None:
@@ -24,29 +25,38 @@ def parse_naive_dt(val: Any) -> datetime | None:
 
 def task_to_dict(t: Task) -> dict[str, Any]:
     """Serializes a Task SQLAlchemy model into a standardized dictionary."""
+    duration = safe_attr(t, "duration")
+    est_start = safe_attr(t, "estimated_start_date")
+    est_end = safe_attr(t, "estimated_end_date")
+    deadline = safe_attr(t, "deadline")
+    completed_at = safe_attr(t, "completedAt")
+    created_at = safe_attr(t, "createdAt")
+    updated_at = safe_attr(t, "updatedAt")
+    deleted_at = safe_attr(t, "deletedAt")
+
     return {
-        "id": t.id,
-        "userId": t.userId,
-        "title": t.title,
-        "notesEncrypted": t.notesEncrypted,
-        "estimateTimer": t.estimateTimer,
-        "realTimer": t.realTimer,
-        "duration": t.duration.isoformat() if t.duration else None,
-        "priorityLevel": t.priorityLevel,
-        "category": t.category,
-        "color": t.color,
+        "id": safe_attr(t, "id"),
+        "userId": safe_attr(t, "userId"),
+        "title": safe_attr(t, "title"),
+        "notesEncrypted": safe_attr(t, "notesEncrypted"),
+        "estimateTimer": safe_attr(t, "estimateTimer"),
+        "realTimer": safe_attr(t, "realTimer"),
+        "duration": duration.isoformat() if duration and hasattr(duration, "isoformat") else None,
+        "priorityLevel": safe_attr(t, "priorityLevel"),
+        "category": safe_attr(t, "category"),
+        "color": safe_attr(t, "color"),
         "estimated_start_date": (
-            t.estimated_start_date.isoformat() if t.estimated_start_date else None
+            est_start.isoformat() if est_start and hasattr(est_start, "isoformat") else None
         ),
         "estimated_end_date": (
-            t.estimated_end_date.isoformat() if t.estimated_end_date else None
+            est_end.isoformat() if est_end and hasattr(est_end, "isoformat") else None
         ),
-        "deadline": t.deadline.isoformat() if t.deadline else None,
-        "status": t.status,
-        "completedAt": t.completedAt.isoformat() if t.completedAt else None,
-        "createdAt": t.createdAt.isoformat() if t.createdAt else None,
-        "updatedAt": t.updatedAt.isoformat() if t.updatedAt else None,
-        "deletedAt": t.deletedAt.isoformat() if t.deletedAt else None,
+        "deadline": deadline.isoformat() if deadline and hasattr(deadline, "isoformat") else None,
+        "status": safe_attr(t, "status"),
+        "completedAt": completed_at.isoformat() if completed_at and hasattr(completed_at, "isoformat") else None,
+        "createdAt": created_at.isoformat() if created_at and hasattr(created_at, "isoformat") else None,
+        "updatedAt": updated_at.isoformat() if updated_at and hasattr(updated_at, "isoformat") else None,
+        "deletedAt": deleted_at.isoformat() if deleted_at and hasattr(deleted_at, "isoformat") else None,
         "tags": t.tags or [],
         "filters": t.filters or {},
         "links": t.links or [],

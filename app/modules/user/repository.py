@@ -1,16 +1,12 @@
-from sqlalchemy import inspect
+from typing import Any
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from app.models import User
 from app.redis import cache
 from datetime import datetime
+from app.database import safe_attr
 
-
-def _safe_attr(user: User, key: str, default=None):
-    state = inspect(user, raiseerr=False)
-    if state and key in state.unloaded:
-        return default
-    return getattr(user, key, default)
+_safe_attr = safe_attr
 
 
 def serialize_user(user: User) -> dict:
@@ -19,8 +15,8 @@ def serialize_user(user: User) -> dict:
     last_sync_at = _safe_attr(user, "lastSyncAt")
 
     return {
-        "id": user.id,
-        "email": user.email,
+        "id": _safe_attr(user, "id"),
+        "email": _safe_attr(user, "email"),
         "name": _safe_attr(user, "name"),
         "picture": _safe_attr(user, "picture"),
         "role": _safe_attr(user, "role"),
@@ -32,13 +28,25 @@ def serialize_user(user: User) -> dict:
         "externalId": _safe_attr(user, "externalId"),
         "fcmToken": _safe_attr(user, "fcmToken"),
         "passwordHash": _safe_attr(user, "passwordHash"),
-        "lastSyncAt": last_sync_at.isoformat() if last_sync_at else None,
+        "lastSyncAt": (
+            last_sync_at.isoformat()
+            if last_sync_at and hasattr(last_sync_at, "isoformat")
+            else (str(last_sync_at) if last_sync_at else None)
+        ),
         "googleCalendarSyncToken": _safe_attr(user, "googleCalendarSyncToken"),
         "googleChannelId": _safe_attr(user, "googleChannelId"),
         "googleResourceId": _safe_attr(user, "googleResourceId"),
         "googleChannelExpiration": _safe_attr(user, "googleChannelExpiration"),
-        "createdAt": created_at.isoformat() if created_at else None,
-        "updatedAt": updated_at.isoformat() if updated_at else None,
+        "createdAt": (
+            created_at.isoformat()
+            if created_at and hasattr(created_at, "isoformat")
+            else (str(created_at) if created_at else None)
+        ),
+        "updatedAt": (
+            updated_at.isoformat()
+            if updated_at and hasattr(updated_at, "isoformat")
+            else (str(updated_at) if updated_at else None)
+        ),
     }
 
 
@@ -82,6 +90,20 @@ def deserialize_user(data: dict) -> User:
     return user
 
 
+import inspect as py_inspect
+
+
+async def _safe_refresh(session: Any, instance: Any) -> None:
+    refresh_fn = getattr(session, "refresh", None)
+    if refresh_fn is not None:
+        try:
+            res = refresh_fn(instance)
+            if py_inspect.isawaitable(res):
+                await res
+        except Exception:
+            pass
+
+
 class UsersRepository:
     def __init__(self, db: AsyncSession):
         self.db = db
@@ -90,11 +112,16 @@ class UsersRepository:
         self.db.add(user)
         if commit:
             await self.db.commit()
-            await self.db.refresh(user)
+            await _safe_refresh(self.db, user)
         else:
             await self.db.flush()
-        await cache.set(f"user:id:{user.id}", serialize_user(user))
-        await cache.set(f"user:email:{user.email}", serialize_user(user))
+            await _safe_refresh(self.db, user)
+        user_id = _safe_attr(user, "id")
+        user_email = _safe_attr(user, "email")
+        if user_id:
+            await cache.set(f"user:id:{user_id}", serialize_user(user))
+        if user_email:
+            await cache.set(f"user:email:{user_email}", serialize_user(user))
         return user
 
     async def get_by_id(self, user_id: str) -> User | None:
@@ -104,8 +131,12 @@ class UsersRepository:
         result = await self.db.execute(select(User).where(User.id == user_id))
         user = result.scalars().first()
         if user:
-            await cache.set(f"user:id:{user.id}", serialize_user(user))
-            await cache.set(f"user:email:{user.email}", serialize_user(user))
+            user_id = _safe_attr(user, "id")
+            user_email = _safe_attr(user, "email")
+            if user_id:
+                await cache.set(f"user:id:{user_id}", serialize_user(user))
+            if user_email:
+                await cache.set(f"user:email:{user_email}", serialize_user(user))
         return user
 
     async def get_by_email(self, email: str) -> User | None:
@@ -115,8 +146,12 @@ class UsersRepository:
         result = await self.db.execute(select(User).where(User.email == email))
         user = result.scalars().first()
         if user:
-            await cache.set(f"user:id:{user.id}", serialize_user(user))
-            await cache.set(f"user:email:{user.email}", serialize_user(user))
+            user_id = _safe_attr(user, "id")
+            user_email = _safe_attr(user, "email")
+            if user_id:
+                await cache.set(f"user:id:{user_id}", serialize_user(user))
+            if user_email:
+                await cache.set(f"user:email:{user_email}", serialize_user(user))
         return user
 
     async def get_all(self) -> list[User]:
@@ -128,14 +163,21 @@ class UsersRepository:
             user = await self.db.merge(user)
         if commit:
             await self.db.commit()
-            await self.db.refresh(user)
+            await _safe_refresh(self.db, user)
         else:
             await self.db.flush()
-        await cache.set(f"user:id:{user.id}", serialize_user(user))
-        await cache.set(f"user:email:{user.email}", serialize_user(user))
+            await _safe_refresh(self.db, user)
+        user_id = _safe_attr(user, "id")
+        user_email = _safe_attr(user, "email")
+        if user_id:
+            await cache.set(f"user:id:{user_id}", serialize_user(user))
+        if user_email:
+            await cache.set(f"user:email:{user_email}", serialize_user(user))
         return user
 
     async def delete(self, user: User, commit: bool = False) -> None:
+        user_id = _safe_attr(user, "id")
+        user_email = _safe_attr(user, "email")
         if user not in self.db:
             user = await self.db.merge(user)
         await self.db.delete(user)
@@ -143,5 +185,7 @@ class UsersRepository:
             await self.db.commit()
         else:
             await self.db.flush()
-        await cache.delete(f"user:id:{user.id}")
-        await cache.delete(f"user:email:{user.email}")
+        if user_id:
+            await cache.delete(f"user:id:{user_id}")
+        if user_email:
+            await cache.delete(f"user:email:{user_email}")
