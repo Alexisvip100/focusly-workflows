@@ -35,10 +35,41 @@ async def lifespan(app: FastAPI):
         ensure_avatars_bucket_ready,
     )
 
+    from sqlalchemy import text
+
     await cache.connect()
 
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        migration_statements = [
+            'ALTER TABLE "Task" ADD COLUMN IF NOT EXISTS "projectId" VARCHAR',
+            'ALTER TABLE "Task" ADD COLUMN IF NOT EXISTS "workspaceId" VARCHAR',
+            'ALTER TABLE "Task" ADD COLUMN IF NOT EXISTS "is_owner" BOOLEAN DEFAULT FALSE',
+            'ALTER TABLE "Task" ADD COLUMN IF NOT EXISTS "use_ai" BOOLEAN DEFAULT FALSE',
+            'ALTER TABLE "Task" ADD COLUMN IF NOT EXISTS "notified" BOOLEAN DEFAULT FALSE',
+            'ALTER TABLE "Task" ADD COLUMN IF NOT EXISTS "lastMinuteNotified" BOOLEAN DEFAULT FALSE',
+            'ALTER TABLE "Task" ADD COLUMN IF NOT EXISTS "subtasks" JSON DEFAULT \'[]\'::json',
+            'ALTER TABLE "Task" ADD COLUMN IF NOT EXISTS "time_logs" JSON DEFAULT \'[]\'::json',
+            'ALTER TABLE "Task" ADD COLUMN IF NOT EXISTS "collaborators" JSON DEFAULT \'[]\'::json',
+            'ALTER TABLE "Task" ADD COLUMN IF NOT EXISTS "google_synced_etag" VARCHAR',
+            'ALTER TABLE "Task" ADD COLUMN IF NOT EXISTS "sync_status" VARCHAR',
+            'ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "googleRefreshToken" VARCHAR',
+            'ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "googleCalendarSyncToken" VARCHAR',
+            'ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "googleChannelId" VARCHAR',
+            'ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "googleResourceId" VARCHAR',
+            'ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "googleChannelExpiration" BIGINT',
+            'ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "lastSyncAt" TIMESTAMP',
+            'ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "fcmToken" VARCHAR',
+            'ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "bio" VARCHAR',
+            'ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "settings" JSON',
+            'ALTER TABLE "Workspace" ADD COLUMN IF NOT EXISTS "groupId" VARCHAR',
+            'ALTER TABLE "Workspace" ADD COLUMN IF NOT EXISTS "folderId" VARCHAR',
+        ]
+        for stmt in migration_statements:
+            try:
+                await conn.execute(text(stmt))
+            except Exception as e:
+                print(f"Migration note ({stmt}): {e}", flush=True)
 
     try:
         ensure_avatars_bucket_ready()
