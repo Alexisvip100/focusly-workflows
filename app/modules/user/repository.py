@@ -1,3 +1,4 @@
+from sqlalchemy import inspect
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from app.models import User
@@ -5,28 +6,39 @@ from app.redis import cache
 from datetime import datetime
 
 
+def _safe_attr(user: User, key: str, default=None):
+    state = inspect(user, raiseerr=False)
+    if state and key in state.unloaded:
+        return default
+    return getattr(user, key, default)
+
+
 def serialize_user(user: User) -> dict:
+    created_at = _safe_attr(user, "createdAt")
+    updated_at = _safe_attr(user, "updatedAt")
+    last_sync_at = _safe_attr(user, "lastSyncAt")
+
     return {
         "id": user.id,
         "email": user.email,
-        "name": user.name,
-        "picture": user.picture,
-        "role": user.role,
-        "bio": user.bio,
-        "authProvider": user.authProvider,
-        "googleRefreshToken": user.googleRefreshToken,
-        "subscriptionStatus": user.subscriptionStatus,
-        "settings": user.settings,
-        "externalId": user.externalId,
-        "fcmToken": user.fcmToken,
-        "passwordHash": user.passwordHash,
-        "lastSyncAt": user.lastSyncAt.isoformat() if user.lastSyncAt else None,
-        "googleCalendarSyncToken": user.googleCalendarSyncToken,
-        "googleChannelId": user.googleChannelId,
-        "googleResourceId": user.googleResourceId,
-        "googleChannelExpiration": user.googleChannelExpiration,
-        "createdAt": user.createdAt.isoformat() if user.createdAt else None,
-        "updatedAt": user.updatedAt.isoformat() if user.updatedAt else None,
+        "name": _safe_attr(user, "name"),
+        "picture": _safe_attr(user, "picture"),
+        "role": _safe_attr(user, "role"),
+        "bio": _safe_attr(user, "bio"),
+        "authProvider": _safe_attr(user, "authProvider"),
+        "googleRefreshToken": _safe_attr(user, "googleRefreshToken"),
+        "subscriptionStatus": _safe_attr(user, "subscriptionStatus", "free"),
+        "settings": _safe_attr(user, "settings"),
+        "externalId": _safe_attr(user, "externalId"),
+        "fcmToken": _safe_attr(user, "fcmToken"),
+        "passwordHash": _safe_attr(user, "passwordHash"),
+        "lastSyncAt": last_sync_at.isoformat() if last_sync_at else None,
+        "googleCalendarSyncToken": _safe_attr(user, "googleCalendarSyncToken"),
+        "googleChannelId": _safe_attr(user, "googleChannelId"),
+        "googleResourceId": _safe_attr(user, "googleResourceId"),
+        "googleChannelExpiration": _safe_attr(user, "googleChannelExpiration"),
+        "createdAt": created_at.isoformat() if created_at else None,
+        "updatedAt": updated_at.isoformat() if updated_at else None,
     }
 
 

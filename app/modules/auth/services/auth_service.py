@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.database import transaction_scope
 from app.models import User
-from app.modules.user.repository import UsersRepository
+from app.modules.user.repository import UsersRepository, _safe_attr
 from app.modules.storage.services.storage_service import resolve_avatar_url
 
 logger = logging.getLogger(__name__)
@@ -76,15 +76,18 @@ class AuthService:
                         subscriptionStatus="free",
                         googleRefreshToken=refresh_token,
                     )
-                    await user_repo.create(user)
+                    user = await user_repo.create(user)
                 elif refresh_token:
                     user.googleRefreshToken = refresh_token
-                    await user_repo.save(user)
+                    user = await user_repo.save(user)
+                else:
+                    user = await user_repo.save(user)
 
             jwt_data = self.generate_jwt(user)
             jwt_data["google_access_token"] = access_token
             return jwt_data
         except Exception as e:
+            logger.exception("Error during Google OAuth token validation: %s", e)
             raise ValueError(f"Invalid Google OAuth Token: {str(e)}")
 
     async def refresh_google_access_token(self, user_id: str) -> dict[str, Any]:
@@ -142,20 +145,23 @@ class AuthService:
             refresh_payload, settings.JWT_SECRET, algorithm="HS256"
         )
 
+        created_at = _safe_attr(user, "createdAt")
+        updated_at = _safe_attr(user, "updatedAt")
+
         # Map to dict matches IUser interface
         user_dict = {
             "id": user.id,
             "email": user.email,
-            "name": user.name,
-            "picture": resolve_avatar_url(user.picture),
-            "role": user.role,
-            "bio": user.bio,
-            "authProvider": user.authProvider,
-            "subscriptionStatus": user.subscriptionStatus,
-            "settings": user.settings,
-            "fcmToken": user.fcmToken,
-            "createdAt": user.createdAt.isoformat() if user.createdAt else None,
-            "updatedAt": user.updatedAt.isoformat() if user.updatedAt else None,
+            "name": _safe_attr(user, "name"),
+            "picture": resolve_avatar_url(_safe_attr(user, "picture")),
+            "role": _safe_attr(user, "role"),
+            "bio": _safe_attr(user, "bio"),
+            "authProvider": _safe_attr(user, "authProvider"),
+            "subscriptionStatus": _safe_attr(user, "subscriptionStatus", "free"),
+            "settings": _safe_attr(user, "settings"),
+            "fcmToken": _safe_attr(user, "fcmToken"),
+            "createdAt": created_at.isoformat() if created_at else None,
+            "updatedAt": updated_at.isoformat() if updated_at else None,
         }
 
         return {
@@ -261,6 +267,6 @@ class AuthService:
                 subscriptionStatus="free",
             )
             async with transaction_scope(self.db):
-                await user_repo.create(user)
+                user = await user_repo.create(user)
 
         return self.generate_jwt(user)
