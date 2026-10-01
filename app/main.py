@@ -42,6 +42,17 @@ async def lifespan(app: FastAPI):
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
         migration_statements = [
+            # "notesEncrypted" never held encrypted data; renamed to "notes".
+            """
+            DO $$ BEGIN
+                IF EXISTS (SELECT 1 FROM information_schema.columns
+                           WHERE table_name = 'Task' AND column_name = 'notesEncrypted')
+                   AND NOT EXISTS (SELECT 1 FROM information_schema.columns
+                                   WHERE table_name = 'Task' AND column_name = 'notes') THEN
+                    ALTER TABLE "Task" RENAME COLUMN "notesEncrypted" TO "notes";
+                END IF;
+            END $$
+            """,
             'ALTER TABLE "Task" ADD COLUMN IF NOT EXISTS "projectId" VARCHAR',
             'ALTER TABLE "Task" ADD COLUMN IF NOT EXISTS "workspaceId" VARCHAR',
             'ALTER TABLE "Task" ADD COLUMN IF NOT EXISTS "is_owner" BOOLEAN DEFAULT FALSE',
@@ -62,6 +73,8 @@ async def lifespan(app: FastAPI):
             'ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "fcmToken" VARCHAR',
             'ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "bio" VARCHAR',
             'ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "settings" JSON',
+            'ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "termsVersion" VARCHAR',
+            'ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "termsAcceptedAt" TIMESTAMP',
             'ALTER TABLE "Workspace" ADD COLUMN IF NOT EXISTS "groupId" VARCHAR',
             'ALTER TABLE "Workspace" ADD COLUMN IF NOT EXISTS "folderId" VARCHAR',
         ]
@@ -173,7 +186,7 @@ async def get_context(request: Request):
 
     from app.graphql.dataloaders import get_loaders
 
-    loaders = get_loaders(db, db_lock) if db and db_lock else {}
+    loaders = get_loaders(db, db_lock, user_id) if db and db_lock else {}
     return {
         "db": db,
         "db_lock": db_lock,

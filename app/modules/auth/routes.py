@@ -126,8 +126,7 @@ async def refresh_google_token(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.post("/logout")
-async def logout(response: Response):
+def clear_auth_cookies(response: Response):
     samesite_val: Literal["none", "lax"] = "none" if settings.IS_PRODUCTION else "lax"
     response.delete_cookie(
         key="access_token", secure=True, httponly=True, samesite=samesite_val
@@ -135,6 +134,11 @@ async def logout(response: Response):
     response.delete_cookie(
         key="refresh_token", secure=True, httponly=True, samesite=samesite_val
     )
+
+
+@router.post("/logout")
+async def logout(response: Response):
+    clear_auth_cookies(response)
     return {"message": "Logged out successfully"}
 
 

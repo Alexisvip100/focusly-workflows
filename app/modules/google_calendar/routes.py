@@ -79,7 +79,7 @@ async def get_events(
                     "id": processed["id"],
                     "google_event_id": processed["google_event_id"],
                     "title": processed["title"],
-                    "notes_encrypted": processed["notes_encrypted"] or "",
+                    "notes": processed["notes"] or "",
                     "deadline": processed["deadline"] or "",
                     "estimated_start_date": processed["estimated_start_date"] or "",
                     "estimated_end_date": processed["estimated_end_date"],

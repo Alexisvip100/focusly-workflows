@@ -58,9 +58,15 @@ def fallback_extract_payload(action_type: str, raw_segment: str) -> dict[str, An
             deadline = dl_m.group(1) if dl_m else None
 
             notes = ""
-            notes_idx = raw_segment.find('"notes_encrypted": "')
+            # "notes_encrypted" is the field's former name, still present in
+            # AI messages stored before the rename.
+            notes_key = '"notes": "'
+            notes_idx = raw_segment.find(notes_key)
+            if notes_idx == -1:
+                notes_key = '"notes_encrypted": "'
+                notes_idx = raw_segment.find(notes_key)
             if notes_idx != -1:
-                start_notes = notes_idx + len('"notes_encrypted": "')
+                start_notes = notes_idx + len(notes_key)
                 end_idx = raw_segment.rfind("}]")
                 if end_idx == -1:
                     end_idx = raw_segment.rfind("}")
@@ -77,7 +83,7 @@ def fallback_extract_payload(action_type: str, raw_segment: str) -> dict[str, An
                 "title": title,
                 "estimate_timer": estimate_timer,
                 "priority_level": priority_level,
-                "notes_encrypted": notes,
+                "notes": notes,
             }
             if deadline:
                 payload["deadline"] = deadline
@@ -165,6 +171,8 @@ def extract_actions(text: str) -> list[dict[str, Any]]:
         payload_raw = text[brace_start : brace_end + 1]
         try:
             payload = json.loads(payload_raw)
+            if isinstance(payload, dict) and "notes_encrypted" in payload:
+                payload.setdefault("notes", payload.pop("notes_encrypted"))
             actions.append({"type": action_type, "payload": payload})
         except json.JSONDecodeError:
             fallback = fallback_extract_payload(action_type, payload_raw)

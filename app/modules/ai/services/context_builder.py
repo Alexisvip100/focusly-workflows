@@ -86,7 +86,7 @@ async def build_context(
 
             clean_title = (t.title or "").replace("\n", " ").replace("\r", " ").strip()
             clean_notes = (
-                (t.notesEncrypted or "").replace("\n", " ").replace("\r", " ").strip()
+                (t.notes or "").replace("\n", " ").replace("\r", " ").strip()
             )
 
             context += (

@@ -175,6 +175,19 @@ def generate_avatar_upload_url(user_id: str, content_type: str) -> dict[str, str
     }
 
 
+def is_avatar_key_owned_by(object_key: str, user_id: str) -> bool:
+    """True if `object_key` has the "{user_id}/{filename}" shape that
+    generate_avatar_upload_url issues for this user. A user must never be
+    able to point their `picture` at — and so trigger deletion of — another
+    user's object.
+    """
+    prefix = f"{user_id}/"
+    if not user_id or not object_key.startswith(prefix):
+        return False
+    filename = object_key[len(prefix):]
+    return bool(filename) and "/" not in filename and ".." not in filename
+
+
 def delete_avatar_object(object_key: str) -> None:
     """Best-effort delete of a replaced avatar. Never call with an absolute
     URL (e.g. a Google photo) — only with a bare object key we own.
@@ -185,3 +198,17 @@ def delete_avatar_object(object_key: str) -> None:
         )
     except ClientError:
         pass
+
+
+def delete_user_avatar_objects(user_id: str) -> None:
+    """Delete every avatar object stored under the user's "{user_id}/" prefix,
+    including earlier uploads that were never cleaned up. Used on account deletion.
+    """
+    if not user_id:
+        return
+    paginator = s3_client.get_paginator("list_objects_v2")
+    for page in paginator.paginate(
+        Bucket=settings.MINIO_BUCKET_AVATARS, Prefix=f"{user_id}/"
+    ):
+        for obj in page.get("Contents", []):
+            delete_avatar_object(obj["Key"])

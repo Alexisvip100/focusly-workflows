@@ -38,7 +38,7 @@ def task_to_dict(t: Task) -> dict[str, Any]:
         "id": safe_attr(t, "id"),
         "userId": safe_attr(t, "userId"),
         "title": safe_attr(t, "title"),
-        "notesEncrypted": safe_attr(t, "notesEncrypted"),
+        "notes": safe_attr(t, "notes"),
         "estimateTimer": safe_attr(t, "estimateTimer"),
         "realTimer": safe_attr(t, "realTimer"),
         "duration": duration.isoformat() if duration and hasattr(duration, "isoformat") else None,
@@ -87,7 +87,7 @@ def map_task_to_google_event(task: dict[str, Any]) -> dict[str, Any]:
     if not end:
         end = start + timedelta(minutes=(task.get("estimateTimer") or 30))
 
-    clean_desc = task.get("notesEncrypted") or ""
+    clean_desc = task.get("notes") or ""
     clean_desc = re.sub(r"\[COLOR:(.*?)\]", "", clean_desc)
     clean_desc = re.sub(r"\[START_DATE:(.*?)\]", "", clean_desc).strip()
 

@@ -10,7 +10,8 @@ class TagQuery:
     async def get_tags_by_user(
         self, info, user_id: str, search_term: str | None = None
     ) -> list[types.Tag]:
-        get_user_id(info)
+        # Always the authenticated user's own tags, whatever user_id the client passes.
+        user_id = get_user_id(info)
         db = info.context["db"]
         from app.modules.task.repository import TasksRepository
 

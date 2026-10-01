@@ -111,7 +111,7 @@ async def run_todo_automation(
             userId=user_id,
             workspaceId=workspace_id,  # Vinculada al workspace
             title=todo.text,
-            notesEncrypted=f"## Creada automáticamente desde Workspace\n\n**TODO detectado:** {todo.text}",
+            notes=f"## Creada automáticamente desde Workspace\n\n**TODO detectado:** {todo.text}",
             estimateTimer=1800,  # 30 minutos por defecto
             realTimer=0.0,
             priorityLevel=2,  # Medium por defecto

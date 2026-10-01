@@ -8,6 +8,26 @@ from app.modules.task.services.tasks.tasks_service import TasksService
 from app.modules.auth.services.auth_service import AuthService
 
 
+async def ensure_owned_task_links(
+    db: Any, user_id: str, workspace_id: str | None, project_id: str | None
+) -> None:
+    """Raise unless the workspace/project a task is being linked to belongs to
+    user_id — Task.workspace / Task.project would otherwise expose another
+    user's workspace content and folder through the linked task.
+    """
+    from app.modules.workspace.services.workspaces_service import (
+        WorkspacesService,
+    )
+    from app.modules.workspace.services.project_groups_service import (
+        ProjectGroupsService,
+    )
+
+    if workspace_id:
+        await WorkspacesService(db).find_one(workspace_id, user_id)
+    if project_id:
+        await ProjectGroupsService(db).find_one(project_id, user_id)
+
+
 @strawberry.type
 class TaskMutation:
     @strawberry.mutation
@@ -36,7 +56,7 @@ class TaskMutation:
             # appear to belong to someone else.
             "userId": user_id,
             "title": create_task_input.title,
-            "notesEncrypted": create_task_input.notes_encrypted,
+            "notes": create_task_input.notes,
             "estimateTimer": create_task_input.estimate_timer,
             "realTimer": create_task_input.real_timer,
             "duration": create_task_input.duration,
@@ -91,6 +111,10 @@ class TaskMutation:
             "use_ai": create_task_input.use_ai,
         }
 
+        await ensure_owned_task_links(
+            db, user_id, create_task_input.workspace_id, create_task_input.project_id
+        )
+
         res = await tasks_serv.create(
             task_data, skip_scheduling=bool(create_task_input.skip_scheduling)
         )
@@ -126,8 +150,8 @@ class TaskMutation:
         update_data: dict[str, Any] = {}
         if update_task_input.title is not None:
             update_data["title"] = update_task_input.title
-        if update_task_input.notes_encrypted is not None:
-            update_data["notesEncrypted"] = update_task_input.notes_encrypted
+        if update_task_input.notes is not None:
+            update_data["notes"] = update_task_input.notes
         if update_task_input.estimate_timer is not None:
             update_data["estimateTimer"] = update_task_input.estimate_timer
         if update_task_input.real_timer is not None:
@@ -195,6 +219,17 @@ class TaskMutation:
             update_data["workspaceId"] = val if val and val.lower() != "null" and val.lower() != "none" else None
         if update_task_input.project_id is not None:
             update_data["projectId"] = update_task_input.project_id
+
+        # Only newly set links need checking; re-sending the current value
+        # (e.g. a since-deleted workspace) must not start failing updates.
+        new_workspace_id = update_data.get("workspaceId")
+        new_project_id = update_data.get("projectId")
+        await ensure_owned_task_links(
+            db,
+            user_id,
+            new_workspace_id if new_workspace_id != existing.get("workspaceId") else None,
+            new_project_id if new_project_id != existing.get("projectId") else None,
+        )
 
         res = await tasks_serv.update(str(update_task_input.id), update_data)
         return types.map_dict_to_strawberry_task(res)

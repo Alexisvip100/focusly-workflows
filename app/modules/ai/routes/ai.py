@@ -366,7 +366,7 @@ async def chat_endpoint(
             system_context += (
                 f"\n\nCRITICAL CONTEXT MODE: The user has selected this specific Task as context:\n"
                 f"- Title: {task_obj.title}\n"
-                f"- Notes/Description: {task_obj.notesEncrypted or 'No description'}\n"
+                f"- Notes/Description: {task_obj.notes or 'No description'}\n"
                 f"- Status: {task_obj.status}\n"
                 f"- Priority: {task_obj.priorityLevel}\n"
                 f"Please focus your response primarily on helping the user with this specific task."

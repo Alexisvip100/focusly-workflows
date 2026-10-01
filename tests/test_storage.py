@@ -9,6 +9,7 @@ from app.modules.storage.services.storage_service import (
     get_avatar_object,
     delete_avatar_object,
     ensure_avatars_bucket_ready,
+    is_avatar_key_owned_by,
 )
 
 client = TestClient(fastapi_app)
@@ -135,3 +136,37 @@ def test_ensure_avatars_bucket_ready_handles_tigris_policy_gracefully():
         ensure_avatars_bucket_ready(max_attempts=1)
         mock_head.assert_called_once()
         mock_policy.assert_called_once()
+
+
+def test_is_avatar_key_owned_by():
+    assert is_avatar_key_owned_by("user-1/abc.png", "user-1")
+    assert not is_avatar_key_owned_by("user-2/abc.png", "user-1")
+    assert not is_avatar_key_owned_by("user-10/abc.png", "user-1")
+    assert not is_avatar_key_owned_by("user-1/", "user-1")
+    assert not is_avatar_key_owned_by("user-1/x/../../user-2/abc.png", "user-1")
+    assert not is_avatar_key_owned_by("user-1/..", "user-1")
+    assert not is_avatar_key_owned_by("abc.png", "")
+
+
+def test_delete_user_avatar_objects_only_touches_user_prefix():
+    from app.modules.storage.services.storage_service import delete_user_avatar_objects
+
+    with patch(
+        "app.modules.storage.services.storage_service.s3_client"
+    ) as s3:
+        paginator = MagicMock()
+        paginator.paginate.return_value = [
+            {"Contents": [{"Key": "user-1/a.png"}, {"Key": "user-1/b.png"}]},
+            {},
+        ]
+        s3.get_paginator.return_value = paginator
+
+        delete_user_avatar_objects("user-1")
+
+        assert paginator.paginate.call_args.kwargs["Prefix"] == "user-1/"
+        deleted = [c.kwargs["Key"] for c in s3.delete_object.call_args_list]
+        assert deleted == ["user-1/a.png", "user-1/b.png"]
+
+        s3.reset_mock()
+        delete_user_avatar_objects("")
+        s3.get_paginator.assert_not_called()

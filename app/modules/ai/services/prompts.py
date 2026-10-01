@@ -50,12 +50,12 @@ Rules for CREATE_WORKSPACE:
 
 TASKS & CALENDAR SCHEDULING (EXECUTABLE & SMART):
 When emitting tasks:
-Emit one [ACTION: CREATE_TASK {"title": "Action-oriented title", "notes_encrypted": "Detailed guide with why, how, and definition of done", "estimate_timer": 60, "priority_level": 2, "deadline": "YYYY-MM-DDTHH:MM:SS", "subtasks": [{"title": "Step 1", "estimate_timer": 20}, {"title": "Step 2", "estimate_timer": 40}]}] line per task.
+Emit one [ACTION: CREATE_TASK {"title": "Action-oriented title", "notes": "Detailed guide with why, how, and definition of done", "estimate_timer": 60, "priority_level": 2, "deadline": "YYYY-MM-DDTHH:MM:SS", "subtasks": [{"title": "Step 1", "estimate_timer": 20}, {"title": "Step 2", "estimate_timer": 40}]}] line per task.
 
 Rules for CREATE_TASK:
 1. TASK SPECIFICITY:
    - NEVER output vague or generic titles (avoid "Estudiar", "Investigar", "Hacer tarea", "Revisión general"). Always output clear, result-oriented titles (e.g., "Mapeo de arquitectura de autenticación y endpoints JWT", "Investigación de modelos fundacionales en arXiv").
-2. ACTIONABLE NOTES ("notes_encrypted"):
+2. ACTIONABLE NOTES ("notes"):
    - Must explain:
      * Why: How this task connects to the project.
      * How: 2-3 practical steps to execute.
@@ -75,7 +75,7 @@ EXISTING TASKS (UPDATE_TASK):
 
 CRITICAL ACTION SYNTAX & JSON FORMATTING:
 - Every [ACTION: ...] tag must be valid, well-formed JSON closed with '}]' on its own line before you begin your conversational chat response.
-- NEVER put raw unescaped double quotes (") inside strings like "content" or "notes_encrypted".
+- NEVER put raw unescaped double quotes (") inside strings like "content" or "notes".
 - If you quote a term, source, or book title inside Markdown content, ALWAYS use single quotes (') or Spanish quotes (« ») instead of raw double quotes (e.g. write 'lipid nanoparticles' or «lipid nanoparticles», NEVER "lipid nanoparticles").
 - Never leave an action tag unclosed.
 

@@ -12,9 +12,14 @@ if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
 
-def get_loaders(db: AsyncSession, db_lock: asyncio.Lock) -> dict[str, DataLoader]:
+def get_loaders(
+    db: AsyncSession, db_lock: asyncio.Lock, user_id: str | None
+) -> dict[str, DataLoader]:
     """Factory creating request-scoped DataLoaders that safely reuse the request's
     existing AsyncSession under db_lock serialization without spawning extra sessions.
+
+    Every loader only returns rows owned by `user_id` (the authenticated caller),
+    so a task pointing at someone else's workspace/project ID never resolves it.
     """
 
     async def batch_load_workspaces_for_tasks(keys: list[tuple[str, str | None]]) -> list[Workspace | None]:
@@ -23,6 +28,8 @@ def get_loaders(db: AsyncSession, db_lock: asyncio.Lock) -> dict[str, DataLoader
         """
         if not keys:
             return []
+        if not user_id:
+            return [None] * len(keys)
         task_ids = list({k[0] for k in keys if k[0]})
         workspace_ids = list({k[1] for k in keys if k[1]})
 
@@ -36,7 +43,9 @@ def get_loaders(db: AsyncSession, db_lock: asyncio.Lock) -> dict[str, DataLoader
             return [None] * len(keys)
 
         async with db_lock:
-            result = await db.execute(select(Workspace).where(or_(*clauses)))
+            result = await db.execute(
+                select(Workspace).where(Workspace.userId == user_id, or_(*clauses))
+            )
             workspaces = result.scalars().all()
 
         ws_by_id = {w.id: w for w in workspaces}
@@ -55,10 +64,14 @@ def get_loaders(db: AsyncSession, db_lock: asyncio.Lock) -> dict[str, DataLoader
     async def batch_load_projects_by_id(project_ids: list[str]) -> list[ProjectGroup | None]:
         if not project_ids:
             return []
+        if not user_id:
+            return [None] * len(project_ids)
         unique_ids = list(set(project_ids))
         async with db_lock:
             result = await db.execute(
-                select(ProjectGroup).where(ProjectGroup.id.in_(unique_ids))
+                select(ProjectGroup).where(
+                    ProjectGroup.userId == user_id, ProjectGroup.id.in_(unique_ids)
+                )
             )
             groups = result.scalars().all()
             grp_map = {g.id: g for g in groups}

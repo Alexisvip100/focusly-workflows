@@ -142,7 +142,7 @@ class TasksFilterService:
                 mapped = [
                     t for t in mapped
                     if term in t.get("title", "").lower()
-                    or term in (t.get("notesEncrypted") or "").lower()
+                    or term in (t.get("notes") or "").lower()
                 ]
 
         if sort and sort.get("sort"):

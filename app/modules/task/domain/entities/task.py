@@ -23,7 +23,7 @@ class Task(Base):
     userId: Mapped[str] = mapped_column(String, nullable=False, index=True)
     title: Mapped[str] = mapped_column(String, nullable=False)
     subtasks: Mapped[Any | None] = mapped_column(JSON, nullable=True, default=list)
-    notesEncrypted: Mapped[str] = mapped_column(String, nullable=False)
+    notes: Mapped[str] = mapped_column(String, nullable=False)
     estimateTimer: Mapped[int | None] = mapped_column(Integer, nullable=True)
     realTimer: Mapped[float | None] = mapped_column(Float, nullable=True)
     duration: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

@@ -5,7 +5,7 @@ from typing import Any
 
 class TaskCreateSchema(BaseModel):
     title: str | None = "Untitled Task"
-    notesEncrypted: str | None = ""
+    notes: str | None = ""
     estimateTimer: int | None = None
     realTimer: float | None = None
     duration: datetime | None = None
@@ -41,7 +41,7 @@ class TaskCreateSchema(BaseModel):
         if isinstance(data, dict):
             defaults = {
                 "title": "Untitled Task",
-                "notesEncrypted": "",
+                "notes": "",
                 "priorityLevel": 2,
                 "status": "Todo",
                 "task_type": "PlatformTask",

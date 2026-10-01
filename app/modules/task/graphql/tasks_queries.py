@@ -128,8 +128,12 @@ class TaskQuery:
 
     @strawberry.field
     async def get_task(self, info, id: str) -> types.Task:
-        get_user_id(info)
+        user_id = get_user_id(info)
         db = info.context["db"]
         tasks_serv = TasksService(db)
         res = await tasks_serv.find_one(id)
+        # Same "not found" for a missing task and one owned by someone else,
+        # so the response doesn't reveal whether the ID exists.
+        if res.get("userId") != user_id:
+            raise ValueError(f"Task with ID {id} not found")
         return types.map_dict_to_strawberry_task(res)

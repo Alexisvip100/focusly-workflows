@@ -13,6 +13,7 @@ def serialize_user(user: User) -> dict:
     created_at = _safe_attr(user, "createdAt")
     updated_at = _safe_attr(user, "updatedAt")
     last_sync_at = _safe_attr(user, "lastSyncAt")
+    terms_accepted_at = _safe_attr(user, "termsAcceptedAt")
 
     return {
         "id": _safe_attr(user, "id"),
@@ -37,6 +38,12 @@ def serialize_user(user: User) -> dict:
         "googleChannelId": _safe_attr(user, "googleChannelId"),
         "googleResourceId": _safe_attr(user, "googleResourceId"),
         "googleChannelExpiration": _safe_attr(user, "googleChannelExpiration"),
+        "termsVersion": _safe_attr(user, "termsVersion"),
+        "termsAcceptedAt": (
+            terms_accepted_at.isoformat()
+            if terms_accepted_at and hasattr(terms_accepted_at, "isoformat")
+            else None
+        ),
         "createdAt": (
             created_at.isoformat()
             if created_at and hasattr(created_at, "isoformat")
@@ -85,6 +92,12 @@ def deserialize_user(data: dict) -> User:
     user.googleChannelId = data.get("googleChannelId")
     user.googleResourceId = data.get("googleResourceId")
     user.googleChannelExpiration = google_channel_exp
+    user.termsVersion = data.get("termsVersion")
+    user.termsAcceptedAt = (
+        datetime.fromisoformat(data["termsAcceptedAt"])
+        if data.get("termsAcceptedAt")
+        else None
+    )
     user.createdAt = created_at
     user.updatedAt = updated_at
     return user

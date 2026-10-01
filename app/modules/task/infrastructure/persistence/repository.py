@@ -25,6 +25,9 @@ def serialize_task(t: Task) -> dict:
 
 
 def deserialize_task(data: dict) -> Task:
+    if "notes" not in data and "notesEncrypted" in data:
+        # Cached before the column was renamed from "notesEncrypted".
+        data = {**data, "notes": data["notesEncrypted"]}
     kwargs = {}
     for column in Task.__table__.columns:
         if column.name not in data:
@@ -164,7 +167,7 @@ class TasksRepository:
                     conditions.append(
                         or_(
                             Task.title.ilike(f"%{term}%"),
-                            Task.notesEncrypted.ilike(f"%{term}%"),
+                            Task.notes.ilike(f"%{term}%"),
                         )
                     )
 

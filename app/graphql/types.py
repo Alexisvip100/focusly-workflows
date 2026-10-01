@@ -249,7 +249,7 @@ class Task:
     title: str
     workspace_id: str | None = strawberry.field(name="workspace_id", default=None)
     project_id: str | None = strawberry.field(name="project_id", default=None)
-    notes_encrypted: str = strawberry.field(name="notes_encrypted")
+    notes: str = strawberry.field(name="notes")
     estimate_timer: int | None = strawberry.field(name="estimate_timer", default=None)
     real_timer: float | None = strawberry.field(name="real_timer", default=None)
     priority_level: int = strawberry.field(name="priority_level")
@@ -457,7 +457,7 @@ class CreateTaskInput:
     title: str
     workspace_id: str | None = strawberry.field(name="workspace_id", default=None)
     project_id: str | None = strawberry.field(name="project_id", default=None)
-    notes_encrypted: str = strawberry.field(name="notes_encrypted")
+    notes: str = strawberry.field(name="notes")
     estimate_timer: int | None = strawberry.field(name="estimate_timer", default=None)
     real_timer: float | None = strawberry.field(name="real_timer", default=None)
     duration: str | None = strawberry.field(name="duration", default=None)
@@ -501,7 +501,7 @@ class UpdateTaskInput:
     title: str | None = strawberry.field(name="title", default=None)
     workspace_id: str | None = strawberry.field(name="workspace_id", default=None)
     project_id: str | None = strawberry.field(name="project_id", default=None)
-    notes_encrypted: str | None = strawberry.field(name="notes_encrypted", default=None)
+    notes: str | None = strawberry.field(name="notes", default=None)
     estimate_timer: int | None = strawberry.field(name="estimate_timer", default=None)
     real_timer: float | None = strawberry.field(name="real_timer", default=None)
     duration: str | None = strawberry.field(name="duration", default=None)
@@ -670,7 +670,7 @@ def map_dict_to_strawberry_task(t: dict[str, Any]) -> Task:
         id=strawberry.ID(str(t["id"])),
         user_id=str(t["userId"]),
         title=t["title"],
-        notes_encrypted=t["notesEncrypted"],
+        notes=t["notes"],
         estimate_timer=t.get("estimateTimer"),
         real_timer=t.get("realTimer"),
         priority_level=t["priorityLevel"],

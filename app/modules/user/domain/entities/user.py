@@ -41,3 +41,5 @@ class User(Base):
     googleChannelExpiration: Mapped[int | None] = mapped_column(
         BigInteger, nullable=True
     )
+    termsVersion: Mapped[str | None] = mapped_column(String, nullable=True)
+    termsAcceptedAt: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

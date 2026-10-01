@@ -16,7 +16,7 @@ def make_task(**overrides):
         id="t1",
         userId="u1",
         title="Task",
-        notesEncrypted="",
+        notes="",
         estimateTimer=30,
         realTimer=0.0,
         duration=None,
@@ -108,21 +108,21 @@ def test_date_filter_uses_estimated_start_then_deadline():
             "estimated_start_date": "2026-08-29T10:00:00",
             "deadline": "2026-09-15T10:00:00",
             "title": "A",
-            "notesEncrypted": "",
+            "notes": "",
         },
         {
             "id": "deadline-only",
             "estimated_start_date": None,
             "deadline": "2026-08-29T18:00:00",
             "title": "B",
-            "notesEncrypted": "",
+            "notes": "",
         },
         {
             "id": "next-month",
             "estimated_start_date": None,
             "deadline": "2026-09-15T10:00:00",
             "title": "C",
-            "notesEncrypted": "",
+            "notes": "",
         },
     ]
     filtered = svc._apply_filters_and_sorting(
@@ -139,9 +139,9 @@ def test_date_filter_uses_estimated_start_then_deadline():
 def test_search_term_matches_title_and_notes_on_full_set():
     svc = TasksService.__new__(TasksService)
     tasks = [
-        {"id": "1", "title": "Write report", "notesEncrypted": ""},
-        {"id": "2", "title": "Other", "notesEncrypted": "report draft"},
-        {"id": "3", "title": "Unrelated", "notesEncrypted": ""},
+        {"id": "1", "title": "Write report", "notes": ""},
+        {"id": "2", "title": "Other", "notes": "report draft"},
+        {"id": "3", "title": "Unrelated", "notes": ""},
     ]
     filtered = svc._apply_filters_and_sorting(
         tasks, {"searchTerm": "report"}, None
@@ -152,10 +152,10 @@ def test_search_term_matches_title_and_notes_on_full_set():
 def test_priority_filter_high_includes_levels_gte_3():
     svc = TasksService.__new__(TasksService)
     tasks = [
-        {"id": "p1", "priorityLevel": 1, "title": "a", "notesEncrypted": ""},
-        {"id": "p2", "priorityLevel": 2, "title": "b", "notesEncrypted": ""},
-        {"id": "p3", "priorityLevel": 3, "title": "c", "notesEncrypted": ""},
-        {"id": "p4", "priorityLevel": 4, "title": "d", "notesEncrypted": ""},
+        {"id": "p1", "priorityLevel": 1, "title": "a", "notes": ""},
+        {"id": "p2", "priorityLevel": 2, "title": "b", "notes": ""},
+        {"id": "p3", "priorityLevel": 3, "title": "c", "notes": ""},
+        {"id": "p4", "priorityLevel": 4, "title": "d", "notes": ""},
     ]
     filtered = svc._apply_filters_and_sorting(
         tasks, {"priorityLevel": [3]}, None
@@ -170,7 +170,7 @@ def test_date_filter_naive_vs_aware_does_not_crash():
             "id": "naive",
             "deadline": "2026-08-29T12:00:00",
             "title": "A",
-            "notesEncrypted": "",
+            "notes": "",
         }
     ]
     filtered = svc._apply_filters_and_sorting(
@@ -188,9 +188,9 @@ def test_workspace_id_filter():
     svc = TasksService.__new__(TasksService)
     svc.tasksFilter = TasksFilterService()
     tasks = [
-        {"id": "t1", "workspaceId": "ws-1", "title": "A", "notesEncrypted": ""},
-        {"id": "t2", "workspaceId": "ws-2", "title": "B", "notesEncrypted": ""},
-        {"id": "t3", "workspaceId": None, "title": "C", "notesEncrypted": ""},
+        {"id": "t1", "workspaceId": "ws-1", "title": "A", "notes": ""},
+        {"id": "t2", "workspaceId": "ws-2", "title": "B", "notes": ""},
+        {"id": "t3", "workspaceId": None, "title": "C", "notes": ""},
     ]
     filtered_1 = svc._apply_filters_and_sorting(
         tasks, {"workspace_id": "ws-1"}, None
@@ -210,7 +210,7 @@ def test_map_dict_to_strawberry_task_workspace_id():
         "id": "task-123",
         "userId": "user-1",
         "title": "Sample Task",
-        "notesEncrypted": "",
+        "notes": "",
         "priorityLevel": 2,
         "deadline": "2026-09-09T10:00:00",
         "status": "Todo",
@@ -228,9 +228,9 @@ def test_project_id_filter():
     svc = TasksService.__new__(TasksService)
     svc.tasksFilter = TasksFilterService()
     tasks = [
-        {"id": "t1", "projectId": "proj-1", "title": "A", "notesEncrypted": ""},
-        {"id": "t2", "projectId": "proj-2", "title": "B", "notesEncrypted": ""},
-        {"id": "t3", "projectId": None, "title": "C", "notesEncrypted": ""},
+        {"id": "t1", "projectId": "proj-1", "title": "A", "notes": ""},
+        {"id": "t2", "projectId": "proj-2", "title": "B", "notes": ""},
+        {"id": "t3", "projectId": None, "title": "C", "notes": ""},
     ]
     filtered_1 = svc._apply_filters_and_sorting(
         tasks, {"project_id": "proj-1"}, None
@@ -250,7 +250,7 @@ def test_map_dict_to_strawberry_task_project_id():
         "id": "task-123",
         "userId": "user-1",
         "title": "Sample Task",
-        "notesEncrypted": "",
+        "notes": "",
         "priorityLevel": 2,
         "deadline": "2026-09-09T10:00:00",
         "status": "Todo",
@@ -268,10 +268,10 @@ def test_has_project_filter():
     svc = TasksService.__new__(TasksService)
     svc.tasksFilter = TasksFilterService()
     tasks = [
-        {"id": "t1", "projectId": "proj-1", "title": "A", "notesEncrypted": ""},
-        {"id": "t2", "projectId": "", "title": "B", "notesEncrypted": ""},
-        {"id": "t3", "projectId": None, "title": "C", "notesEncrypted": ""},
-        {"id": "t4", "project_id": "proj-2", "title": "D", "notesEncrypted": ""},
+        {"id": "t1", "projectId": "proj-1", "title": "A", "notes": ""},
+        {"id": "t2", "projectId": "", "title": "B", "notes": ""},
+        {"id": "t3", "projectId": None, "title": "C", "notes": ""},
+        {"id": "t4", "project_id": "proj-2", "title": "D", "notes": ""},
     ]
     filtered = svc._apply_filters_and_sorting(
         tasks, {"has_project": True}, None
@@ -352,7 +352,7 @@ def test_tasks_service_routes_to_sql_when_db_present():
     svc.tasksFilter = TasksFilterService()
 
     mock_repo = MagicMock()
-    fake_task = Task(id="t1", userId="u1", title="Task 1", notesEncrypted="", status="Todo", deadline=NOW)
+    fake_task = Task(id="t1", userId="u1", title="Task 1", notes="", status="Todo", deadline=NOW)
     mock_repo.query_tasks_by_user = AsyncMock(return_value=([fake_task], 1))
     mock_repo.get_all_active_by_user = AsyncMock(return_value=[])
     svc.repository = mock_repo
@@ -398,7 +398,7 @@ def test_tasks_service_find_paginated_by_user_routes_to_sql():
 
     mock_repo = MagicMock()
     fake_tasks = [
-        Task(id=f"t{i}", userId="u1", title=f"Task {i}", notesEncrypted="", status="Todo", deadline=NOW)
+        Task(id=f"t{i}", userId="u1", title=f"Task {i}", notes="", status="Todo", deadline=NOW)
         for i in range(5)
     ]
     mock_repo.query_tasks_by_user = AsyncMock(return_value=(fake_tasks, 25))
@@ -442,14 +442,14 @@ def test_sql_pushdown_direct_filters_real_db_execution():
         async with session_factory() as session:
             now = datetime(2026, 9, 19, 12, 0, 0)
             tasks = [
-                Task(id="t1", userId="u1", title="Task 1", notesEncrypted="", deadline=now + timedelta(days=1), status="Todo", workspaceId="ws1", projectId="p1", category="Work", createdAt=now),
-                Task(id="t2", userId="u1", title="Task 2", notesEncrypted="", deadline=now + timedelta(days=2), status="Todo", workspaceId="ws1", projectId="p2", category="Work", createdAt=now - timedelta(days=1)),
-                Task(id="t3", userId="u1", title="Task 3", notesEncrypted="", deadline=now + timedelta(days=3), status="Done", workspaceId="ws1", projectId="p1", category="Personal", createdAt=now - timedelta(days=2)),
-                Task(id="t4", userId="u1", title="Task 4", notesEncrypted="", deadline=now + timedelta(days=4), status="Todo", workspaceId="ws2", projectId="", category="Work", createdAt=now - timedelta(days=3)),
-                Task(id="t5", userId="u1", title="Task 5", notesEncrypted="", deadline=now + timedelta(days=5), status="Todo", workspaceId="ws1", projectId=None, category="Work", createdAt=now - timedelta(days=4)),
-                Task(id="t6", userId="u1", title="Task 6", notesEncrypted="", deadline=now, status="Todo", workspaceId="ws1", projectId="p1", category="Work", deletedAt=now),
-                Task(id="t7", userId="u1", title="Task 7", notesEncrypted="", deadline=now, status="Todo", workspaceId="ws1", projectId="p1", category="Work", source="google"),
-                Task(id="t8", userId="u2", title="Task 8", notesEncrypted="", deadline=now, status="Todo", workspaceId="ws1", projectId="p1", category="Work"),
+                Task(id="t1", userId="u1", title="Task 1", notes="", deadline=now + timedelta(days=1), status="Todo", workspaceId="ws1", projectId="p1", category="Work", createdAt=now),
+                Task(id="t2", userId="u1", title="Task 2", notes="", deadline=now + timedelta(days=2), status="Todo", workspaceId="ws1", projectId="p2", category="Work", createdAt=now - timedelta(days=1)),
+                Task(id="t3", userId="u1", title="Task 3", notes="", deadline=now + timedelta(days=3), status="Done", workspaceId="ws1", projectId="p1", category="Personal", createdAt=now - timedelta(days=2)),
+                Task(id="t4", userId="u1", title="Task 4", notes="", deadline=now + timedelta(days=4), status="Todo", workspaceId="ws2", projectId="", category="Work", createdAt=now - timedelta(days=3)),
+                Task(id="t5", userId="u1", title="Task 5", notes="", deadline=now + timedelta(days=5), status="Todo", workspaceId="ws1", projectId=None, category="Work", createdAt=now - timedelta(days=4)),
+                Task(id="t6", userId="u1", title="Task 6", notes="", deadline=now, status="Todo", workspaceId="ws1", projectId="p1", category="Work", deletedAt=now),
+                Task(id="t7", userId="u1", title="Task 7", notes="", deadline=now, status="Todo", workspaceId="ws1", projectId="p1", category="Work", source="google"),
+                Task(id="t8", userId="u2", title="Task 8", notes="", deadline=now, status="Todo", workspaceId="ws1", projectId="p1", category="Work"),
             ]
             session.add_all(tasks)
             await session.commit()
@@ -548,7 +548,7 @@ def test_tasks_repository_query_tasks_fase_2_filters():
     assert '"Task"."priorityLevel" >= 3 OR "Task"."priorityLevel" IN (3)' in items_sql
     assert '"Task".title ILIKE \'%%revisión%%\'' in items_sql
 
-    # 2. priorityLevel < 3 and searchTerm across title and notesEncrypted (plain text)
+    # 2. priorityLevel < 3 and searchTerm across title and notes (plain text)
     asyncio.run(
         repo.query_tasks_by_user(
             user_id="user-1",
@@ -559,7 +559,7 @@ def test_tasks_repository_query_tasks_fase_2_filters():
     items_sql_2 = str(items_stmt_2.compile(dialect=postgresql.dialect(), compile_kwargs={"literal_binds": True}))
     assert '"Task"."priorityLevel" IN (1, 2)' in items_sql_2
     assert '"Task"."priorityLevel" >= 3' not in items_sql_2
-    assert '"Task".title ILIKE \'%%diseño%%\' OR "Task"."notesEncrypted" ILIKE \'%%diseño%%\'' in items_sql_2
+    assert '"Task".title ILIKE \'%%diseño%%\' OR "Task".notes ILIKE \'%%diseño%%\'' in items_sql_2
 
 
 def test_sql_pushdown_fase_2_real_db_execution():
@@ -587,14 +587,14 @@ def test_sql_pushdown_fase_2_real_db_execution():
         async with session_factory() as session:
             now = datetime(2026, 9, 19, 12, 0, 0)
             tasks = [
-                Task(id="p1", userId="u1", title="Baja prioridad", notesEncrypted="", deadline=now, priorityLevel=1, status="Todo"),
-                Task(id="p2", userId="u1", title="Media prioridad", notesEncrypted="", deadline=now, priorityLevel=2, status="Todo"),
-                Task(id="p3", userId="u1", title="Alta prioridad", notesEncrypted="", deadline=now, priorityLevel=3, status="Todo"),
-                Task(id="p4", userId="u1", title="Urgente prioridad", notesEncrypted="", deadline=now, priorityLevel=4, status="Todo"),
-                Task(id="s1", userId="u1", title="Revisión de arquitectura", notesEncrypted="Todo listo", deadline=now, priorityLevel=2, status="Todo"),
-                Task(id="s2", userId="u1", title="Diseño de UI", notesEncrypted="Notas estándar", deadline=now, priorityLevel=2, status="Todo"),
-                Task(id="s3", userId="u1", title="Seguridad web", notesEncrypted="Revisión de notas de diseño detalladas", deadline=now, priorityLevel=2, status="Todo"),
-                Task(id="s4", userId="u1", title="Café con el equipo", notesEncrypted="Hablar de CAFÉ y galletas", deadline=now, priorityLevel=2, status="Todo"),
+                Task(id="p1", userId="u1", title="Baja prioridad", notes="", deadline=now, priorityLevel=1, status="Todo"),
+                Task(id="p2", userId="u1", title="Media prioridad", notes="", deadline=now, priorityLevel=2, status="Todo"),
+                Task(id="p3", userId="u1", title="Alta prioridad", notes="", deadline=now, priorityLevel=3, status="Todo"),
+                Task(id="p4", userId="u1", title="Urgente prioridad", notes="", deadline=now, priorityLevel=4, status="Todo"),
+                Task(id="s1", userId="u1", title="Revisión de arquitectura", notes="Todo listo", deadline=now, priorityLevel=2, status="Todo"),
+                Task(id="s2", userId="u1", title="Diseño de UI", notes="Notas estándar", deadline=now, priorityLevel=2, status="Todo"),
+                Task(id="s3", userId="u1", title="Seguridad web", notes="Revisión de notas de diseño detalladas", deadline=now, priorityLevel=2, status="Todo"),
+                Task(id="s4", userId="u1", title="Café con el equipo", notes="Hablar de CAFÉ y galletas", deadline=now, priorityLevel=2, status="Todo"),
             ]
             session.add_all(tasks)
             await session.commit()
@@ -616,7 +616,7 @@ def test_sql_pushdown_fase_2_real_db_execution():
             assert total == 1
             assert items[0].id == "s1"
 
-            # 4. searchTerm in notesEncrypted (plain text search)
+            # 4. searchTerm in notes (plain text search)
             items, total = await repo.query_tasks_by_user("u1", filters={"searchTerm": "arquitectura"})
             assert total == 1
             assert items[0].id == "s1"
@@ -648,7 +648,7 @@ def test_tasks_service_fase_2_routing():
     svc.tasksFilter = TasksFilterService()
 
     mock_repo = MagicMock()
-    fake_task = Task(id="t1", userId="u1", title="Task 1", notesEncrypted="", status="Todo", deadline=NOW)
+    fake_task = Task(id="t1", userId="u1", title="Task 1", notes="", status="Todo", deadline=NOW)
     mock_repo.query_tasks_by_user = AsyncMock(return_value=([fake_task], 1))
     mock_repo.get_all_active_by_user = AsyncMock(return_value=[])
     svc.repository = mock_repo
@@ -738,7 +738,7 @@ def test_sql_pushdown_fase_3_real_db_execution():
                     id="d1",
                     userId="u1",
                     title="Task with estimated start",
-                    notesEncrypted="",
+                    notes="",
                     estimated_start_date=t_base - timedelta(days=5),
                     deadline=t_base + timedelta(days=21),
                     status="Todo",
@@ -748,7 +748,7 @@ def test_sql_pushdown_fase_3_real_db_execution():
                     id="d2",
                     userId="u1",
                     title="Task with deadline fallback",
-                    notesEncrypted="",
+                    notes="",
                     estimated_start_date=None,
                     deadline=t_base + timedelta(days=3),
                     status="Todo",
@@ -758,7 +758,7 @@ def test_sql_pushdown_fase_3_real_db_execution():
                     id="d3",
                     userId="u1",
                     title="Task outside range",
-                    notesEncrypted="",
+                    notes="",
                     estimated_start_date=None,
                     deadline=t_base + timedelta(days=15),
                     status="Todo",
@@ -835,7 +835,7 @@ def test_tasks_service_fase_3_routing():
     svc.tasksFilter = TasksFilterService()
 
     mock_repo = MagicMock()
-    fake_task = Task(id="t1", userId="u1", title="Task 1", notesEncrypted="", status="Todo", deadline=NOW)
+    fake_task = Task(id="t1", userId="u1", title="Task 1", notes="", status="Todo", deadline=NOW)
     mock_repo.query_tasks_by_user = AsyncMock(return_value=([fake_task], 1))
     mock_repo.get_all_active_by_user = AsyncMock(return_value=[])
     svc.repository = mock_repo
@@ -928,7 +928,7 @@ def test_sql_pushdown_tags_option_b_pagination():
             # Create 6 tasks: 4 with tag 'frontend', 2 with tag 'backend'
             # With status 'Todo', and ordered by createdAt
             tasks = [
-                Task(id=f"t{i}", userId="u1", title=f"Task {i}", notesEncrypted="", deadline=now, status="Todo", tags=["frontend"] if i < 4 else ["backend"], createdAt=now - timedelta(minutes=i))
+                Task(id=f"t{i}", userId="u1", title=f"Task {i}", notes="", deadline=now, status="Todo", tags=["frontend"] if i < 4 else ["backend"], createdAt=now - timedelta(minutes=i))
                 for i in range(6)
             ]
             session.add_all(tasks)
@@ -984,11 +984,11 @@ def test_sql_pushdown_tags_option_b_determinism():
             now = datetime(2026, 9, 19, 12, 0, 0)
             # Heterogeneous tag structures (string vs dict)
             tasks = [
-                Task(id="tg-1", userId="u1", title="Task 1", notesEncrypted="", deadline=now, status="Todo", tags=["frontend", "bug"], createdAt=now),
-                Task(id="tg-2", userId="u1", title="Task 2", notesEncrypted="", deadline=now, status="Todo", tags=[{"name": "frontend"}], createdAt=now - timedelta(hours=1)),
-                Task(id="tg-3", userId="u1", title="Task 3", notesEncrypted="", deadline=now, status="Todo", tags=["frontend"], createdAt=now - timedelta(hours=2)),
-                Task(id="tg-4", userId="u1", title="Task 4", notesEncrypted="", deadline=now, status="Todo", tags=[{"name": "FRONTEND"}], createdAt=now - timedelta(hours=3)),
-                Task(id="tg-5", userId="u1", title="Task 5", notesEncrypted="", deadline=now, status="Todo", tags=["backend"], createdAt=now - timedelta(hours=4)),
+                Task(id="tg-1", userId="u1", title="Task 1", notes="", deadline=now, status="Todo", tags=["frontend", "bug"], createdAt=now),
+                Task(id="tg-2", userId="u1", title="Task 2", notes="", deadline=now, status="Todo", tags=[{"name": "frontend"}], createdAt=now - timedelta(hours=1)),
+                Task(id="tg-3", userId="u1", title="Task 3", notes="", deadline=now, status="Todo", tags=["frontend"], createdAt=now - timedelta(hours=2)),
+                Task(id="tg-4", userId="u1", title="Task 4", notes="", deadline=now, status="Todo", tags=[{"name": "FRONTEND"}], createdAt=now - timedelta(hours=3)),
+                Task(id="tg-5", userId="u1", title="Task 5", notes="", deadline=now, status="Todo", tags=["backend"], createdAt=now - timedelta(hours=4)),
             ]
             session.add_all(tasks)
             await session.commit()
@@ -1046,13 +1046,13 @@ def test_tags_filter_parity_orm_vs_dict_and_multi_tags():
 
     now = datetime(2026, 9, 21, 10, 0, 0)
     orm_tasks = [
-        Task(id="t1", userId="u1", title="T1", notesEncrypted="", deadline=now, status="Todo", tags=["frontend", "react"], createdAt=now),
-        Task(id="t2", userId="u1", title="T2", notesEncrypted="", deadline=now, status="Todo", tags=[{"name": "Frontend"}], createdAt=now - timedelta(minutes=1)),
-        Task(id="t3", userId="u1", title="T3", notesEncrypted="", deadline=now, status="Todo", tags=["backend", "python"], createdAt=now - timedelta(minutes=2)),
-        Task(id="t4", userId="u1", title="T4", notesEncrypted="", deadline=now, status="Todo", tags=[{"name": "BACKEND"}], createdAt=now - timedelta(minutes=3)),
-        Task(id="t5", userId="u1", title="T5", notesEncrypted="", deadline=now, status="Todo", tags=["frontend", "backend"], createdAt=now - timedelta(minutes=4)),
-        Task(id="t6", userId="u1", title="T6", notesEncrypted="", deadline=now, status="Todo", tags=["devops"], createdAt=now - timedelta(minutes=5)),
-        Task(id="t7", userId="u1", title="T7", notesEncrypted="", deadline=now, status="Todo", tags=[], createdAt=now - timedelta(minutes=6)),
+        Task(id="t1", userId="u1", title="T1", notes="", deadline=now, status="Todo", tags=["frontend", "react"], createdAt=now),
+        Task(id="t2", userId="u1", title="T2", notes="", deadline=now, status="Todo", tags=[{"name": "Frontend"}], createdAt=now - timedelta(minutes=1)),
+        Task(id="t3", userId="u1", title="T3", notes="", deadline=now, status="Todo", tags=["backend", "python"], createdAt=now - timedelta(minutes=2)),
+        Task(id="t4", userId="u1", title="T4", notes="", deadline=now, status="Todo", tags=[{"name": "BACKEND"}], createdAt=now - timedelta(minutes=3)),
+        Task(id="t5", userId="u1", title="T5", notes="", deadline=now, status="Todo", tags=["frontend", "backend"], createdAt=now - timedelta(minutes=4)),
+        Task(id="t6", userId="u1", title="T6", notes="", deadline=now, status="Todo", tags=["devops"], createdAt=now - timedelta(minutes=5)),
+        Task(id="t7", userId="u1", title="T7", notes="", deadline=now, status="Todo", tags=[], createdAt=now - timedelta(minutes=6)),
     ]
     dict_tasks = [task_to_dict(t) for t in orm_tasks]
 

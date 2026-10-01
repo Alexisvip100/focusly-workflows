@@ -252,7 +252,7 @@ class GoogleCalendarService:
                         task_data = {
                             "userId": user_id,
                             "title": processed["title"],
-                            "notesEncrypted": processed["notes_encrypted"] or "",
+                            "notes": processed["notes"] or "",
                             "deadline": processed["deadline"],
                             "status": "Scheduled",
                             "priorityLevel": processed["priority_level"] or 2,
@@ -463,7 +463,7 @@ class GoogleCalendarService:
             "id": event.get("id") or "",
             "google_event_id": event.get("id"),
             "title": event.get("summary") or "Sin título",
-            "notes_encrypted": event.get("description") or "",
+            "notes": event.get("description") or "",
             "deadline": deadline.isoformat(),
             "estimated_start_date": start.isoformat(),
             "estimated_end_date": deadline.isoformat(),
@@ -481,7 +481,7 @@ class GoogleCalendarService:
         }
 
         # Stage 2: Clean Description
-        notes = task["notes_encrypted"]
+        notes = task["notes"]
         if notes:
             # strip html
             notes = (
@@ -502,7 +502,7 @@ class GoogleCalendarService:
                 .replace("&quot;", '"')
             )
             notes = re.sub(r"\n\s*\n", "\n\n", notes)
-            task["notes_encrypted"] = notes.strip()
+            task["notes"] = notes.strip()
 
         # Stage 3: Extract Meeting Links
         conf_data = event.get("conferenceData") or {}

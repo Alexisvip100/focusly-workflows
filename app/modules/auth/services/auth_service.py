@@ -9,6 +9,7 @@ from app.config import settings
 from app.database import transaction_scope
 from app.models import User
 from app.modules.user.repository import UsersRepository, _safe_attr
+from app.modules.user.legal import terms_fields
 from app.modules.storage.services.storage_service import resolve_avatar_url
 
 logger = logging.getLogger(__name__)
@@ -164,6 +165,7 @@ class AuthService:
             "subscriptionStatus": _safe_attr(user, "subscriptionStatus", "free"),
             "settings": _safe_attr(user, "settings"),
             "fcmToken": _safe_attr(user, "fcmToken"),
+            **terms_fields(user),
             "createdAt": (
                 created_at.isoformat()
                 if created_at and hasattr(created_at, "isoformat")

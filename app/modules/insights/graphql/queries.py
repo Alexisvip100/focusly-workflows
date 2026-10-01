@@ -17,7 +17,10 @@ class InsightsQuery:
         timezone_offset: int | None = 0,
         base_date: str | None = None,
     ) -> types.InsightsResponse:
-        get_user_id(info)
+        # The authenticated user's own ID is always used, regardless of what
+        # user_id the client passes — otherwise any authenticated user could
+        # read another user's insights (and task titles) by supplying their userId.
+        user_id = get_user_id(info)
         db = info.context["db"]
 
         # Instantiate services needed by insights_service
