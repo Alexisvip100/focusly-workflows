@@ -133,3 +133,19 @@ async def test_schedule_task_avoids_existing_meeting():
         scheduled_block["start"] >= meeting_end
         or scheduled_block["end"] <= meeting_start
     )
+
+
+def test_work_hours_read_from_saved_settings_key():
+    from app.modules.task.services.scheduler.scheduler_service import (
+        work_hours_from_settings,
+    )
+
+    # Onboarding and the profile page store the user's hours here.
+    config = {"selectedDays": ["Mon", "Wed"], "startTime": "10:00", "endTime": "15:00"}
+    assert work_hours_from_settings({"workHoursConfig": config}) == config
+
+    # The older key still works, and missing settings fall back to defaults.
+    legacy = {"selectedDays": ["Tue"], "startTime": "08:00", "endTime": "12:00"}
+    assert work_hours_from_settings({"workHours": legacy}) == legacy
+    assert work_hours_from_settings(None) == {}
+    assert work_hours_from_settings({"workHoursConfig": "bad"}) == {}

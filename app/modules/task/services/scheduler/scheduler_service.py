@@ -11,6 +11,14 @@ from app.modules.task.repository import TasksRepository, TimeBlocksRepository
 from .scheduling_algorithm import SchedulingAlgorithm
 
 
+
+def work_hours_from_settings(settings: dict[str, Any] | None) -> dict[str, Any]:
+    """The user's work hours. Onboarding and the profile page save them as
+    "workHoursConfig"; "workHours" is the older key, kept as a fallback."""
+    settings = settings or {}
+    config = settings.get("workHoursConfig") or settings.get("workHours") or {}
+    return config if isinstance(config, dict) else {}
+
 class SchedulerService:
     algo = SchedulingAlgorithm()
 
@@ -210,8 +218,7 @@ class SchedulerService:
         if not user:
             return
 
-        settings = user.settings or {}
-        work_hours_config = settings.get("workHours", {})
+        work_hours_config = work_hours_from_settings(user.settings)
         if not work_hours_config.get("enabled", True):
             return
 
