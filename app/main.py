@@ -64,6 +64,8 @@ async def lifespan(app: FastAPI):
             'ALTER TABLE "Task" ADD COLUMN IF NOT EXISTS "collaborators" JSON DEFAULT \'[]\'::json',
             'ALTER TABLE "Task" ADD COLUMN IF NOT EXISTS "google_synced_etag" VARCHAR',
             'ALTER TABLE "Task" ADD COLUMN IF NOT EXISTS "sync_status" VARCHAR',
+            'ALTER TABLE "Conversation" ADD COLUMN IF NOT EXISTS "workspaceId" VARCHAR',
+            'CREATE INDEX IF NOT EXISTS "ix_Conversation_workspaceId" ON "Conversation" ("workspaceId")',
             'ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "googleRefreshToken" VARCHAR',
             'ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "googleCalendarSyncToken" VARCHAR',
             'ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "googleChannelId" VARCHAR',
@@ -132,6 +134,8 @@ fastapi_app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    # The editor assistant learns its conversation id from this header.
+    expose_headers=["X-Conversation-Id"],
 )
 
 # 3. Mount REST Routers

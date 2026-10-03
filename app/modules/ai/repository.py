@@ -3,7 +3,7 @@ from sqlalchemy.future import select
 from sqlalchemy import delete
 from app.models import Conversation, Message, UserMemory
 from app.redis import cache
-from datetime import datetime
+from datetime import datetime, timezone
 
 
 def serialize_conversation(c: Conversation) -> dict:
@@ -12,6 +12,7 @@ def serialize_conversation(c: Conversation) -> dict:
         "userId": c.userId,
         "title": c.title,
         "summary": c.summary,
+        "workspaceId": c.workspaceId,
         "createdAt": c.createdAt.isoformat() if c.createdAt else None,
         "updatedAt": c.updatedAt.isoformat() if c.updatedAt else None,
     }
@@ -33,6 +34,7 @@ def deserialize_conversation(data: dict) -> Conversation:
         userId=data["userId"],
         title=data["title"],
         summary=data["summary"],
+        workspaceId=data.get("workspaceId"),
     )
     c.createdAt = created_at
     c.updatedAt = updated_at
@@ -112,6 +114,40 @@ class ConversationRepository:
         )
         return conversations
 
+    async def get_latest_for_workspace(
+        self, user_id: str, workspace_id: str
+    ) -> Conversation | None:
+        # Uncached on purpose: cached rows written before workspaceId existed
+        # don't carry it.
+        result = await self.db.execute(
+            select(Conversation)
+            .where(
+                Conversation.userId == user_id,
+                Conversation.workspaceId == workspace_id,
+            )
+            .order_by(Conversation.updatedAt.desc())
+            .limit(1)
+        )
+        return result.scalars().first()
+
+    async def list_for_workspace(
+        self, user_id: str, workspace_id: str
+    ) -> list[Conversation]:
+        result = await self.db.execute(
+            select(Conversation)
+            .where(
+                Conversation.userId == user_id,
+                Conversation.workspaceId == workspace_id,
+            )
+            .order_by(Conversation.updatedAt.desc())
+        )
+        return list(result.scalars().all())
+
+    async def touch(self, conversation: Conversation) -> Conversation:
+        """Marks the conversation as just used (lists sort by updatedAt)."""
+        conversation.updatedAt = datetime.now(timezone.utc).replace(tzinfo=None)
+        return await self.save(conversation)
+
     async def save(self, conversation: Conversation) -> Conversation:
         if conversation not in self.db:
             conversation = await self.db.merge(conversation)
@@ -164,6 +200,25 @@ class MessageRepository:
             expire_seconds=3600,
         )
         return messages
+
+    async def first_user_messages(
+        self, conversation_ids: list[str]
+    ) -> dict[str, Message]:
+        """Each conversation's opening user message, in one query."""
+        if not conversation_ids:
+            return {}
+        result = await self.db.execute(
+            select(Message)
+            .where(
+                Message.conversationId.in_(conversation_ids),
+                Message.role == "user",
+            )
+            .order_by(Message.createdAt.asc())
+        )
+        first: dict[str, Message] = {}
+        for message in result.scalars().all():
+            first.setdefault(message.conversationId, message)
+        return first
 
     async def delete_by_conversation_id(self, conversation_id: str) -> None:
         await self.db.execute(

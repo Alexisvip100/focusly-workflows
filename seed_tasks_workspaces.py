@@ -109,7 +109,7 @@ WHERE deleted_at IS NULL;
 ### 2.2 Estrategia de Indexación GIN para Búsqueda Full-Text
 ```sql
 CREATE INDEX idx_task_search_gin 
-ON "Task" USING gin(to_tsvector('spanish', coalesce(title, '') || ' ' || coalesce(notes_encrypted, '')));
+ON "Task" USING gin(to_tsvector('spanish', coalesce(title, '') || ' ' || coalesce(notes, '')));
 ```
 
 ---
@@ -681,7 +681,7 @@ sequenceDiagram
                     id=task_id,
                     userId=user_id,
                     title=t_def["title"],
-                    notesEncrypted=t_def["notes"],
+                    notes=t_def["notes"],
                     estimateTimer=t_def["estimateTimer"],
                     priorityLevel=t_def["priorityLevel"],
                     category=t_def["category"],
@@ -862,7 +862,7 @@ sequenceDiagram
                 id=str(uuid.uuid4()),
                 userId=USER_ID_1,
                 title=p_def["title"],
-                notesEncrypted=p_def["notes"],
+                notes=p_def["notes"],
                 estimateTimer=p_def["estimateTimer"],
                 priorityLevel=p_def["priorityLevel"],
                 category="Project",

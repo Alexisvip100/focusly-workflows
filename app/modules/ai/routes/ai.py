@@ -27,6 +27,10 @@ from app.modules.ai.services.router import classify_query
 from app.modules.ai.services.memory import extract_and_save_memory
 from app.modules.ai.services.summarizer import check_and_summarize
 from app.modules.ai.services.action_parser import extract_actions, strip_action_tag
+from app.modules.ai.services.editor_blocks import (
+    editor_message_preview,
+    strip_editor_blocks,
+)
 
 router = APIRouter(prefix="/ai", tags=["ai"])
 
@@ -50,6 +54,14 @@ class ChatRequestSchema(BaseModel):
     document_context: str | None = None
     clientTime: str | None = None
     timeZone: str | None = None
+    # Workspace editor assistant: a new conversation (no conversationId) is
+    # linked to this document, and GET /ai/workspaces/{id}/conversation finds
+    # it again, so each document keeps one thread.
+    workspaceId: str | None = None
+    conversationTitle: str | None = None
+    # False for one-shot utilities (the editor's rewrite menu): no
+    # conversation is created and nothing is saved to the history.
+    persist: bool = True
 
 
 class GeminiStreamParser:
@@ -144,7 +156,7 @@ async def fetch_ai_stream_and_persist(
     url: str,
     payload: dict,
     user_id: str,
-    conversation_id: str,
+    conversation_id: str | None,
     user_message: str,
     db_factory,
     queue: asyncio.Queue,
@@ -170,14 +182,14 @@ async def fetch_ai_stream_and_persist(
         await queue.put(("done", None))
 
         # Persist assistant reply to DB even if client disconnected mid-stream
-        if full_assistant_response:
+        if conversation_id and full_assistant_response:
             try:
                 async for new_db in db_factory():
                     await background_post_chat_tasks(
                         user_id,
                         conversation_id,
                         user_message,
-                        full_assistant_response,
+                        strip_editor_blocks(full_assistant_response),
                         new_db,
                     )
                     break
@@ -191,7 +203,7 @@ async def stream_gemini_and_save(
     model: str,
     background_tasks: BackgroundTasks,
     user_id: str,
-    conversation_id: str,
+    conversation_id: str | None,
     user_message: str,
     db_factory,
 ):
@@ -286,54 +298,74 @@ async def chat_endpoint(
     # We only care about the latest user message since we have state in DB
     latest_user_message = body.messages[-1].content
 
-    # 1. Get or create conversation for user
+    # 1. Get or create conversation for user (none for one-shot utilities)
     conv_repo = ConversationRepository(db)
     conversation_id = body.conversationId
-    if conversation_id:
+    conversation: Conversation | None = None
+    if not body.persist:
+        pass
+    elif conversation_id:
         conversation = await conv_repo.get_by_id(conversation_id)
         if not conversation or conversation.userId != current_user_id:
             raise HTTPException(status_code=404, detail="Conversation not found")
     else:
-        clean_user_message = re.sub(
-            r"(?:===|---)\s*ATTACHED FILE:.*", "", latest_user_message, flags=re.DOTALL
-        ).strip()
-        if (
-            not clean_user_message
-            or clean_user_message
-            == "Please review and analyze the following attached file(s):"
-        ):
-            file_match = re.search(
-                r"(?:===|---)\s*ATTACHED FILE:\s*([^\n\r]+?)\s*(?:===|---)",
-                latest_user_message,
+        if body.workspaceId:
+            workspace = await WorkspacesRepository(db).get_by_id_and_user(
+                body.workspaceId, current_user_id
             )
-            clean_user_message = (
-                f"File: {file_match.group(1).strip()}"
-                if file_match
-                else "Document analysis"
+            if not workspace:
+                raise HTTPException(status_code=404, detail="Workspace not found")
+
+        title = (body.conversationTitle or "").strip()[:80]
+        if not title:
+            clean_user_message = re.sub(
+                r"(?:===|---)\s*ATTACHED FILE:.*",
+                "",
+                latest_user_message,
+                flags=re.DOTALL,
+            ).strip()
+            if (
+                not clean_user_message
+                or clean_user_message
+                == "Please review and analyze the following attached file(s):"
+            ):
+                file_match = re.search(
+                    r"(?:===|---)\s*ATTACHED FILE:\s*([^\n\r]+?)\s*(?:===|---)",
+                    latest_user_message,
+                )
+                clean_user_message = (
+                    f"File: {file_match.group(1).strip()}"
+                    if file_match
+                    else "Document analysis"
+                )
+            title = clean_user_message[:30] + (
+                "..." if len(clean_user_message) > 30 else ""
             )
 
-        title_snippet = clean_user_message[:30] + (
-            "..." if len(clean_user_message) > 30 else ""
-        )
         conversation = Conversation(
             id=str(uuid.uuid4()),
             userId=current_user_id,
-            title=title_snippet,
+            title=title,
             summary="",
+            workspaceId=body.workspaceId,
         )
         await conv_repo.create(conversation)
 
     # 2. Save user message
-    user_msg = Message(
-        id=str(uuid.uuid4()),
-        conversationId=conversation.id,
-        role="user",
-        content=latest_user_message,
-        tokenUsage=0,
-    )
-    msg_repo = MessageRepository(db)
-    await msg_repo.create(user_msg)
-    await db.commit()
+    if conversation:
+        user_msg = Message(
+            id=str(uuid.uuid4()),
+            conversationId=conversation.id,
+            role="user",
+            content=latest_user_message,
+            tokenUsage=0,
+        )
+        msg_repo = MessageRepository(db)
+        await msg_repo.create(user_msg)
+        if conversation_id:
+            # Continuing a thread moves it to the top of the history.
+            await conv_repo.touch(conversation)
+        await db.commit()
 
     # 3. Router logic
     complexity = classify_query(latest_user_message)
@@ -344,7 +376,7 @@ async def chat_endpoint(
     # 4. Context Builder
     system_context = await build_context(
         current_user_id,
-        conversation.id,
+        conversation.id if conversation else "",
         latest_user_message,
         db,
         client_time=body.clientTime,
@@ -463,12 +495,28 @@ async def chat_endpoint(
             selected_model,
             background_tasks,
             current_user_id,
-            conversation.id,
+            conversation.id if conversation else None,
             latest_user_message,
             get_db,
         ),
         media_type="text/plain",
+        headers={"X-Conversation-Id": conversation.id} if conversation else None,
     )
+
+
+def serialize_message(m: Message) -> dict[str, Any]:
+    return {
+        "id": m.id,
+        "role": m.role,
+        # Raw content may embed an internal `[ACTION: ...]` tool-call tag
+        # (see action_parser.py) — never return that verbatim, it leaks
+        # our internal action protocol and payload field names. Editor
+        # blocks are stripped too: replies saved before they were removed on
+        # write can still hold a whole document.
+        "content": strip_editor_blocks(strip_action_tag(m.content)),
+        "actions": extract_actions(m.content),
+        "createdAt": m.createdAt.isoformat(),
+    }
 
 
 @router.get("/conversations")
@@ -504,19 +552,55 @@ async def get_conversation_messages(
 
     msg_repo = MessageRepository(db)
     messages = await msg_repo.get_by_conversation_id(conversation_id)
+    return [serialize_message(m) for m in messages]
+
+
+@router.get("/workspaces/{workspace_id}/conversations")
+async def list_workspace_conversations(
+    workspace_id: str,
+    current_user_id: str = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
+):
+    """The editor assistant's threads for a document, most recent first."""
+    conversations = await ConversationRepository(db).list_for_workspace(
+        current_user_id, workspace_id
+    )
+    openers = await MessageRepository(db).first_user_messages(
+        [c.id for c in conversations]
+    )
     return [
         {
-            "id": m.id,
-            "role": m.role,
-            # Raw content may embed an internal `[ACTION: ...]` tool-call tag
-            # (see action_parser.py) — never return that verbatim, it leaks
-            # our internal action protocol and payload field names.
-            "content": strip_action_tag(m.content),
-            "actions": extract_actions(m.content),
-            "createdAt": m.createdAt.isoformat(),
+            "id": c.id,
+            "title": c.title,
+            "preview": (
+                editor_message_preview(openers[c.id].content)
+                if c.id in openers
+                else ""
+            ),
+            "createdAt": c.createdAt.isoformat(),
+            "updatedAt": c.updatedAt.isoformat(),
         }
-        for m in messages
+        for c in conversations
     ]
+
+
+@router.get("/workspaces/{workspace_id}/conversation")
+async def get_workspace_conversation(
+    workspace_id: str,
+    current_user_id: str = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
+):
+    """The editor assistant's latest thread for a document, if any."""
+    conversation = await ConversationRepository(db).get_latest_for_workspace(
+        current_user_id, workspace_id
+    )
+    if not conversation:
+        return {"conversationId": None, "messages": []}
+    messages = await MessageRepository(db).get_by_conversation_id(conversation.id)
+    return {
+        "conversationId": conversation.id,
+        "messages": [serialize_message(m) for m in messages],
+    }
 
 
 @router.delete("/conversations/{conversation_id}")

@@ -14,6 +14,10 @@ class Conversation(Base):
     userId: Mapped[str] = mapped_column(String, nullable=False, index=True)
     title: Mapped[str | None] = mapped_column(String, nullable=True)
     summary: Mapped[str | None] = mapped_column(String, nullable=True)
+    # Set for the workspace editor's assistant: one thread per document.
+    workspaceId: Mapped[str | None] = mapped_column(
+        String, nullable=True, index=True
+    )
     createdAt: Mapped[datetime] = mapped_column(
         DateTime, default=func.now(), nullable=False
     )
