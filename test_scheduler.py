@@ -66,7 +66,7 @@ async def main():
                     "id": t.id,
                     "userId": t.userId,
                     "title": t.title,
-                    "notesEncrypted": t.notesEncrypted,
+                    "notes": t.notes,
                     "estimateTimer": t.estimateTimer,
                     "realTimer": t.realTimer,
                     "duration": t.duration,

@@ -5,6 +5,7 @@ import strawberry
 from app.graphql import types
 from app.graphql.common import get_user_id
 from app.modules.task.services.tasks.tasks_service import TasksService
+from app.modules.task.services.tasks.tasks_mapper import parse_naive_dt
 from app.modules.auth.services.auth_service import AuthService
 
 
@@ -26,6 +27,26 @@ async def ensure_owned_task_links(
         await WorkspacesService(db).find_one(workspace_id, user_id)
     if project_id:
         await ProjectGroupsService(db).find_one(project_id, user_id)
+
+
+def _link_id_or_none(value: str | None) -> str | None:
+    """An explicit null, an empty string or the strings "null"/"none" (older
+    clients) all mean "unlink"."""
+    if value is None:
+        return None
+    val = str(value).strip()
+    return val if val and val.lower() not in ("null", "none") else None
+
+
+def _deadline_or_none(value: str | None):
+    """null or "" removes the task's date. Anything else must be a real date:
+    a typo must not silently wipe the deadline."""
+    if value is None or not str(value).strip():
+        return None
+    parsed = parse_naive_dt(value)
+    if parsed is None:
+        raise ValueError(f"Invalid deadline: {value!r}")
+    return parsed
 
 
 @strawberry.type
@@ -160,8 +181,8 @@ class TaskMutation:
             update_data["duration"] = update_task_input.duration
         if update_task_input.priority_level is not None:
             update_data["priorityLevel"] = update_task_input.priority_level
-        if update_task_input.deadline is not None:
-            update_data["deadline"] = update_task_input.deadline
+        if update_task_input.deadline is not strawberry.UNSET:
+            update_data["deadline"] = _deadline_or_none(update_task_input.deadline)
         if update_task_input.category is not None:
             update_data["category"] = update_task_input.category
         if update_task_input.color is not None:
@@ -214,11 +235,12 @@ class TaskMutation:
             ]
         if update_task_input.use_ai is not None:
             update_data["use_ai"] = update_task_input.use_ai
-        if update_task_input.workspace_id is not None:
-            val = str(update_task_input.workspace_id).strip()
-            update_data["workspaceId"] = val if val and val.lower() != "null" and val.lower() != "none" else None
-        if update_task_input.project_id is not None:
-            update_data["projectId"] = update_task_input.project_id
+        if update_task_input.workspace_id is not strawberry.UNSET:
+            update_data["workspaceId"] = _link_id_or_none(
+                update_task_input.workspace_id
+            )
+        if update_task_input.project_id is not strawberry.UNSET:
+            update_data["projectId"] = _link_id_or_none(update_task_input.project_id)
 
         # Only newly set links need checking; re-sending the current value
         # (e.g. a since-deleted workspace) must not start failing updates.

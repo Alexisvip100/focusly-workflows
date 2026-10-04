@@ -255,7 +255,8 @@ class Task:
     priority_level: int = strawberry.field(name="priority_level")
     category: str | None = None
     color: str | None = None
-    deadline: datetime
+    # null when the task has no date.
+    deadline: datetime | None = None
     status: str
     completed_at: datetime | None = strawberry.field(name="completed_at", default=None)
     duration: datetime | None = None
@@ -462,7 +463,8 @@ class CreateTaskInput:
     real_timer: float | None = strawberry.field(name="real_timer", default=None)
     duration: str | None = strawberry.field(name="duration", default=None)
     priority_level: int = strawberry.field(name="priority_level")
-    deadline: str
+    # Optional: a task created without one has no date.
+    deadline: str | None = strawberry.field(name="deadline", default=None)
     category: str | None = strawberry.field(name="category", default=None)
     color: str | None = strawberry.field(name="color", default=None)
     status: str | None = strawberry.field(name="status", default=None)
@@ -499,14 +501,20 @@ class UpdateTaskInput:
     id: strawberry.ID
     user_id: str | None = strawberry.field(name="user_id", default=None)
     title: str | None = strawberry.field(name="title", default=None)
-    workspace_id: str | None = strawberry.field(name="workspace_id", default=None)
-    project_id: str | None = strawberry.field(name="project_id", default=None)
+    # UNSET (field omitted) leaves the link alone; an explicit null unlinks.
+    workspace_id: str | None = strawberry.field(
+        name="workspace_id", default=strawberry.UNSET
+    )
+    project_id: str | None = strawberry.field(
+        name="project_id", default=strawberry.UNSET
+    )
     notes: str | None = strawberry.field(name="notes", default=None)
     estimate_timer: int | None = strawberry.field(name="estimate_timer", default=None)
     real_timer: float | None = strawberry.field(name="real_timer", default=None)
     duration: str | None = strawberry.field(name="duration", default=None)
     priority_level: int | None = strawberry.field(name="priority_level", default=None)
-    deadline: str | None = strawberry.field(name="deadline", default=None)
+    # UNSET (omitted) keeps the date; null or "" removes it.
+    deadline: str | None = strawberry.field(name="deadline", default=strawberry.UNSET)
     category: str | None = strawberry.field(name="category", default=None)
     color: str | None = strawberry.field(name="color", default=None)
     status: str | None = strawberry.field(name="status", default=None)
@@ -676,7 +684,7 @@ def map_dict_to_strawberry_task(t: dict[str, Any]) -> Task:
         priority_level=t["priorityLevel"],
         category=t.get("category"),
         color=t.get("color"),
-        deadline=parse_iso_datetime(t.get("deadline")) or datetime.now(timezone.utc),
+        deadline=parse_iso_datetime(t.get("deadline")),
         status=t["status"],
         completed_at=parse_iso_datetime(t.get("completedAt")),
         duration=parse_iso_datetime(t.get("duration")),

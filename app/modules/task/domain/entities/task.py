@@ -36,7 +36,9 @@ class Task(Base):
     estimated_end_date: Mapped[datetime | None] = mapped_column(
         DateTime, nullable=True
     )
-    deadline: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    # NULL means the task has no date ("Sin fecha"). See
+    # migrations/make_task_deadline_nullable.py.
+    deadline: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     status: Mapped[str] = mapped_column(String, nullable=False, default="Todo")
     completedAt: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     createdAt: Mapped[datetime] = mapped_column(
