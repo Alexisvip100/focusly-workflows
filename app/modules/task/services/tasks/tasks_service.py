@@ -79,13 +79,14 @@ class TasksService:
             await self.sync_service.sync_create_to_google(user_id, task_data)
 
         task_id = task_data.get("id") or str(uuid.uuid4())
-        now = datetime.now(timezone.utc).replace(tzinfo=None)
         task_input = TaskCreateSchema(**task_data)
 
+        # No deadline stays NULL: the task has no date. It used to default to
+        # "now", which made undated tasks show up as due today, then overdue.
         new_task = Task(
             id=task_id,
             userId=user_id,
-            deadline=task_input.deadline or now,
+            deadline=task_input.deadline,
             **task_input.model_dump(exclude={"deadline"}),
         )
 

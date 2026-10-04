@@ -2,8 +2,20 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
-from sqlalchemy import or_, and_, delete, func, DateTime
-from app.models import Task, Tag, TimeBlock, FocusSession, User
+from sqlalchemy import (
+    JSON,
+    Text,
+    and_,
+    case,
+    cast,
+    delete,
+    exists,
+    func,
+    literal,
+    or_,
+    DateTime,
+)
+from app.models import Task, Tag, TimeBlock, FocusSession, User, ProjectGroup
 from app.redis import cache
 
 INACTIVE_STATUSES = ["completed", "cancelled", "Completed"]
@@ -60,9 +72,53 @@ def parse_filter_date(val: Any) -> datetime | None:
     return dt
 
 
+def search_term_condition(term: str, user_id: str, dialect: str = "postgresql"):
+    """Matches a task whose title, notes, any tag name or project name contains
+    `term` (case-insensitive)."""
+    pattern = f"%{term}%"
+
+    if dialect == "postgresql":
+        # Tags are a JSON array of {"name": ...}. A row whose tags aren't an
+        # array would make json_array_elements fail the whole query, so it is
+        # read as empty.
+        tags_array = case(
+            (func.json_typeof(Task.tags) == "array", Task.tags),
+            else_=cast(literal("[]"), JSON),
+        )
+        tag = func.json_array_elements(tags_array).table_valued("value").alias("tag")
+        tag_matches = exists(
+            select(literal(1))
+            .select_from(tag)
+            .where(tag.c.value.op("->>", return_type=Text)("name").ilike(pattern))
+        )
+    else:
+        # Other engines (the SQLite test database) lack json_array_elements;
+        # matching the serialized tags is close enough there.
+        tag_matches = cast(Task.tags, Text).ilike(pattern)
+
+    project_matches = Task.projectId.in_(
+        select(ProjectGroup.id).where(
+            ProjectGroup.userId == user_id, ProjectGroup.name.ilike(pattern)
+        )
+    )
+
+    return or_(
+        Task.title.ilike(pattern),
+        Task.notes.ilike(pattern),
+        tag_matches,
+        project_matches,
+    )
+
+
 class TasksRepository:
     def __init__(self, db: AsyncSession):
         self.db = db
+
+    def _dialect_name(self) -> str:
+        try:
+            return self.db.get_bind().dialect.name
+        except Exception:
+            return "postgresql"
 
     async def create(self, task: Task, commit: bool = False) -> Task:
         self.db.add(task)
@@ -165,10 +221,7 @@ class TasksRepository:
                 term = str(filters["searchTerm"]).strip()
                 if term:
                     conditions.append(
-                        or_(
-                            Task.title.ilike(f"%{term}%"),
-                            Task.notes.ilike(f"%{term}%"),
-                        )
+                        search_term_condition(term, user_id, self._dialect_name())
                     )
 
             if filters.get("startDate") or filters.get("endDate"):
