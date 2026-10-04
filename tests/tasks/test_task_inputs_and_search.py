@@ -224,3 +224,20 @@ async def test_update_task_parses_a_new_date():
 
     assert result.errors is None
     assert sent_update(service)["deadline"].isoformat() == "2026-10-03T06:00:00"
+
+
+@pytest.mark.anyio
+async def test_update_task_null_removes_the_estimate_and_omitting_keeps_it():
+    run, service = run_task_mutation(
+        'mutation { updateTask(updateTaskInput: { id: "task-1", estimate_timer: null }) { id } }',
+        make_task_dict(estimateTimer=45),
+    )
+    assert (await run()).errors is None
+    assert sent_update(service)["estimateTimer"] is None
+
+    run, service = run_task_mutation(
+        'mutation { updateTask(updateTaskInput: { id: "task-1", title: "x" }) { id } }',
+        make_task_dict(estimateTimer=45),
+    )
+    assert (await run()).errors is None
+    assert "estimateTimer" not in sent_update(service)

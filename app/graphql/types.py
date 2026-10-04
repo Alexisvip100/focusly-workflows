@@ -509,7 +509,10 @@ class UpdateTaskInput:
         name="project_id", default=strawberry.UNSET
     )
     notes: str | None = strawberry.field(name="notes", default=None)
-    estimate_timer: int | None = strawberry.field(name="estimate_timer", default=None)
+    # UNSET (omitted) keeps the estimate; null removes it.
+    estimate_timer: int | None = strawberry.field(
+        name="estimate_timer", default=strawberry.UNSET
+    )
     real_timer: float | None = strawberry.field(name="real_timer", default=None)
     duration: str | None = strawberry.field(name="duration", default=None)
     priority_level: int | None = strawberry.field(name="priority_level", default=None)

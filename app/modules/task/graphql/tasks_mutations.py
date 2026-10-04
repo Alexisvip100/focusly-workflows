@@ -173,7 +173,7 @@ class TaskMutation:
             update_data["title"] = update_task_input.title
         if update_task_input.notes is not None:
             update_data["notes"] = update_task_input.notes
-        if update_task_input.estimate_timer is not None:
+        if update_task_input.estimate_timer is not strawberry.UNSET:
             update_data["estimateTimer"] = update_task_input.estimate_timer
         if update_task_input.real_timer is not None:
             update_data["realTimer"] = update_task_input.real_timer
