@@ -33,9 +33,7 @@ class User(Base):
         DateTime, default=func.now(), onupdate=func.now(), nullable=False
     )
     lastSyncAt: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
-    googleCalendarSyncToken: Mapped[str | None] = mapped_column(
-        String, nullable=True
-    )
+    googleCalendarSyncToken: Mapped[str | None] = mapped_column(String, nullable=True)
     googleChannelId: Mapped[str | None] = mapped_column(String, nullable=True)
     googleResourceId: Mapped[str | None] = mapped_column(String, nullable=True)
     googleChannelExpiration: Mapped[int | None] = mapped_column(
@@ -43,3 +41,5 @@ class User(Base):
     )
     termsVersion: Mapped[str | None] = mapped_column(String, nullable=True)
     termsAcceptedAt: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    stripeCustomerId: Mapped[str | None] = mapped_column(String, nullable=True)
+    stripeSubscriptionId: Mapped[str | None] = mapped_column(String, nullable=True)

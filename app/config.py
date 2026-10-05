@@ -51,6 +51,8 @@ class Settings:
     MINIO_ROOT_USER: str = os.getenv("MINIO_ROOT_USER", "")
     MINIO_ROOT_PASSWORD: str = os.getenv("MINIO_ROOT_PASSWORD", "")
     MINIO_BUCKET_AVATARS: str = os.getenv("MINIO_BUCKET_AVATARS", "avatars")
+    STRIPE_SECRET_KEY: str = os.getenv("STRIPE_SECRET_KEY", "").strip()
+    STRIPE_WEBHOOK_SECRET: str = os.getenv("STRIPE_WEBHOOK_SECRET", "").strip()
 
 
 settings = Settings()

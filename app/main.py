@@ -17,6 +17,7 @@ from app.modules.google_calendar.presentation.rest import (
 from app.modules.task.presentation.rest import time_blocks_router
 from app.modules.ai.presentation.rest import ai_router, planner_router
 from app.modules.storage.presentation.rest import router as storage_router
+from app.modules.billing.routes import router as billing_router
 
 
 from app.database import engine, Base
@@ -79,6 +80,8 @@ async def lifespan(app: FastAPI):
             'ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "termsAcceptedAt" TIMESTAMP',
             'ALTER TABLE "Workspace" ADD COLUMN IF NOT EXISTS "groupId" VARCHAR',
             'ALTER TABLE "Workspace" ADD COLUMN IF NOT EXISTS "folderId" VARCHAR',
+            'ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "stripeCustomerId" VARCHAR',
+            'ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "stripeSubscriptionId" VARCHAR',
         ]
         for stmt in migration_statements:
             try:
@@ -146,6 +149,7 @@ fastapi_app.include_router(time_blocks_router)
 fastapi_app.include_router(ai_router)
 fastapi_app.include_router(planner_router)
 fastapi_app.include_router(storage_router)
+fastapi_app.include_router(billing_router)
 
 
 # 4. GraphQL Setup with session management and auth context
