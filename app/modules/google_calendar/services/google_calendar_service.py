@@ -40,7 +40,9 @@ class GoogleCalendarService:
         if time_min:
             params["timeMin"] = time_min
         else:
-            default_min = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=30)
+            default_min = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(
+                days=30
+            )
             params["timeMin"] = default_min.isoformat() + "Z"
 
         if time_max:
@@ -53,6 +55,23 @@ class GoogleCalendarService:
             )
             if res.status_code != 200:
                 raise Exception(f"Failed to fetch from Google Calendar: {res.text}")
+            return res.json()
+
+    async def get_event(self, user_id: str, event_id: str) -> dict[str, Any]:
+        """One event as Google has it now (guests included), before editing it."""
+        if not self.auth_service:
+            raise ValueError("AuthService is required to get an event")
+
+        token_info = await self.auth_service.refresh_google_access_token(user_id)
+        access_token = token_info.get("access_token")
+
+        url = f"https://www.googleapis.com/calendar/v3/calendars/primary/events/{event_id}"
+        async with httpx.AsyncClient() as client:
+            res = await client.get(
+                url, headers={"Authorization": f"Bearer {access_token}"}
+            )
+            if res.status_code != 200:
+                raise Exception(f"Failed to fetch Google event: {res.text}")
             return res.json()
 
     async def create_event(self, user_id: str, event: dict[str, Any]) -> dict[str, Any]:
@@ -106,7 +125,8 @@ class GoogleCalendarService:
         token_info = await self.auth_service.refresh_google_access_token(user_id)
         access_token = token_info.get("access_token")
 
-        url = f"https://www.googleapis.com/calendar/v3/calendars/primary/events/{event_id}"
+        # Like create/patch, tell the guests: they get the cancellation.
+        url = f"https://www.googleapis.com/calendar/v3/calendars/primary/events/{event_id}?sendUpdates=all"
         async with httpx.AsyncClient() as client:
             res = await client.delete(
                 url, headers={"Authorization": f"Bearer {access_token}"}
@@ -171,7 +191,9 @@ class GoogleCalendarService:
                     if sync_token:
                         params["syncToken"] = sync_token
                     else:
-                        default_min = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=30)
+                        default_min = datetime.now(timezone.utc).replace(
+                            tzinfo=None
+                        ) - timedelta(days=30)
                         params["timeMin"] = default_min.isoformat() + "Z"
                         params["singleEvents"] = "true"
 

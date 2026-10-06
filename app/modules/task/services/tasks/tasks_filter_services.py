@@ -143,6 +143,11 @@ class TasksFilterService:
                     t for t in mapped
                     if term in t.get("title", "").lower()
                     or term in (t.get("notes") or "").lower()
+                    or any(
+                        term in str(tag.get("name") or "").lower()
+                        for tag in (t.get("tags") or [])
+                        if isinstance(tag, dict)
+                    )
                 ]
 
         if sort and sort.get("sort"):

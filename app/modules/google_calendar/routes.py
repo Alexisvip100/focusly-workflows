@@ -40,6 +40,20 @@ def get_google_calendar_service(
     return gc_service
 
 
+def event_attendees(item: dict[str, Any]) -> list[dict[str, Any]]:
+    """Everyone invited to an event, with their answer."""
+    return [
+        {
+            "email": a["email"],
+            "responseStatus": a.get("responseStatus"),
+            "self": bool(a.get("self")),
+            "organizer": bool(a.get("organizer")),
+        }
+        for a in item.get("attendees") or []
+        if isinstance(a, dict) and a.get("email")
+    ]
+
+
 @router.get("/events", response_model=list[dict[str, Any]])
 async def get_events(
     timeMin: str | None = None,
@@ -56,7 +70,9 @@ async def get_events(
         try:
             await gc_service.sync_calendar(user_id)
         except Exception as sync_err:
-            logger.warning("Calendar sync skipped or failed for user %s: %s", user_id, sync_err)
+            logger.warning(
+                "Calendar sync skipped or failed for user %s: %s", user_id, sync_err
+            )
 
         user_email = safe_attr(user, "email")
 
@@ -91,6 +107,9 @@ async def get_events(
                     "created_at": item.get("created") or "",
                     "updated_at": item.get("updated") or "",
                     "is_owner": processed.get("is_owner", True),
+                    "organizer_email": processed.get("organizer_email"),
+                    "location": processed.get("location"),
+                    "attendees": event_attendees(item),
                 }
             )
 
@@ -98,6 +117,18 @@ async def get_events(
     except Exception as e:
         logger.exception("Failed to retrieve Google Calendar events: %s", e)
         return []
+
+
+@router.get("/events/{id}")
+async def get_event(
+    id: str,
+    user_id: str = Depends(get_current_user_id),
+    gc_service: GoogleCalendarService = Depends(get_google_calendar_service),
+):
+    try:
+        return await gc_service.get_event(user_id, id)
+    except Exception:
+        raise HTTPException(status_code=404, detail="Google Calendar event not found")
 
 
 @router.post("/events")

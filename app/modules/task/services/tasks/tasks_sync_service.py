@@ -13,6 +13,12 @@ from datetime import datetime, timezone
 logger = logging.getLogger(__name__)
 
 
+def _has_calendar_time(task: dict[str, Any]) -> bool:
+    """Whether a task has a date to place it on a calendar. Undated tasks are
+    not mirrored to Google Calendar."""
+    return bool(task.get("deadline") or task.get("estimated_start_date"))
+
+
 class TasksSyncService:
     """Handles external calendar synchronization and background scheduling pipelines."""
 
@@ -32,6 +38,8 @@ class TasksSyncService:
     ) -> None:
         """Mirrors newly created task into Google Calendar if user has integration active."""
         if not user_id or not self.google_calendar_service:
+            return
+        if not _has_calendar_time(task_data):
             return
 
         try:
@@ -61,8 +69,13 @@ class TasksSyncService:
         ):
             return
 
+        updated_task_dict = task_to_dict(task)
+        # Taking a mirrored task's dates away leaves its event where it was
+        # instead of moving it to "now".
+        if not _has_calendar_time(updated_task_dict):
+            return
+
         try:
-            updated_task_dict = task_to_dict(task)
             google_event_body = map_task_to_google_event(updated_task_dict)
             google_event = await self.google_calendar_service.patch_event(
                 task.userId, task.google_event_id, google_event_body

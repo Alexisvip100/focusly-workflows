@@ -118,7 +118,7 @@ async def run_todo_automation(
             category="General",
             color="#6366f1",  # Indigo — color de automatización
             status="Backlog",
-            deadline=now,
+            deadline=None,  # A detected TODO has no date until the user sets one.
             use_ai=False,
             source="automation",  # Identifica tareas creadas por workflow
             notified=False,
