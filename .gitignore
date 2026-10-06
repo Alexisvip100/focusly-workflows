@@ -17,6 +17,7 @@ __pycache__/
 # IDE files
 .vscode/
 .idea/
+.claude/
 *.suo
 *.ntvs*
 *.njsproj

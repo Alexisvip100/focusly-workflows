@@ -9,8 +9,6 @@ from app.routes.common import get_current_user_id
 from app.modules.google_calendar.services.google_calendar_service import (
     GoogleCalendarService,
 )
-from sqlalchemy import select
-from app.models import User
 from app.sockets.realtime import realtime_gateway
 from app.modules.user.repository import UsersRepository
 
