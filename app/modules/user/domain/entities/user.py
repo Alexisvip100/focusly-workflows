@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import BigInteger, DateTime, JSON, String
+from sqlalchemy import BigInteger, DateTime, Integer, JSON, String
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import func
 
@@ -43,3 +43,5 @@ class User(Base):
     termsAcceptedAt: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     stripeCustomerId: Mapped[str | None] = mapped_column(String, nullable=True)
     stripeSubscriptionId: Mapped[str | None] = mapped_column(String, nullable=True)
+    # AI chat messages used on the free plan (see billing/plans.py).
+    aiMessagesUsed: Mapped[int] = mapped_column(Integer, default=0, nullable=False)

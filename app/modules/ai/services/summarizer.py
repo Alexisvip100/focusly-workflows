@@ -1,8 +1,12 @@
+import asyncio
 import os
 from sqlalchemy.ext.asyncio import AsyncSession
 from google import genai
 from app.modules.ai.repository import ConversationRepository, MessageRepository
 from .prompts import SUMMARIZATION_PROMPT
+
+# A background extra after each reply: never worth holding a request for.
+GEMINI_TIMEOUT_SECONDS = 30
 
 
 async def check_and_summarize(
@@ -43,9 +47,14 @@ async def check_and_summarize(
 
     client = genai.Client(api_key=api_key)
     try:
-        response = client.models.generate_content(
-            model="gemini-2.5-flash",
-            contents=f"{SUMMARIZATION_PROMPT}\n\n{text_to_summarize}",
+        # The async client: the sync one blocked the whole server (every
+        # request, of every user) for as long as Gemini took to answer.
+        response = await asyncio.wait_for(
+            client.aio.models.generate_content(
+                model="gemini-2.5-flash",
+                contents=f"{SUMMARIZATION_PROMPT}\n\n{text_to_summarize}",
+            ),
+            timeout=GEMINI_TIMEOUT_SECONDS,
         )
         new_summary = response.text.strip()
 

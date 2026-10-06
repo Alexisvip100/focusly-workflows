@@ -1,3 +1,4 @@
+import asyncio
 import os
 import uuid
 import json
@@ -8,6 +9,9 @@ from app.models import UserMemory
 from app.modules.ai.repository import UserMemoryRepository
 from .embeddings import generate_embedding
 from .prompts import MEMORY_EXTRACTION_PROMPT
+
+# A background extra after each reply: never worth holding a request for.
+GEMINI_TIMEOUT_SECONDS = 30
 
 
 def cosine_similarity(a: list[float], b: list[float]) -> float:
@@ -28,7 +32,7 @@ async def search_memories(
     """
     Search relevant memories for a given query.
     """
-    query_emb = generate_embedding(query)
+    query_emb = await generate_embedding(query)
     if not query_emb:
         return ""
 
@@ -64,9 +68,14 @@ async def extract_and_save_memory(user_id: str, message: str, db: AsyncSession):
 
     client = genai.Client(api_key=api_key)
     try:
-        response = client.models.generate_content(
-            model="gemini-2.5-flash",
-            contents=f"{MEMORY_EXTRACTION_PROMPT}\n\nUser Message: {message}",
+        # The async client: the sync one blocked the whole server (every
+        # request, of every user) for as long as Gemini took to answer.
+        response = await asyncio.wait_for(
+            client.aio.models.generate_content(
+                model="gemini-2.5-flash",
+                contents=f"{MEMORY_EXTRACTION_PROMPT}\n\nUser Message: {message}",
+            ),
+            timeout=GEMINI_TIMEOUT_SECONDS,
         )
 
         # Parse JSON
@@ -88,7 +97,7 @@ async def extract_and_save_memory(user_id: str, message: str, db: AsyncSession):
                 if not content:
                     continue
 
-                emb = generate_embedding(content)
+                emb = await generate_embedding(content)
 
                 new_memory = UserMemory(
                     id=str(uuid.uuid4()),

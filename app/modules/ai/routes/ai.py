@@ -31,6 +31,16 @@ from app.modules.ai.services.editor_blocks import (
     editor_message_preview,
     strip_editor_blocks,
 )
+from app.modules.billing.plans import (
+    FREE_AI_MESSAGE_LIMIT,
+    is_editor_request,
+    is_pro,
+)
+from app.modules.billing.services.usage_service import (
+    consume_ai_message,
+    refund_ai_message,
+)
+from app.modules.user.domain.entities.user import User
 
 router = APIRouter(prefix="/ai", tags=["ai"])
 
@@ -295,6 +305,32 @@ async def chat_endpoint(
     if not body.messages:
         raise HTTPException(status_code=400, detail="Messages array cannot be empty")
 
+    # Plan limits, enforced here (the browser's own counter is only a hint):
+    # free users get FREE_AI_MESSAGE_LIMIT chat messages and no editor
+    # assistant. 402 + a code tells the app to show the Pro plans.
+    user = await db.get(User, current_user_id)
+    remaining: int | None = None
+    if not is_pro(user):
+        if is_editor_request(
+            document_context=body.document_context,
+            persist=body.persist,
+            workspace_id=body.workspaceId,
+        ):
+            raise HTTPException(
+                status_code=402,
+                detail={"code": "pro_required", "feature": "editor_ai"},
+            )
+        used = await consume_ai_message(db, current_user_id)
+        if used is None:
+            raise HTTPException(
+                status_code=402,
+                detail={
+                    "code": "free_limit_reached",
+                    "limit": FREE_AI_MESSAGE_LIMIT,
+                },
+            )
+        remaining = FREE_AI_MESSAGE_LIMIT - used
+
     # We only care about the latest user message since we have state in DB
     latest_user_message = body.messages[-1].content
 
@@ -307,6 +343,8 @@ async def chat_endpoint(
     elif conversation_id:
         conversation = await conv_repo.get_by_id(conversation_id)
         if not conversation or conversation.userId != current_user_id:
+            if remaining is not None:
+                await refund_ai_message(db, current_user_id)
             raise HTTPException(status_code=404, detail="Conversation not found")
     else:
         if body.workspaceId:
@@ -368,7 +406,7 @@ async def chat_endpoint(
         await db.commit()
 
     # 3. Router logic
-    complexity = classify_query(latest_user_message)
+    complexity = await classify_query(latest_user_message)
     selected_model = body.model or (
         "gemini-2.5-flash" if complexity == "complex" else "gemini-2.5-flash-lite"
     )
@@ -405,7 +443,9 @@ async def chat_endpoint(
             )
         else:
             try:
-                from app.modules.google_calendar.routes import get_google_calendar_service
+                from app.modules.google_calendar.routes import (
+                    get_google_calendar_service,
+                )
 
                 gc_service = get_google_calendar_service(db)
                 events_data = await gc_service.get_events(current_user_id)
@@ -500,7 +540,15 @@ async def chat_endpoint(
             get_db,
         ),
         media_type="text/plain",
-        headers={"X-Conversation-Id": conversation.id} if conversation else None,
+        headers={
+            **({"X-Conversation-Id": conversation.id} if conversation else {}),
+            **(
+                {"X-AI-Messages-Remaining": str(remaining)}
+                if remaining is not None
+                else {}
+            ),
+        }
+        or None,
     )
 
 
@@ -573,9 +621,7 @@ async def list_workspace_conversations(
             "id": c.id,
             "title": c.title,
             "preview": (
-                editor_message_preview(openers[c.id].content)
-                if c.id in openers
-                else ""
+                editor_message_preview(openers[c.id].content) if c.id in openers else ""
             ),
             "createdAt": c.createdAt.isoformat(),
             "updatedAt": c.updatedAt.isoformat(),

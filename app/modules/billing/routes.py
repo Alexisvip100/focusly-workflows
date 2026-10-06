@@ -1,48 +1,55 @@
+import logging
 from typing import Any
-from fastapi import APIRouter, Depends, HTTPException, Request, Header
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
-from pydantic import BaseModel
-import stripe
 
-from app.database import get_db
+import stripe
+from fastapi import APIRouter, Depends, Header, HTTPException, Request
+from pydantic import BaseModel
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.config import settings
-from app.routes.common import get_current_user_id
-from app.modules.user.domain.entities.user import User
+from app.database import get_db
 from app.modules.billing.services.stripe_service import StripeService
+from app.modules.user.domain.entities.user import User
+from app.routes.common import get_current_user_id
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/billing", tags=["Billing"])
-
-
-class SubscribeRequest(BaseModel):
-    price_id: str
-    plan_name: str = "pro_monthly"
 
 
 class CancelSubscriptionRequest(BaseModel):
     cancel_at_period_end: bool = True
 
 
-@router.post("/subscribe")
-async def create_subscription(
-    body: SubscribeRequest,
+async def _current_user(user_id: str, db: AsyncSession) -> User:
+    user = await db.get(User, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+    return user
+
+
+@router.get("/status")
+async def get_billing_status(
+    refresh: bool = False,
     current_user_id: str = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
-    """
-    Inicia una suscripción recurrente para el usuario logueado.
-    Devuelve el client_secret para que el frontend confirme el pago con Payment Element.
-    """
-    user = await db.get(User, current_user_id)
-    if not user:
-        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+    """The user's plan and free AI usage. refresh=true reads the subscription
+    from Stripe first (after paying, before the webhook may have arrived)."""
+    user = await _current_user(current_user_id, db)
+    return await StripeService(db).get_status(user, refresh=refresh)
 
-    service = StripeService(db)
-    return await service.create_subscription(
-        user=user,
-        price_id=body.price_id,
-        plan_name=body.plan_name,
-    )
+
+@router.post("/subscribe")
+async def create_subscription(
+    current_user_id: str = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    """Starts the Pro subscription; returns the client_secret the Payment
+    Element confirms. The price is the server's (STRIPE_PRICE_ID_PRO): any
+    price the client sends is ignored."""
+    user = await _current_user(current_user_id, db)
+    return await StripeService(db).create_subscription(user)
 
 
 @router.post("/portal")
@@ -50,55 +57,37 @@ async def get_customer_portal(
     current_user_id: str = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, str]:
-    """
-    Devuelve la URL del portal oficial de Stripe para que el usuario gestione
-    su tarjeta, vea sus recibos o cancele su suscripción.
-    """
-    user = await db.get(User, current_user_id)
-    if not user:
-        raise HTTPException(status_code=404, detail="Usuario no encontrado")
-
-    service = StripeService(db)
-    portal_url = await service.create_customer_portal(user)
-    return {"url": portal_url}
+    user = await _current_user(current_user_id, db)
+    return {"url": await StripeService(db).create_customer_portal(user)}
 
 
 @router.post("/cancel")
 async def cancel_subscription(
-    body: CancelSubscriptionRequest = CancelSubscriptionRequest(),
+    body: CancelSubscriptionRequest | None = None,
     current_user_id: str = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
-    """
-    Cancela la suscripción del usuario logueado.
-    """
-    user = await db.get(User, current_user_id)
-    if not user:
-        raise HTTPException(status_code=404, detail="Usuario no encontrado")
-
-    service = StripeService(db)
-    return await service.cancel_subscription(
-        user=user, cancel_at_period_end=body.cancel_at_period_end
+    user = await _current_user(current_user_id, db)
+    return await StripeService(db).cancel_subscription(
+        user,
+        cancel_at_period_end=body.cancel_at_period_end if body else True,
     )
 
 
 @router.post("/webhook")
 async def stripe_webhook(
     request: Request,
-    stripe_signature: str = Header(None, alias="stripe-signature"),
+    stripe_signature: str | None = Header(None, alias="stripe-signature"),
     db: AsyncSession = Depends(get_db),
-) -> dict[str, str]:
-    """
-    Webhook que recibe los eventos de Stripe de forma segura y
-    actualiza el estado de la suscripción en la base de datos de Focusly.
-    """
-    payload = await request.body()
-
+) -> dict[str, bool]:
+    """Stripe's notifications (payments, renewals, failures, cancellations).
+    Only signed events are accepted."""
     if not settings.STRIPE_WEBHOOK_SECRET:
-        raise HTTPException(
-            status_code=500, detail="STRIPE_WEBHOOK_SECRET no configurado"
-        )
+        raise HTTPException(status_code=503, detail="Webhook no configurado")
+    if not stripe_signature:
+        raise HTTPException(status_code=400, detail="Falta la firma de Stripe")
 
+    payload = await request.body()
     try:
         event = stripe.Webhook.construct_event(
             payload, stripe_signature, settings.STRIPE_WEBHOOK_SECRET
@@ -106,39 +95,10 @@ async def stripe_webhook(
     except (ValueError, stripe.SignatureVerificationError):
         raise HTTPException(status_code=400, detail="Firma de webhook inválida")
 
-    event_type = event["type"]
-    data = event["data"]["object"]
-
-    # 1. Pago de factura completado (primer pago o renovación mensual automática)
-    if event_type == "invoice.payment_succeeded":
-        customer_id = data.get("customer")
-        subscription_id = data.get("subscription")
-
-        # Buscar usuario por stripeCustomerId
-        stmt = select(User).where(User.stripeCustomerId == customer_id)
-        result = await db.execute(stmt)
-        user = result.scalar_one_or_none()
-
-        if user:
-            user.subscriptionStatus = "pro"
-            if subscription_id:
-                user.stripeSubscriptionId = subscription_id
-            await db.commit()
-
-    # 2. Suscripción cancelada o vencida
-    elif event_type in (
-        "customer.subscription.deleted",
-        "customer.subscription.paused",
-    ):
-        customer_id = data.get("customer")
-
-        stmt = select(User).where(User.stripeCustomerId == customer_id)
-        result = await db.execute(stmt)
-        user = result.scalar_one_or_none()
-
-        if user:
-            user.subscriptionStatus = "free"
-            user.stripeSubscriptionId = None
-            await db.commit()
-
-    return {"status": "success"}
+    try:
+        await StripeService(db).handle_event(event)
+    except Exception:
+        # A 5xx makes Stripe retry the event later.
+        logger.exception("Stripe webhook %s failed", getattr(event, "type", "?"))
+        raise HTTPException(status_code=500, detail="Webhook processing failed")
+    return {"received": True}

@@ -22,11 +22,15 @@ from app.routes.common import get_current_user_id
 
 class TestStripEditorBlocks:
     def test_drops_a_whole_document_edit(self):
-        reply = f"Reordené las secciones.\n{EDIT_START}\n# Doc\nTodo el texto\n{EDIT_END}"
+        reply = (
+            f"Reordené las secciones.\n{EDIT_START}\n# Doc\nTodo el texto\n{EDIT_END}"
+        )
         assert strip_editor_blocks(reply) == "Reordené las secciones."
 
     def test_drops_a_fragment_replacement(self):
-        reply = f"Lo hice más claro.\n{REPLACEMENT_START}\nTexto nuevo\n{REPLACEMENT_END}"
+        reply = (
+            f"Lo hice más claro.\n{REPLACEMENT_START}\nTexto nuevo\n{REPLACEMENT_END}"
+        )
         assert strip_editor_blocks(reply) == "Lo hice más claro."
 
     def test_unterminated_block_runs_to_the_end(self):
@@ -56,8 +60,16 @@ def chat_app(monkeypatch):
     ws_repo.get_by_id_and_user = AsyncMock()
     streamed = {}
 
-    async def fake_stream(messages, system_context, model, background_tasks,
-                          user_id, conversation_id, user_message, db_factory):
+    async def fake_stream(
+        messages,
+        system_context,
+        model,
+        background_tasks,
+        user_id,
+        conversation_id,
+        user_message,
+        db_factory,
+    ):
         streamed["conversation_id"] = conversation_id
         yield "hola"
 
@@ -65,13 +77,15 @@ def chat_app(monkeypatch):
     monkeypatch.setattr(ai_routes, "MessageRepository", lambda db: msg_repo)
     monkeypatch.setattr(ai_routes, "WorkspacesRepository", lambda db: ws_repo)
     monkeypatch.setattr(ai_routes, "build_context", AsyncMock(return_value="ctx"))
-    monkeypatch.setattr(ai_routes, "classify_query", lambda m: "simple")
+    monkeypatch.setattr(ai_routes, "classify_query", AsyncMock(return_value="simple"))
     monkeypatch.setattr(ai_routes, "stream_gemini_and_save", fake_stream)
 
     app = FastAPI()
     app.include_router(ai_routes.router)
     db = MagicMock()
     db.commit = AsyncMock()
+    # The editor assistant is a Pro feature (see test_billing.py for limits).
+    db.get = AsyncMock(return_value=SimpleNamespace(subscriptionStatus="pro"))
     app.dependency_overrides[get_db] = lambda: db
     app.dependency_overrides[get_current_user_id] = lambda: "user-1"
     return (
@@ -120,16 +134,22 @@ class TestChatPersistence:
         client, repos = chat_app
         repos.ws.get_by_id_and_user.return_value = None
 
-        res = client.post("/ai/chat", json={"messages": MESSAGES, "workspaceId": "ws-x"})
+        res = client.post(
+            "/ai/chat", json={"messages": MESSAGES, "workspaceId": "ws-x"}
+        )
 
         assert res.status_code == 404
         repos.conv.create.assert_not_called()
 
     def test_continuing_a_thread_reuses_it(self, chat_app):
         client, repos = chat_app
-        repos.conv.get_by_id.return_value = SimpleNamespace(id="conv-1", userId="user-1")
+        repos.conv.get_by_id.return_value = SimpleNamespace(
+            id="conv-1", userId="user-1"
+        )
 
-        res = client.post("/ai/chat", json={"messages": MESSAGES, "conversationId": "conv-1"})
+        res = client.post(
+            "/ai/chat", json={"messages": MESSAGES, "conversationId": "conv-1"}
+        )
 
         assert res.status_code == 200
         assert res.headers["x-conversation-id"] == "conv-1"
@@ -175,7 +195,9 @@ class TestWorkspaceConversationList:
             SimpleNamespace(id="c1", title="📝 Plan", createdAt=stamp, updatedAt=stamp),
         ]
         repos.msg.first_user_messages.return_value = {
-            "c2": SimpleNamespace(content="Mejora esto.\n\n```selection\nun texto\n```"),
+            "c2": SimpleNamespace(
+                content="Mejora esto.\n\n```selection\nun texto\n```"
+            ),
         }
 
         body = client.get("/ai/workspaces/ws-1/conversations").json()

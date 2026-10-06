@@ -82,6 +82,7 @@ async def lifespan(app: FastAPI):
             'ALTER TABLE "Workspace" ADD COLUMN IF NOT EXISTS "folderId" VARCHAR',
             'ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "stripeCustomerId" VARCHAR',
             'ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "stripeSubscriptionId" VARCHAR',
+            'ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "aiMessagesUsed" INTEGER NOT NULL DEFAULT 0',
         ]
         for stmt in migration_statements:
             try:
@@ -138,7 +139,7 @@ fastapi_app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
     # The editor assistant learns its conversation id from this header.
-    expose_headers=["X-Conversation-Id"],
+    expose_headers=["X-Conversation-Id", "X-AI-Messages-Remaining"],
 )
 
 # 3. Mount REST Routers

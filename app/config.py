@@ -53,6 +53,9 @@ class Settings:
     MINIO_BUCKET_AVATARS: str = os.getenv("MINIO_BUCKET_AVATARS", "avatars")
     STRIPE_SECRET_KEY: str = os.getenv("STRIPE_SECRET_KEY", "").strip()
     STRIPE_WEBHOOK_SECRET: str = os.getenv("STRIPE_WEBHOOK_SECRET", "").strip()
+    # The Pro monthly price. The server decides what is charged, never the
+    # client.
+    STRIPE_PRICE_ID_PRO: str = os.getenv("STRIPE_PRICE_ID_PRO", "").strip()
 
 
 settings = Settings()

@@ -1,8 +1,12 @@
+import asyncio
 import os
 from google import genai
 
+# Picking a model must not hold up the reply.
+CLASSIFY_TIMEOUT_SECONDS = 8
 
-def classify_query(user_query: str) -> str:
+
+async def classify_query(user_query: str) -> str:
     """
     Classifies a user query as 'simple' or 'complex'.
     Complex: needs function calling, memory access, summarizing, or project info.
@@ -29,9 +33,13 @@ Return ONLY the word 'simple' or 'complex'.
 User Query: {user_query}
 """
     try:
-        response = client.models.generate_content(
-            model="gemini-2.5-flash",
-            contents=prompt,
+        # Async client: the sync one froze the whole server while it waited.
+        response = await asyncio.wait_for(
+            client.aio.models.generate_content(
+                model="gemini-2.5-flash",
+                contents=prompt,
+            ),
+            timeout=CLASSIFY_TIMEOUT_SECONDS,
         )
         result = response.text.strip().lower()
         if "simple" in result:
