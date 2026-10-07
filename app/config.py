@@ -43,6 +43,8 @@ class Settings:
     RESEND_API_KEY: str = os.getenv("RESEND_API_KEY", "")
     IS_PRODUCTION: bool = os.getenv("ENV", "development") == "production"
     FOCUSLY_AI_URL: str = _normalized_ai_url
+    # Shared secret with focusly-ai (same FOCUSLY_AI_INTERNAL_TOKEN there).
+    FOCUSLY_AI_INTERNAL_TOKEN: str = os.getenv("FOCUSLY_AI_INTERNAL_TOKEN", "").strip()
     REDIS_URL: str = os.getenv("REDIS_URL", "redis://localhost:6379/0").strip()
     MINIO_ENDPOINT: str = os.getenv("MINIO_ENDPOINT", "http://localhost:9000").strip()
     MINIO_PUBLIC_ENDPOINT: str = os.getenv(

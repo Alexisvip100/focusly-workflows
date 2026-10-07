@@ -8,6 +8,7 @@ from fastapi.testclient import TestClient
 
 from app.database import get_db
 from app.modules.ai.routes import ai as ai_routes
+from app.modules.ai.services.context_builder import AIContext
 from app.modules.ai.services.editor_blocks import (
     editor_message_preview,
     EDIT_END,
@@ -69,15 +70,21 @@ def chat_app(monkeypatch):
         conversation_id,
         user_message,
         db_factory,
+        **kwargs,
     ):
         streamed["conversation_id"] = conversation_id
+        streamed["messages"] = messages
+        streamed["context"] = system_context
+        streamed["model"] = model
+        streamed.update(kwargs)
         yield "hola"
 
     monkeypatch.setattr(ai_routes, "ConversationRepository", lambda db: conv_repo)
     monkeypatch.setattr(ai_routes, "MessageRepository", lambda db: msg_repo)
     monkeypatch.setattr(ai_routes, "WorkspacesRepository", lambda db: ws_repo)
-    monkeypatch.setattr(ai_routes, "build_context", AsyncMock(return_value="ctx"))
-    monkeypatch.setattr(ai_routes, "classify_query", AsyncMock(return_value="simple"))
+    monkeypatch.setattr(
+        ai_routes, "build_context", AsyncMock(return_value=AIContext("ctx"))
+    )
     monkeypatch.setattr(ai_routes, "stream_gemini_and_save", fake_stream)
 
     app = FastAPI()

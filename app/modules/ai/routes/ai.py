@@ -4,7 +4,6 @@ from pydantic import BaseModel
 from typing import Any
 import asyncio
 import httpx
-import json
 import logging
 import re
 import uuid
@@ -22,9 +21,20 @@ from app.modules.task.repository import TasksRepository
 from app.modules.workspace.repository import WorkspacesRepository
 from app.modules.ai.repository import ConversationRepository, MessageRepository
 
-from app.modules.ai.services.context_builder import build_context
-from app.modules.ai.services.router import classify_query
-from app.modules.ai.services.memory import extract_and_save_memory
+from app.modules.ai.services.chat_payload import build_history, has_attachments
+from app.modules.ai.services.context_builder import (
+    AIContext,
+    build_context,
+    get_calendar_items,
+    one_shot_context,
+)
+from app.modules.ai.services.focusly_ai import (
+    UsageTrailer,
+    focusly_ai_headers,
+    total_tokens,
+)
+from app.modules.ai.services.router import pick_model
+from app.modules.ai.services.memory import extract_and_save_memory, worth_extracting
 from app.modules.ai.services.summarizer import check_and_summarize
 from app.modules.ai.services.action_parser import extract_actions, strip_action_tag
 from app.modules.ai.services.editor_blocks import (
@@ -74,70 +84,14 @@ class ChatRequestSchema(BaseModel):
     persist: bool = True
 
 
-class GeminiStreamParser:
-    def __init__(self):
-        self.buffer = ""
-
-    def feed(self, chunk: str):
-        self.buffer += chunk
-        self.buffer = self.buffer.lstrip("[\r\n, ")
-
-        while self.buffer:
-            if not self.buffer.startswith("{"):
-                self.buffer = self.buffer.lstrip("\r\n, ]")
-                if not self.buffer:
-                    break
-                if not self.buffer.startswith("{"):
-                    self.buffer = ""
-                    break
-
-            brace_count = 0
-            in_string = False
-            escape = False
-            end_idx = -1
-
-            for idx, char in enumerate(self.buffer):
-                if char == '"' and not escape:
-                    in_string = not in_string
-                elif char == "\\" and in_string:
-                    escape = not escape
-                else:
-                    escape = False
-
-                if not in_string:
-                    if char == "{":
-                        brace_count += 1
-                    elif char == "}":
-                        brace_count -= 1
-                        if brace_count == 0:
-                            end_idx = idx
-                            break
-
-            if end_idx != -1:
-                obj_str = self.buffer[: end_idx + 1]
-                self.buffer = self.buffer[end_idx + 1 :].lstrip("\r\n, ")
-                try:
-                    obj = json.loads(obj_str)
-                    candidates = obj.get("candidates", [])
-                    if candidates:
-                        content = candidates[0].get("content", {})
-                        parts = content.get("parts", [])
-                        if parts:
-                            text = parts[0].get("text", "")
-                            if text:
-                                yield text
-                except Exception:
-                    pass
-            else:
-                break
-
-
 async def background_post_chat_tasks(
     user_id: str,
     conversation_id: str,
     user_message: str,
     assistant_message: str,
     db: AsyncSession,
+    token_usage: int = 0,
+    extract_memory: bool = True,
 ):
     try:
         # Save assistant message
@@ -146,14 +100,16 @@ async def background_post_chat_tasks(
             conversationId=conversation_id,
             role="assistant",
             content=assistant_message,
-            tokenUsage=0,
+            tokenUsage=token_usage,
         )
         msg_repo = MessageRepository(db)
         await msg_repo.create(ast_msg)
         await db.commit()
 
-        # Memory Extraction
-        await extract_and_save_memory(user_id, user_message, db)
+        # Memory extraction: only for messages that may tell something about
+        # the user (see worth_extracting), not after every reply.
+        if extract_memory:
+            await extract_and_save_memory(user_id, user_message, db)
 
         # Summarizer Check
         await check_and_summarize(conversation_id, db)
@@ -170,26 +126,53 @@ async def fetch_ai_stream_and_persist(
     user_message: str,
     db_factory,
     queue: asyncio.Queue,
+    extract_memory: bool = True,
 ):
     full_assistant_response = ""
+    trailer = UsageTrailer()
     try:
         async with httpx.AsyncClient() as client:
-            async with client.stream("POST", url, json=payload, timeout=90.0) as r:
+            async with client.stream(
+                "POST", url, json=payload, headers=focusly_ai_headers(), timeout=90.0
+            ) as r:
                 if r.status_code != 200:
                     error_text = await r.aread()
-                    msg = f"Error calling focusly-ai service: {r.status_code} - {error_text.decode('utf-8', errors='ignore')}"
-                    await queue.put(("chunk", msg))
+                    logger.error(
+                        f"focusly-ai answered {r.status_code}: "
+                        f"{error_text.decode('utf-8', errors='ignore')[:500]}"
+                    )
+                    await queue.put(
+                        (
+                            "chunk",
+                            "Lumina no pudo responder en este momento. 🛠️ "
+                            "Intenta de nuevo en unos segundos.",
+                        )
+                    )
                     return
 
                 async for chunk in r.aiter_text():
-                    full_assistant_response += chunk
-                    await queue.put(("chunk", chunk))
+                    text = trailer.feed(chunk)
+                    if text:
+                        full_assistant_response += text
+                        await queue.put(("chunk", text))
     except Exception as e:
         logger.error(f"Error streaming from focusly-ai: {e}")
         await queue.put(("error", f"\nStreaming error from focusly-ai: {str(e)}"))
     finally:
         # Signal that the stream is complete
         await queue.put(("done", None))
+
+        usage = trailer.usage
+        if usage:
+            logger.info(
+                "AI usage user=%s model=%s input=%s cached=%s output=%s thoughts=%s",
+                user_id,
+                usage.get("model"),
+                usage.get("input"),
+                usage.get("cached"),
+                usage.get("output"),
+                usage.get("thoughts"),
+            )
 
         # Persist assistant reply to DB even if client disconnected mid-stream
         if conversation_id and full_assistant_response:
@@ -201,6 +184,8 @@ async def fetch_ai_stream_and_persist(
                         user_message,
                         strip_editor_blocks(full_assistant_response),
                         new_db,
+                        token_usage=total_tokens(usage),
+                        extract_memory=extract_memory,
                     )
                     break
             except Exception as e:
@@ -209,16 +194,24 @@ async def fetch_ai_stream_and_persist(
 
 async def stream_gemini_and_save(
     messages: list[dict[str, str]],
-    system_context: str,
+    system_context: AIContext,
     model: str,
     background_tasks: BackgroundTasks,
     user_id: str,
     conversation_id: str | None,
     user_message: str,
     db_factory,
+    extract_memory: bool = True,
 ):
     url = f"{settings.FOCUSLY_AI_URL}/ai/chat"
-    payload = {"messages": messages, "system_context": system_context, "model": model}
+    payload = {
+        "messages": messages,
+        "system_context": system_context.text,
+        # Up to here the prompt repeats between messages: Claude caches it.
+        "cache_prefix_chars": len(system_context.stable),
+        "model": model,
+        "include_usage": True,
+    }
 
     queue: asyncio.Queue[tuple[str, str | None]] = asyncio.Queue()
 
@@ -232,6 +225,7 @@ async def stream_gemini_and_save(
             user_message,
             db_factory,
             queue,
+            extract_memory,
         )
     )
 
@@ -281,7 +275,9 @@ async def analyze_patterns_endpoint(
 
     async with httpx.AsyncClient() as client:
         try:
-            r = await client.post(url, json=payload, timeout=30.0)
+            r = await client.post(
+                url, json=payload, headers=focusly_ai_headers(), timeout=30.0
+            )
             if r.status_code != 200:
                 raise HTTPException(
                     status_code=502,
@@ -405,35 +401,71 @@ async def chat_endpoint(
             await conv_repo.touch(conversation)
         await db.commit()
 
-    # 3. Router logic
-    complexity = await classify_query(latest_user_message)
-    selected_model = body.model or (
-        "gemini-2.5-flash" if complexity == "complex" else "gemini-2.5-flash-lite"
+    # 3. What the model gets: one-shot rewrites need no user data, the
+    # editor's assistant works on the document, the chat sees everything.
+    one_shot = not body.persist and body.document_context is None
+    editor = (
+        body.document_context is not None
+        or bool(body.workspaceId)
+        or bool(getattr(conversation, "workspaceId", None))
+    )
+
+    # The conversation: the client sends just the new message and the thread
+    # comes from the database, unless it sends a history of its own (e.g. a
+    # retry, which drops the replies after the retried message). Either way,
+    # older turns go shortened.
+    history_source = [(m.role, m.content) for m in body.messages]
+    if conversation and conversation_id and len(body.messages) == 1:
+        stored = await MessageRepository(db).get_by_conversation_id(conversation.id)
+        if stored:
+            history_source = [(m.role, m.content) for m in stored]
+            if history_source[-1] != ("user", latest_user_message):
+                history_source.append(("user", latest_user_message))
+    messages_payload = build_history(history_source) or [
+        {"role": "user", "content": latest_user_message}
+    ]
+
+    selected_model = pick_model(
+        body.model,
+        latest_user_message,
+        has_attachments=has_attachments(latest_user_message),
+    )
+    user_turns = sum(1 for role, _ in history_source if role == "user")
+    extract_memory = (
+        bool(conversation)
+        and not editor
+        and worth_extracting(latest_user_message, user_turns)
     )
 
     # 4. Context Builder
-    system_context = await build_context(
-        current_user_id,
-        conversation.id if conversation else "",
-        latest_user_message,
-        db,
-        client_time=body.clientTime,
-        time_zone=body.timeZone,
-    )
+    if one_shot:
+        system_context = one_shot_context()
+    else:
+        system_context = await build_context(
+            current_user_id,
+            conversation.id if conversation else "",
+            latest_user_message,
+            db,
+            client_time=body.clientTime,
+            time_zone=body.timeZone,
+            mode="editor" if editor else "full",
+        )
 
     # Apply selected context instructions
     if body.contextType in ("tasks", "calendar"):
-        system_context += (
+        system_context.add(
             "\n\nCRITICAL CONTEXT MODE: The user has selected the 'Tasks / Calendar' context. "
             "Focus your answer primarily on analyzing, organizing, or answering questions about their tasks list and calendar events."
         )
     elif body.contextType == "workspaces":
-        system_context += "\n\nCRITICAL CONTEXT MODE: The user has selected the 'Workspaces' context. Focus your answer primarily on their workspaces, document notes, and organizing projects."
+        system_context.add(
+            "\n\nCRITICAL CONTEXT MODE: The user has selected the 'Workspaces' context. Focus your answer primarily on their workspaces, document notes, and organizing projects."
+        )
     elif body.contextType in ("task", "event") and body.contextId:
         task_repo = TasksRepository(db)
         task_obj = await task_repo.get_by_id(body.contextId)
         if task_obj and task_obj.userId == current_user_id:
-            system_context += (
+            system_context.add(
                 f"\n\nCRITICAL CONTEXT MODE: The user has selected this specific Task as context:\n"
                 f"- Title: {task_obj.title}\n"
                 f"- Notes/Description: {task_obj.notes or 'No description'}\n"
@@ -443,13 +475,7 @@ async def chat_endpoint(
             )
         else:
             try:
-                from app.modules.google_calendar.routes import (
-                    get_google_calendar_service,
-                )
-
-                gc_service = get_google_calendar_service(db)
-                events_data = await gc_service.get_events(current_user_id)
-                items = events_data.get("items", [])
+                items = await get_calendar_items(db, current_user_id)
                 match_ev = next(
                     (it for it in items if it.get("id") == body.contextId), None
                 )
@@ -462,7 +488,7 @@ async def chat_endpoint(
                     end_val = (match_ev.get("end") or {}).get("dateTime") or (
                         match_ev.get("end") or {}
                     ).get("date")
-                    system_context += (
+                    system_context.add(
                         f"\n\nCRITICAL CONTEXT MODE: The user has selected this specific Calendar Event as context:\n"
                         f"- Title: {summary}\n"
                         f"- Start: {start_val}\n"
@@ -493,7 +519,7 @@ async def chat_endpoint(
                         f"priority: {linked_task.priorityLevel}, "
                         f"deadline: {linked_task.deadline.isoformat() if linked_task.deadline else 'none'})"
                     )
-            system_context += (
+            system_context.add(
                 f"\n\nCRITICAL CONTEXT MODE: The user has selected this specific Workspace/Document as context:\n"
                 f"- Title: {ws_obj.title}\n"
                 f"- Content/Notes: {ws_obj.content or 'No content'}\n"
@@ -502,7 +528,7 @@ async def chat_endpoint(
             )
 
     if body.document_context:
-        system_context += (
+        system_context.add(
             "\n\nCRITICAL CONTEXT MODE: The user is currently looking at this exact "
             "document in the editor right now (this reflects their live, possibly "
             "unsaved edits — trust it over anything above with the same title):\n"
@@ -511,7 +537,7 @@ async def chat_endpoint(
 
     task = body.task
     if task:
-        system_context += (
+        system_context.add(
             f"\n\nThe user is currently viewing/focusing on this task:\n"
             f"- Title: {task.get('title', 'Untitled')}\n"
             f"- Notes/Description: {task.get('description') or 'No description provided'}\n"
@@ -519,14 +545,11 @@ async def chat_endpoint(
         )
         links = task.get("links", [])
         if links:
-            system_context += "\nAssociated Links:\n"
+            system_context.add("\nAssociated Links:\n")
             for link in links:
-                system_context += (
+                system_context.add(
                     f"- [{link.get('title', 'Link')}]({link.get('url', '#')})\n"
                 )
-
-    # Prepare payload for focusly-ai endpoint
-    messages_payload = [{"role": m.role, "content": m.content} for m in body.messages]
 
     return StreamingResponse(
         stream_gemini_and_save(
@@ -538,6 +561,7 @@ async def chat_endpoint(
             conversation.id if conversation else None,
             latest_user_message,
             get_db,
+            extract_memory=extract_memory,
         ),
         media_type="text/plain",
         headers={

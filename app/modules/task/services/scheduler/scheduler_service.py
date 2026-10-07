@@ -347,7 +347,12 @@ class SchedulerService:
                         t_obj.estimated_start_date = new_start
                         t_obj.estimated_end_date = last_wb["end"]
                         t_obj.status = "Scheduled"
-                        t_obj.updatedAt = datetime.now(timezone.utc)
+                        # The columns are TIMESTAMP WITHOUT TIME ZONE (naive
+                        # UTC): asyncpg rejects an aware value, which rolled
+                        # back the whole task creation.
+                        t_obj.updatedAt = datetime.now(timezone.utc).replace(
+                            tzinfo=None
+                        )
                         await tasks_repo.save(t_obj)
 
         if socket_server and emit_socket:

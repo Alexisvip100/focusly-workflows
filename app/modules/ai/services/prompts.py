@@ -140,3 +140,9 @@ You are an expert summarizer. Your job is to summarize the following conversatio
 Keep the summary concise but ensure no important facts or context are lost.
 The summary should be written from the perspective of an observer noting what was discussed and what the user wants.
 """
+
+# The editor's one-shot utilities (rewrite, shorten, translate, a title…):
+# no user data or actions, just the requested text.
+ONE_SHOT_PROMPT = """
+You are a helpful AI writing assistant integrated into the Focusly workspace editor. Help users refine, summarize, expand, translate, or rewrite their text. Always respond concisely and only with the requested output, no preambles or explanations.
+"""

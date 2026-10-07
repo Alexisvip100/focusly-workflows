@@ -8,6 +8,7 @@ from fastapi.testclient import TestClient
 
 from app.database import get_db
 from app.modules.ai.routes import ai as ai_routes
+from app.modules.ai.services.context_builder import AIContext
 from app.modules.billing import routes as billing_routes
 from app.modules.billing.plans import FREE_AI_MESSAGE_LIMIT, is_editor_request
 from app.modules.billing.services import stripe_service as service_module
@@ -38,8 +39,21 @@ def make_db():
     db = MagicMock()
     db.commit = AsyncMock()
     db.get = AsyncMock()
-    db.execute = AsyncMock()
+    # The checkout's row lock reads nothing new: the user object stays.
+    result = MagicMock()
+    result.scalar_one_or_none = MagicMock(return_value=None)
+    db.execute = AsyncMock(return_value=result)
     return db
+
+
+@pytest.fixture(autouse=True)
+def no_other_subscriptions(monkeypatch):
+    """The customer has no other paying subscription (see test_billing_double_charge.py)."""
+    monkeypatch.setattr(
+        stripe.Subscription,
+        "list",
+        MagicMock(return_value=stripe.StripeObject.construct_from({"data": []}, "k")),
+    )
 
 
 def stripe_obj(data):
@@ -406,14 +420,13 @@ class TestChatLimits:
         msg_repo = MagicMock()
         msg_repo.create = AsyncMock()
 
-        async def fake_stream(*args):
+        async def fake_stream(*args, **kwargs):
             yield "hola"
 
         monkeypatch.setattr(ai_routes, "ConversationRepository", lambda db: conv_repo)
         monkeypatch.setattr(ai_routes, "MessageRepository", lambda db: msg_repo)
-        monkeypatch.setattr(ai_routes, "build_context", AsyncMock(return_value="ctx"))
         monkeypatch.setattr(
-            ai_routes, "classify_query", AsyncMock(return_value="simple")
+            ai_routes, "build_context", AsyncMock(return_value=AIContext("ctx"))
         )
         monkeypatch.setattr(ai_routes, "stream_gemini_and_save", fake_stream)
         state = SimpleNamespace(

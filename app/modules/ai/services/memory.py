@@ -1,17 +1,44 @@
-import asyncio
 import os
+import re
+import unicodedata
 import uuid
 import json
 import numpy as np
 from sqlalchemy.ext.asyncio import AsyncSession
-from google import genai
 from app.models import UserMemory
 from app.modules.ai.repository import UserMemoryRepository
+from .chat_payload import compact_attachments
 from .embeddings import generate_embedding
+from .gemini_rest import generate_text
 from .prompts import MEMORY_EXTRACTION_PROMPT
 
 # A background extra after each reply: never worth holding a request for.
 GEMINI_TIMEOUT_SECONDS = 30
+MAX_MESSAGE_CHARS = 2000
+# Besides messages that look personal, every this many user messages.
+EXTRACT_EVERY_N_MESSAGES = 6
+
+# Phrases people use to tell something about themselves.
+_PERSONAL = re.compile(
+    r"\b("
+    r"recuerda\w*|acuerdate|no olvides|me llamo|soy|trabajo|estudio|vivo|"
+    r"prefiero|me gusta\w*|no me gusta\w*|odio|me encanta\w*|suelo|siempre|nunca|"
+    r"mi (?:horario|trabajo|jefe|equipo|empresa|rutina|meta|objetivo)|"
+    r"mis (?:horarios|metas|objetivos)|"
+    r"remember|my name|i am|i'm|i work|i study|i live|i prefer|i like|"
+    r"i don't like|i hate|i love|i usually|i always|i never|"
+    r"my (?:schedule|job|boss|team|company|routine|goal)"
+    r")\b"
+)
+
+
+def worth_extracting(message: str, user_message_count: int) -> bool:
+    """Whether a message may hold something to remember about the user."""
+    text = unicodedata.normalize("NFKD", (message or "").lower())
+    text = "".join(c for c in text if not unicodedata.combining(c))
+    if _PERSONAL.search(compact_attachments(text)):
+        return True
+    return user_message_count > 0 and user_message_count % EXTRACT_EVERY_N_MESSAGES == 0
 
 
 def cosine_similarity(a: list[float], b: list[float]) -> float:
@@ -32,12 +59,14 @@ async def search_memories(
     """
     Search relevant memories for a given query.
     """
-    query_emb = await generate_embedding(query)
-    if not query_emb:
-        return ""
-
     repo = UserMemoryRepository(db)
     all_memories = await repo.get_all_by_user(user_id)
+    if not any(m.embedding for m in all_memories):
+        return ""
+
+    query_emb = await generate_embedding(compact_attachments(query)[:MAX_MESSAGE_CHARS])
+    if not query_emb:
+        return ""
 
     scored_memories = []
     for m in all_memories:
@@ -66,20 +95,19 @@ async def extract_and_save_memory(user_id: str, message: str, db: AsyncSession):
     if not api_key:
         return
 
-    client = genai.Client(api_key=api_key)
+    # Attached files are documents, not facts about the user.
+    message = compact_attachments(message)[:MAX_MESSAGE_CHARS]
+    if not message:
+        return
+
     try:
-        # The async client: the sync one blocked the whole server (every
-        # request, of every user) for as long as Gemini took to answer.
-        response = await asyncio.wait_for(
-            client.aio.models.generate_content(
-                model="gemini-2.5-flash",
-                contents=f"{MEMORY_EXTRACTION_PROMPT}\n\nUser Message: {message}",
-            ),
+        # Async, so the server keeps serving everyone else meanwhile.
+        text = await generate_text(
+            f"{MEMORY_EXTRACTION_PROMPT}\n\nUser Message: {message}",
             timeout=GEMINI_TIMEOUT_SECONDS,
         )
 
         # Parse JSON
-        text = response.text.strip()
         if text.startswith("```json"):
             text = text[7:-3].strip()
         elif text.startswith("```"):
