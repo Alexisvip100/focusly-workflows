@@ -91,6 +91,9 @@ class TasksService:
         )
 
         should_schedule = user_id and not skip_scheduling and new_task.status != "Backlog"
+        # Read now: after a rollback the instance is detached and reading it
+        # raises instead of reporting the real error.
+        mirrored_event_id = new_task.google_event_id
 
         try:
             async with transaction_scope(self.db):
@@ -103,10 +106,10 @@ class TasksService:
                     )
         except Exception as e:
             # Compensating action: if Google Calendar event was created but DB transaction rolled back, delete event from Google
-            if new_task.google_event_id and user_id and self.google_calendar_service:
+            if mirrored_event_id and user_id and self.google_calendar_service:
                 try:
                     await self.google_calendar_service.delete_event(
-                        user_id, new_task.google_event_id
+                        user_id, mirrored_event_id
                     )
                 except Exception:
                     pass

@@ -3,7 +3,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from app.modules.ai.services import embeddings, memory, router, summarizer
+from app.modules.ai.services import embeddings
 
 
 def fake_client(delay: float, text: str = "simple"):
@@ -28,7 +28,7 @@ def gemini(monkeypatch):
     monkeypatch.setenv("GEMINI_API_KEY", "test")
 
     def install(delay: float, text: str = "simple"):
-        for module in (router, embeddings, memory, summarizer):
+        for module in (embeddings,):
             monkeypatch.setattr(
                 module.genai, "Client", lambda api_key: fake_client(delay, text)
             )
@@ -48,17 +48,17 @@ class TestGeminiCallsDontFreezeTheServer:
                 await asyncio.sleep(0.01)
                 ticks += 1
 
-        result, _ = await asyncio.gather(router.classify_query("hola"), other_request())
-        assert result == "simple"
-        # The loop kept serving while classify_query waited on Gemini.
+        result, _ = await asyncio.gather(
+            embeddings.generate_embedding("hola"), other_request()
+        )
+        assert result == [0.1, 0.2]
+        # The loop kept serving while the embedding call waited on Gemini.
         assert ticks == 10
 
     @pytest.mark.anyio
     async def test_a_slow_gemini_is_given_up(self, gemini, monkeypatch):
         gemini(1.0)
-        monkeypatch.setattr(router, "CLASSIFY_TIMEOUT_SECONDS", 0.05)
         monkeypatch.setattr(embeddings, "EMBEDDING_TIMEOUT_SECONDS", 0.05)
-        assert await router.classify_query("hola") == "complex"
         assert await embeddings.generate_embedding("hola") == []
 
     @pytest.mark.anyio

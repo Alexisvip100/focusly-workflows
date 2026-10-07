@@ -1,8 +1,8 @@
-import asyncio
 import os
 from sqlalchemy.ext.asyncio import AsyncSession
-from google import genai
 from app.modules.ai.repository import ConversationRepository, MessageRepository
+from .chat_payload import compact_assistant_message, compact_user_message
+from .gemini_rest import generate_text
 from .prompts import SUMMARIZATION_PROMPT
 
 # A background extra after each reply: never worth holding a request for.
@@ -39,24 +39,26 @@ async def check_and_summarize(
     # Summarize all but the last 5 messages
     messages_to_summarize = messages[:-5]
     for m in messages_to_summarize:
-        text_to_summarize += f"{m.role}: {m.content}\n"
+        # Without attached files and action payloads: what was said and done.
+        content = (
+            compact_user_message(m.content)
+            if m.role == "user"
+            else compact_assistant_message(m.content)
+        )
+        text_to_summarize += f"{m.role}: {content}\n"
 
     api_key = os.environ.get("GEMINI_API_KEY")
     if not api_key:
         return
 
-    client = genai.Client(api_key=api_key)
     try:
-        # The async client: the sync one blocked the whole server (every
-        # request, of every user) for as long as Gemini took to answer.
-        response = await asyncio.wait_for(
-            client.aio.models.generate_content(
-                model="gemini-2.5-flash",
-                contents=f"{SUMMARIZATION_PROMPT}\n\n{text_to_summarize}",
-            ),
+        # Async, so the server keeps serving everyone else meanwhile.
+        new_summary = await generate_text(
+            f"{SUMMARIZATION_PROMPT}\n\n{text_to_summarize}",
             timeout=GEMINI_TIMEOUT_SECONDS,
         )
-        new_summary = response.text.strip()
+        if not new_summary:
+            return
 
         # 4. Update Conversation summary
         conversation.summary = new_summary

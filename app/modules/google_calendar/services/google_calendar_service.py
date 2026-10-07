@@ -13,6 +13,13 @@ from app.modules.user.repository import UsersRepository
 from app.modules.task.repository import TasksRepository
 
 
+async def _forget_cached_events(user_id: str) -> None:
+    """Lumina's copy of the calendar (see context_builder) is stale now."""
+    from app.modules.ai.services.context_builder import invalidate_calendar_cache
+
+    await invalidate_calendar_cache(user_id)
+
+
 class GoogleCalendarService:
     def __init__(
         self,
@@ -93,7 +100,8 @@ class GoogleCalendarService:
             )
             if res.status_code not in (200, 201):
                 raise Exception(f"Failed to create Google event: {res.text}")
-            return res.json()
+        await _forget_cached_events(user_id)
+        return res.json()
 
     async def patch_event(
         self, user_id: str, event_id: str, event: dict[str, Any]
@@ -116,7 +124,8 @@ class GoogleCalendarService:
             )
             if res.status_code != 200:
                 raise Exception(f"Failed to patch Google event: {res.text}")
-            return res.json()
+        await _forget_cached_events(user_id)
+        return res.json()
 
     async def delete_event(self, user_id: str, event_id: str) -> None:
         if not self.auth_service:
@@ -137,6 +146,7 @@ class GoogleCalendarService:
                 and res.status_code != 404
             ):
                 raise Exception("Failed to delete Google event")
+        await _forget_cached_events(user_id)
 
     async def sync_calendar(self, user_id: str) -> None:
         if (

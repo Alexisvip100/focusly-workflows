@@ -1,5 +1,7 @@
+import asyncio
 import logging
 import time
+from collections import defaultdict
 from typing import Any
 
 import stripe
@@ -26,6 +28,13 @@ stripe.api_key = settings.STRIPE_SECRET_KEY
 ENDED_STATUSES = frozenset({"canceled", "incomplete_expired"})
 
 GENERIC_STRIPE_ERROR = "No se pudo completar la operación con Stripe. Intenta de nuevo."
+
+# What a checkout needs from a subscription: the secret of its first payment.
+CHECKOUT_EXPAND = ["latest_invoice.confirmation_secret", "pending_setup_intent"]
+
+# One checkout at a time per user in this process (double clicks, two tabs);
+# the row lock in _lock_user does the same across processes.
+_checkout_locks: defaultdict[str, asyncio.Lock] = defaultdict(asyncio.Lock)
 
 # The Pro price as shown on the plan cards, read from Stripe (so the page
 # never disagrees with what's charged) and kept for an hour.
@@ -96,9 +105,15 @@ class StripeService:
 
     # ── Stripe calls (the SDK is blocking: keep it off the event loop) ──
 
-    async def _retrieve_subscription(self, subscription_id: str) -> Any | None:
+    async def _retrieve_subscription(
+        self, subscription_id: str, expand: list[str] | None = None
+    ) -> Any | None:
         """None when Stripe doesn't have it (e.g. deleted in test mode)."""
         try:
+            if expand:
+                return await run_in_threadpool(
+                    stripe.Subscription.retrieve, subscription_id, expand=expand
+                )
             return await run_in_threadpool(
                 stripe.Subscription.retrieve, subscription_id
             )
@@ -107,7 +122,7 @@ class StripeService:
                 return None
             raise
 
-    async def get_or_create_customer(self, user: User) -> str:
+    async def get_or_create_customer(self, user: User, *, commit: bool = True) -> str:
         if user.stripeCustomerId:
             return user.stripeCustomerId
         try:
@@ -123,7 +138,8 @@ class StripeService:
             logger.exception("Stripe customer creation failed for %s", user.id)
             raise HTTPException(status_code=502, detail=GENERIC_STRIPE_ERROR)
         user.stripeCustomerId = customer.id
-        await self.db.commit()
+        if commit:
+            await self.db.commit()
         return customer.id
 
     async def pro_price(self) -> dict[str, Any] | None:
@@ -159,8 +175,10 @@ class StripeService:
         status = _get(subscription, "status")
 
         if status in ACCESS_STATUSES:
+            # Never two paid subscriptions: the one kept may be another.
+            kept = await self._keep_one_subscription(subscription)
             user.subscriptionStatus = PRO
-            user.stripeSubscriptionId = sub_id
+            user.stripeSubscriptionId = _get(kept, "id")
         elif sub_id == user.stripeSubscriptionId:
             # The user's own subscription stopped giving access.
             user.subscriptionStatus = FREE
@@ -171,6 +189,79 @@ class StripeService:
             # user's current one.
             return
         await self.db.commit()
+
+    async def _keep_one_subscription(self, subscription: Any) -> Any:
+        """A customer must never pay for Pro twice. If, whatever the way (a
+        race, a checkout paid in another tab, a retried request), more than
+        one of their subscriptions gives access, the oldest stays and the
+        others are cancelled and refunded. Returns the one that stays."""
+        customer_id = _id(_get(subscription, "customer"))
+        if not customer_id:
+            return subscription
+        listing = await run_in_threadpool(
+            stripe.Subscription.list, customer=customer_id, status="all", limit=20
+        )
+        paying = [
+            s
+            for s in (_get(listing, "data") or [])
+            if _get(s, "status") in ACCESS_STATUSES
+        ]
+        sub_id = _get(subscription, "id")
+        if not any(_get(s, "id") == sub_id for s in paying):
+            # The listing can lag behind the event that brought it here.
+            paying.append(subscription)
+        if len(paying) <= 1:
+            return subscription
+
+        paying.sort(key=lambda s: (_get(s, "created") or 0, _get(s, "id") or ""))
+        kept, extras = paying[0], paying[1:]
+        for extra in extras:
+            await self._undo_duplicate(extra)
+        return kept
+
+    async def _undo_duplicate(self, subscription: Any) -> None:
+        """Cancels a duplicate Pro subscription and refunds what it charged."""
+        sub_id = _get(subscription, "id")
+        logger.error(
+            "Duplicate Pro subscription %s for customer %s: cancelling and refunding it",
+            sub_id,
+            _id(_get(subscription, "customer")),
+        )
+        try:
+            await run_in_threadpool(
+                stripe.Subscription.cancel, sub_id, prorate=False, invoice_now=False
+            )
+        except stripe.InvalidRequestError:
+            # Already cancelled (e.g. a retried webhook): still refund below.
+            logger.warning("Duplicate subscription %s was already cancelled", sub_id)
+
+        invoices = await run_in_threadpool(
+            stripe.Invoice.list, subscription=sub_id, status="paid", limit=10
+        )
+        for invoice in _get(invoices, "data") or []:
+            payments = await run_in_threadpool(
+                stripe.InvoicePayment.list,
+                invoice=_get(invoice, "id"),
+                status="paid",
+                limit=10,
+            )
+            for payment in _get(payments, "data") or []:
+                intent = _id(_get(_get(payment, "payment"), "payment_intent"))
+                if intent:
+                    await self._refund(intent)
+
+    async def _refund(self, payment_intent_id: str) -> None:
+        try:
+            await run_in_threadpool(
+                stripe.Refund.create,
+                payment_intent=payment_intent_id,
+                reason="duplicate",
+                # A retried webhook refunds once.
+                idempotency_key=f"focusly-duplicate-refund-{payment_intent_id}",
+            )
+        except stripe.InvalidRequestError as e:
+            if getattr(e, "code", None) != "charge_already_refunded":
+                raise
 
     async def get_status(self, user: User, refresh: bool = False) -> dict[str, Any]:
         subscription = None
@@ -247,23 +338,59 @@ class StripeService:
         """Starts a Pro subscription in "incomplete" state and returns the
         secret the browser's Payment Element confirms the first payment with.
         The card is saved as the subscription's default, so Stripe charges
-        it every month on its own."""
+        it every month on its own.
+
+        Never two charges: checkouts of one user run one at a time, and a
+        checkout waiting for its payment is handed out again instead of
+        creating another (one PaymentIntent, however many clicks or tabs)."""
         require_billing(price=True)
+        async with _checkout_locks[user.id]:
+            user = await self._lock_user(user)
+            return await self._start_checkout(user)
+
+    async def _lock_user(self, user: User) -> User:
+        """Locks the user's row until the next commit, so a checkout running
+        in another process waits for this one (and then sees it)."""
+        result = await self.db.execute(
+            select(User)
+            .where(User.id == user.id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+        return result.scalar_one_or_none() or user
+
+    def _is_reusable_checkout(self, subscription: Any) -> bool:
+        """A checkout still waiting for its first payment, for today's price."""
+        if _get(subscription, "status") != "incomplete":
+            return False
+        items = _get(_get(subscription, "items"), "data") or []
+        price_id = _id(_get(items[0], "price")) if items else None
+        secret, _ = subscription_client_secret(subscription)
+        return bool(secret) and price_id == settings.STRIPE_PRICE_ID_PRO
+
+    async def _start_checkout(self, user: User) -> dict[str, Any]:
         if is_pro(user):
             raise HTTPException(status_code=409, detail="Ya tienes Focusly Pro.")
 
-        customer_id = await self.get_or_create_customer(user)
+        customer_id = await self.get_or_create_customer(user, commit=False)
 
         if user.stripeSubscriptionId:
-            current = await self._retrieve_subscription(user.stripeSubscriptionId)
+            current = await self._retrieve_subscription(
+                user.stripeSubscriptionId, expand=CHECKOUT_EXPAND
+            )
             status = _get(current, "status")
             if status in ACCESS_STATUSES:
                 # Paid, but the webhook hasn't arrived yet: don't charge twice.
                 await self.sync_subscription(user, current)
                 raise HTTPException(status_code=409, detail="Ya tienes Focusly Pro.")
+            if self._is_reusable_checkout(current):
+                # The same payment as before (another click, another tab):
+                # paying it twice is impossible, Stripe charges an intent once.
+                await self.db.commit()
+                return await self._checkout_response(current, customer_id)
             if status == "incomplete":
-                # An abandoned checkout: cancel it so it can't be paid later
-                # on top of the new one.
+                # An abandoned checkout for an old price: cancel it so it
+                # can't be paid later on top of the new one.
                 try:
                     await run_in_threadpool(
                         stripe.Subscription.cancel, user.stripeSubscriptionId
@@ -281,30 +408,37 @@ class StripeService:
                 items=[{"price": settings.STRIPE_PRICE_ID_PRO}],
                 payment_behavior="default_incomplete",
                 payment_settings={"save_default_payment_method": "on_subscription"},
-                expand=["latest_invoice.confirmation_secret", "pending_setup_intent"],
+                expand=CHECKOUT_EXPAND,
                 metadata={"user_id": user.id, "plan": "pro_monthly"},
             )
         except stripe.StripeError:
             logger.exception("Stripe subscription creation failed for %s", user.id)
+            await self.db.commit()  # keeps the customer id
             raise HTTPException(status_code=502, detail=GENERIC_STRIPE_ERROR)
 
-        client_secret, intent_type = subscription_client_secret(subscription)
+        client_secret, _ = subscription_client_secret(subscription)
         if not client_secret:
             logger.error("Subscription %s has no client secret", subscription.id)
+            await self.db.commit()
             raise HTTPException(status_code=502, detail=GENERIC_STRIPE_ERROR)
 
         user.stripeSubscriptionId = subscription.id
         await self.db.commit()
+        return await self._checkout_response(subscription, customer_id)
 
+    async def _checkout_response(
+        self, subscription: Any, customer_id: str
+    ) -> dict[str, Any]:
+        client_secret, intent_type = subscription_client_secret(subscription)
         customer_session_secret = await self.create_customer_session(customer_id)
         items = _get(_get(subscription, "items"), "data") or []
         price = _get(items[0], "price") if items else None
         return {
-            "subscription_id": subscription.id,
+            "subscription_id": _get(subscription, "id"),
             "client_secret": client_secret,
             "intent_type": intent_type,
             "customer_session_client_secret": customer_session_secret,
-            "status": subscription.status,
+            "status": _get(subscription, "status"),
             "amount": _get(price, "unit_amount"),
             "currency": _get(price, "currency"),
             "interval": _get(_get(price, "recurring"), "interval"),
