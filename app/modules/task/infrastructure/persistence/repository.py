@@ -15,10 +15,13 @@ from sqlalchemy import (
     or_,
     DateTime,
 )
+from sqlalchemy import inspect as sa_inspect
 from app.models import Task, Tag, TimeBlock, FocusSession, User, ProjectGroup
 from app.redis import cache
 
-INACTIVE_STATUSES = ["completed", "cancelled", "Completed"]
+# Finished or put away: no reminders. "Done"/"Archived" are what the app sets;
+# the lowercase ones come from older data.
+INACTIVE_STATUSES = ["completed", "cancelled", "Completed", "Done", "Archived"]
 
 
 def serialize_task(t: Task) -> dict:
@@ -364,6 +367,12 @@ class TasksRepository:
             await self.db.refresh(task)
         else:
             await self.db.flush()
+            # Columns set by SQL on flush (updatedAt's onupdate=func.now())
+            # come back expired; reading them while caching would lazy-load
+            # outside the async context (MissingGreenlet). Load them here.
+            expired = sa_inspect(task).expired_attributes
+            if expired:
+                await self.db.refresh(task, attribute_names=list(expired))
         await cache.set(f"task:id:{task.id}", serialize_task(task))
         await cache.delete(f"tasks:active:user:{task.userId}")
         await cache.delete(f"signals:user:{task.userId}")

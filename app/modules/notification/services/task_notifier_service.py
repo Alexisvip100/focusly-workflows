@@ -15,6 +15,7 @@ Payload: { taskId, title, deadline, minutesLeft, type: "5min" | "1min" }
 """
 
 import asyncio
+import logging
 import uuid
 from datetime import datetime, timezone
 
@@ -23,6 +24,8 @@ from app.models import Task, Notification
 from app.sockets.realtime import sio
 from app.modules.task.repository import TasksRepository
 from app.modules.notification.repository import NotificationsRepository
+
+logger = logging.getLogger(__name__)
 
 
 def _task_start_at(task: Task) -> datetime:
@@ -108,6 +111,11 @@ async def _check_and_notify_once() -> None:
         # Commit all notifications and task status changes atomically
         if tasks_5min or tasks_1min:
             await db.commit()
+            logger.info(
+                "Task reminders sent: %d at 5 min, %d at 1 min",
+                len(tasks_5min),
+                len(tasks_1min),
+            )
 
 
 async def _emit_notification(
@@ -130,7 +138,7 @@ async def _emit_notification(
     try:
         await sio.emit("task_upcoming", payload, room=room, namespace="/realtime")
     except Exception:
-        pass
+        logger.exception("Could not emit task_upcoming for task %s", task_id)
 
 
 async def run_task_notifier_loop() -> None:
@@ -142,5 +150,5 @@ async def run_task_notifier_loop() -> None:
         try:
             await _check_and_notify_once()
         except Exception:
-            pass
+            logger.exception("Task reminder sweep failed")
         await asyncio.sleep(60)

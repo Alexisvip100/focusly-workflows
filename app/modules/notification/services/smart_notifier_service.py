@@ -658,5 +658,5 @@ async def run_smart_notifier_loop() -> None:
         try:
             await _run_smart_checks_once()
         except Exception:
-            pass
+            logger.exception("Smart notification sweep failed")
         await asyncio.sleep(300)  # 5 minutes

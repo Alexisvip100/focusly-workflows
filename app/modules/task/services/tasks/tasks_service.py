@@ -247,6 +247,10 @@ class TasksService:
                     if current_value != parsed_val:
                         setattr(task, key, parsed_val)
                         has_changes = True
+                        if key != "estimated_end_date":
+                            # A new start time gets its own reminders.
+                            task.notified = False
+                            task.lastMinuteNotified = False
                 elif key in ["subtasks", "time_logs", "collaborators"]:
                     if current_value != value:
                         setattr(task, key, value)

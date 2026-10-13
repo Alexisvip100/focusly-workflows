@@ -15,6 +15,7 @@ loops run once no matter how many replicas the web service has.
 """
 
 import asyncio
+import logging
 
 from app.database import engine, Base
 from app.redis import cache
@@ -26,7 +27,13 @@ from app.modules.notification.services.smart_notifier_service import (
 )
 
 
+logger = logging.getLogger("app.worker")
+
+
 async def main() -> None:
+    logging.basicConfig(
+        level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s"
+    )
     # Same startup steps the web service's lifespan used to do for these
     # loops: connect the Redis cache and ensure tables exist before polling.
     await cache.connect()
@@ -34,6 +41,7 @@ async def main() -> None:
         await conn.run_sync(Base.metadata.create_all)
 
     # Run both loops forever, side by side, in this one process.
+    logger.info("Notification worker started")
     await asyncio.gather(
         run_task_notifier_loop(),
         run_smart_notifier_loop(),
