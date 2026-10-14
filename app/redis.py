@@ -59,6 +59,20 @@ class ResilientRedisCache:
             await self.connect()
         return self.client is not None
 
+    async def acquire_lock(self, key: str, ttl_seconds: int) -> bool | None:
+        """Take `key` for `ttl_seconds` if nobody holds it (SET NX EX).
+
+        True: taken. False: another process holds it. None: Redis is down,
+        so nobody can coordinate — the caller decides what to do.
+        """
+        if not await self._ensure_connected() or self.client is None:
+            return None
+        try:
+            return bool(await self.client.set(key, "1", nx=True, ex=ttl_seconds))
+        except Exception as e:
+            logger.warning(f"Redis lock failed for key {key}: {e}.")
+        return None
+
     async def get(self, key: str) -> Any | None:
         if not await self._ensure_connected() or self.client is None:
             return None

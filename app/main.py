@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import jwt
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
@@ -27,9 +28,10 @@ from app.database import engine, Base
 async def lifespan(app: FastAPI):
     """Connect shared resources on startup, clean up on shutdown.
 
-    The recurring notification loops (task/smart notifier) no longer run
-    here — they run once, in their own process, via app/worker.py — so
-    scaling this web service to multiple replicas doesn't duplicate them.
+    Also runs the recurring notification loops (task reminders, smart
+    notifications) unless RUN_NOTIFIER_LOOPS=0, which is for when they run in
+    their own service (app/worker.py). Each sweep takes a Redis lock, so
+    several replicas, or the web and a worker at once, never duplicate one.
     """
     from app.redis import cache
     from app.modules.storage.services.storage_service import (
@@ -98,8 +100,38 @@ async def lifespan(app: FastAPI):
         # shouldn't go down over a storage dependency that isn't core.
         print(f"Warning: could not initialize avatars bucket: {e}", flush=True)
 
+    loops = start_notifier_loops() if settings.RUN_NOTIFIER_LOOPS else []
+
     yield
+
+    for loop in loops:
+        loop.cancel()
+    await asyncio.gather(*loops, return_exceptions=True)
     await cache.disconnect()
+
+
+def start_notifier_loops() -> list[asyncio.Task]:
+    from app.modules.notification.services.task_notifier_service import (
+        run_task_notifier_loop,
+    )
+    from app.modules.notification.services.smart_notifier_service import (
+        run_smart_notifier_loop,
+    )
+
+    # Uvicorn only sets up its own loggers: without this, the loops' INFO
+    # lines ("Task reminders sent: …") never reach the deploy logs.
+    log = logging.getLogger("app.modules.notification")
+    if not log.handlers:
+        handler = logging.StreamHandler()
+        handler.setFormatter(logging.Formatter("%(levelname)s %(name)s: %(message)s"))
+        log.addHandler(handler)
+        log.setLevel(logging.INFO)
+
+    print("Notification loops started in the web service", flush=True)
+    return [
+        asyncio.create_task(run_task_notifier_loop(), name="task-reminders"),
+        asyncio.create_task(run_smart_notifier_loop(), name="smart-notifications"),
+    ]
 
 
 from fastapi.responses import JSONResponse

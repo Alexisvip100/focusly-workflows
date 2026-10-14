@@ -42,6 +42,10 @@ class Settings:
     WEBHOOK_URL: str = os.getenv("WEBHOOK_URL", "http://localhost:3000")
     RESEND_API_KEY: str = os.getenv("RESEND_API_KEY", "")
     IS_PRODUCTION: bool = os.getenv("ENV", "development") == "production"
+    # The web service runs the notification loops itself (one sweep at a
+    # time across replicas, through a Redis lock). Set to 0 when they run in
+    # their own service instead (python -m app.worker).
+    RUN_NOTIFIER_LOOPS: bool = os.getenv("RUN_NOTIFIER_LOOPS", "1").strip() != "0"
     FOCUSLY_AI_URL: str = _normalized_ai_url
     # Shared secret with focusly-ai (same FOCUSLY_AI_INTERNAL_TOKEN there).
     FOCUSLY_AI_INTERNAL_TOKEN: str = os.getenv("FOCUSLY_AI_INTERNAL_TOKEN", "").strip()

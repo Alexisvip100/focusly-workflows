@@ -9,7 +9,10 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from app.models import Task
+from app.modules.notification.services import smart_notifier_service as smart
+from app.modules.notification.services import sweep_lock
 from app.modules.notification.services import task_notifier_service as notifier
+from app.redis import ResilientRedisCache
 from app.modules.task.infrastructure.persistence.repository import (
     INACTIVE_STATUSES,
     TasksRepository,
@@ -255,6 +258,7 @@ async def test_the_loop_logs_a_failed_sweep_and_keeps_running(monkeypatch, caplo
     sleeps = AsyncMock(side_effect=[None, StopAsyncIteration()])
     monkeypatch.setattr(notifier, "_check_and_notify_once", sweeps)
     monkeypatch.setattr(notifier.asyncio, "sleep", sleeps)
+    monkeypatch.setattr(sweep_lock.cache, "acquire_lock", AsyncMock(return_value=True))
 
     with caplog.at_level(logging.ERROR, logger=notifier.logger.name):
         with pytest.raises(StopAsyncIteration):
@@ -263,3 +267,113 @@ async def test_the_loop_logs_a_failed_sweep_and_keeps_running(monkeypatch, caplo
     assert sweeps.await_count == 2
     assert "Task reminder sweep failed" in caplog.text
     assert "db gone" in caplog.text
+
+
+# ── One sweep at a time (web replicas and/or the worker) ─────────────────────
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    "taken, runs",
+    [(True, True), (False, False), (None, True)],
+    ids=["lock taken", "another process has it", "redis down"],
+)
+async def test_a_sweep_runs_only_with_the_round_lock(monkeypatch, caplog, taken, runs):
+    lock = AsyncMock(return_value=taken)
+    monkeypatch.setattr(sweep_lock.cache, "acquire_lock", lock)
+    sweep = AsyncMock()
+
+    with caplog.at_level(logging.WARNING, logger=sweep_lock.logger.name):
+        ran = await sweep_lock.run_exclusively("task_reminders", 55, sweep)
+
+    assert ran is runs
+    assert sweep.await_count == (1 if runs else 0)
+    lock.assert_awaited_once_with("lock:notifier:task_reminders", 55)
+    assert ("without a lock" in caplog.text) is (taken is None)
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    "module, loop, name, ttl, interval",
+    [
+        (notifier, "run_task_notifier_loop", "task_reminders", 55, 60),
+        (smart, "run_smart_notifier_loop", "smart_notifications", 290, 300),
+    ],
+)
+async def test_each_loop_locks_a_little_under_its_interval(
+    monkeypatch, module, loop, name, ttl, interval
+):
+    lock = AsyncMock(return_value=False)  # someone else sweeps this round
+    sleeps = AsyncMock(side_effect=StopAsyncIteration())
+    monkeypatch.setattr(sweep_lock.cache, "acquire_lock", lock)
+    monkeypatch.setattr(module.asyncio, "sleep", sleeps)
+
+    with pytest.raises(StopAsyncIteration):
+        await getattr(module, loop)()
+
+    lock.assert_awaited_once_with(f"lock:notifier:{name}", ttl)
+    sleeps.assert_awaited_once_with(interval)
+    assert ttl < interval
+
+
+class _FakeRedis:
+    def __init__(self, result=None, error=None):
+        self.result, self.error, self.calls = result, error, []
+
+    async def set(self, *args, **kwargs):
+        self.calls.append((args, kwargs))
+        if self.error:
+            raise self.error
+        return self.result
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    "client, expected",
+    [
+        (_FakeRedis(result=True), True),
+        (_FakeRedis(result=None), False),  # SET NX on a held key
+        (_FakeRedis(error=ConnectionError("reset")), None),
+        (None, None),
+    ],
+    ids=["free", "held", "error", "disconnected"],
+)
+async def test_the_redis_lock(monkeypatch, client, expected):
+    cache = ResilientRedisCache("redis://unused")
+    cache.client = client
+    monkeypatch.setattr(
+        cache, "_ensure_connected", AsyncMock(return_value=client is not None)
+    )
+
+    assert await cache.acquire_lock("lock:x", 55) is expected
+    if isinstance(client, _FakeRedis):
+        assert client.calls == [(("lock:x", "1"), {"nx": True, "ex": 55})]
+
+
+@pytest.mark.anyio
+async def test_the_web_starts_both_loops_and_can_stop_them(monkeypatch):
+    import asyncio
+
+    import app.main as main
+
+    started = []
+
+    async def forever(name):
+        started.append(name)
+        await asyncio.Event().wait()
+
+    monkeypatch.setattr(notifier, "run_task_notifier_loop", lambda: forever("task"))
+    monkeypatch.setattr(smart, "run_smart_notifier_loop", lambda: forever("smart"))
+
+    loops = main.start_notifier_loops()
+    await asyncio.sleep(0)
+    assert sorted(started) == ["smart", "task"]
+    assert sorted(t.get_name() for t in loops) == [
+        "smart-notifications",
+        "task-reminders",
+    ]
+
+    for loop in loops:
+        loop.cancel()
+    await asyncio.gather(*loops, return_exceptions=True)
+    assert all(t.cancelled() for t in loops)

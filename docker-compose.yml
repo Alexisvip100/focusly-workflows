@@ -42,26 +42,6 @@ services:
       - default
       - focusly-net
 
-  # The recurring notification loops (task reminders, smart notifications),
-  # as the separate Railway service does in production: exactly one copy, no
-  # HTTP server. Its socket emits reach the browsers connected to `web`
-  # through Redis. No --reload: restart it after changing its code.
-  worker:
-    build: .
-    container_name: focusly-worker
-    restart: always
-    command: python -m app.worker
-    volumes:
-      - .:/app
-    env_file:
-      - .env
-    environment:
-      - DATABASE_URL=postgresql+asyncpg://focusly_user:focusly_password@db:5432/focusly
-      - REDIS_URL=redis://redis:6379/0
-    depends_on:
-      - db
-      - redis
-
   minio:
     image: minio/minio:latest
     restart: always

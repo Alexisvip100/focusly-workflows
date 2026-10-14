@@ -24,6 +24,7 @@ from app.models import Task, Notification
 from app.sockets.realtime import sio
 from app.modules.task.repository import TasksRepository
 from app.modules.notification.repository import NotificationsRepository
+from app.modules.notification.services.sweep_lock import run_exclusively
 
 logger = logging.getLogger(__name__)
 
@@ -143,12 +144,13 @@ async def _emit_notification(
 
 async def run_task_notifier_loop() -> None:
     """
-    Background loop that runs every 60 seconds.
-    Call this once, from the standalone worker process (see app/worker.py).
+    Background loop that runs every 60 seconds, in the web service
+    (RUN_NOTIFIER_LOOPS) or in the standalone worker (app/worker.py).
     """
     while True:
         try:
-            await _check_and_notify_once()
+            # Locked a little under the interval: one sweep per minute overall.
+            await run_exclusively("task_reminders", 55, _check_and_notify_once)
         except Exception:
             logger.exception("Task reminder sweep failed")
         await asyncio.sleep(60)

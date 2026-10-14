@@ -17,6 +17,7 @@ from typing import Any
 from sqlalchemy import func, select, cast, Date
 from sqlalchemy.sql import extract
 
+from app.modules.notification.services.sweep_lock import run_exclusively
 from app.database import async_session_local
 from app.models import Task, User, FocusSession, Notification
 import logging
@@ -651,12 +652,12 @@ async def _run_smart_checks_once() -> None:
 
 async def run_smart_notifier_loop() -> None:
     """
-    Background loop that runs every 5 minutes.
-    Call this once, from the standalone worker process (see app/worker.py).
+    Background loop that runs every 5 minutes, in the web service
+    (RUN_NOTIFIER_LOOPS) or in the standalone worker (app/worker.py).
     """
     while True:
         try:
-            await _run_smart_checks_once()
+            await run_exclusively("smart_notifications", 290, _run_smart_checks_once)
         except Exception:
             logger.exception("Smart notification sweep failed")
         await asyncio.sleep(300)  # 5 minutes

@@ -1,17 +1,14 @@
 """
 Standalone worker entrypoint for the recurring notification loops.
 
-`run_task_notifier_loop` and `run_smart_notifier_loop` used to be started
-inside the FastAPI app's lifespan (app/main.py), which meant every replica
-of the web service ran its own copy of both loops. That's fine with a
-single instance, but once the web service scales to multiple replicas it
-causes duplicate notifications and duplicate DB writes, since each replica
-polls and fires independently.
+By default the web service runs these loops itself (RUN_NOTIFIER_LOOPS, see
+app/main.py): Railway's free plan has no room for another service. Each
+sweep takes a Redis lock (sweep_lock.py), so several web replicas never
+duplicate a reminder.
 
-This file runs those two loops on their own, with no HTTP server attached.
-It's deployed as a separate Railway service (Custom Start Command:
-`python -m app.worker`) that always stays at exactly 1 replica, so the
-loops run once no matter how many replicas the web service has.
+To move them to their own service (one replica, Custom Start Command
+`python -m app.worker`), set RUN_NOTIFIER_LOOPS=0 on the web service. Running
+both at once is also safe: the lock lets only one sweep each round.
 """
 
 import asyncio
