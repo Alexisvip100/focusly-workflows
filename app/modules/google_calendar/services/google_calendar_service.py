@@ -174,18 +174,18 @@ class GoogleCalendarService:
 
         sync_token = user.googleCalendarSyncToken
 
-        # Check if we have any existing google tasks in the local DB
-        all_user_tasks = await tasks_repo.get_all_active_by_user(user_id)
-        existing_google_tasks = [
-            t for t in all_user_tasks if t.task_type == "GoogleTask"
-        ]
-
-        # If we have a sync token but no local tasks, it indicates a database reset
-        # or out-of-sync state. Force a full sync by clearing the sync token.
-        if sync_token and not existing_google_tasks:
-            sync_token = None
-            user.googleCalendarSyncToken = None
-            await user_repo.save(user, commit=True)
+        # The tasks linked to a Google event, by event id: the sync only
+        # updates or removes these (Google's own events aren't stored). One
+        # query, instead of one per event Google returns.
+        #
+        # The sync token is kept even when there are none: Google events
+        # aren't tasks, so "no linked tasks" is the normal state, and
+        # treating it as a database reset made every calendar load re-read
+        # the whole calendar from scratch.
+        linked_tasks: dict[str, Any] = {}
+        for t in await tasks_repo.get_all_active_by_user(user_id):
+            if t.google_event_id and t.google_event_id not in linked_tasks:
+                linked_tasks[t.google_event_id] = t
 
         next_page_token = None
         new_sync_token = None
@@ -240,10 +240,7 @@ class GoogleCalendarService:
                     event_id = item.get("id") or ""
 
                     if item.get("status") == "cancelled":
-                        # Find existing task
-                        t_existing = await tasks_repo.get_by_google_event_id(
-                            user_id, event_id
-                        )
+                        t_existing = linked_tasks.get(event_id)
                         existing_tasks = [t_existing] if t_existing else []
                         for t in existing_tasks:
                             # delete task
@@ -254,10 +251,7 @@ class GoogleCalendarService:
                     else:
                         summary = item.get("summary") or "Sin título"
 
-                        # Check if this event already exists in DB
-                        existing_task = await tasks_repo.get_by_google_event_id(
-                            user_id, event_id
-                        )
+                        existing_task = linked_tasks.get(event_id)
                         if not existing_task:
                             continue
 

@@ -1,3 +1,4 @@
+import hashlib
 import logging
 import time
 from typing import Any
@@ -8,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.database import transaction_scope
 from app.models import User
+from app.redis import cache
 from app.modules.user.repository import UsersRepository, _safe_attr
 from app.modules.user.legal import terms_fields
 from app.modules.storage.services.storage_service import resolve_avatar_url
@@ -97,6 +99,16 @@ class AuthService:
         if not user or not user.googleRefreshToken:
             raise ValueError("No valid refresh token found for this user")
 
+        # An access token lasts about an hour: reuse it instead of asking
+        # Google again on every calendar call (a single calendar load used to
+        # do it up to three times). Keyed by the refresh token, so connecting
+        # Google again starts a new entry.
+        refresh_hash = hashlib.sha256(user.googleRefreshToken.encode()).hexdigest()
+        key = f"google:access:{user_id}:{refresh_hash[:16]}"
+        cached = await cache.get(key)
+        if cached and cached.get("expiry_date", 0) > (time.time() + 60) * 1000:
+            return cached
+
         async with httpx.AsyncClient() as client:
             res = await client.post(
                 "https://oauth2.googleapis.com/token",
@@ -111,11 +123,14 @@ class AuthService:
                 raise ValueError(f"Failed to refresh Google token: {res.text}")
             credentials = res.json()
 
-        return {
+        expires_in = int(credentials.get("expires_in", 3600))
+        token_info = {
             "access_token": credentials.get("access_token"),
-            "expiry_date": int(time.time() * 1000)
-            + (credentials.get("expires_in", 3600) * 1000),
+            "expiry_date": int(time.time() * 1000) + expires_in * 1000,
         }
+        if token_info["access_token"] and expires_in > 300:
+            await cache.set(key, token_info, expire_seconds=expires_in - 300)
+        return token_info
 
     async def refresh_session(self, user_id: str) -> User:
         user = await UsersRepository(self.db).get_by_id(user_id)

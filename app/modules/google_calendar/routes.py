@@ -11,19 +11,17 @@ from app.modules.google_calendar.services.google_calendar_service import (
 )
 from app.sockets.realtime import realtime_gateway
 from app.modules.user.repository import UsersRepository
+from app.redis import cache
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/google-calendar", tags=["google-calendar"])
 
 
-def get_google_calendar_service(
-    db: AsyncSession = Depends(get_db),
-) -> GoogleCalendarService:
+def build_google_calendar_service(db: AsyncSession) -> GoogleCalendarService:
     from app.modules.auth.services.auth_service import AuthService
     from app.modules.task.services.tasks_service import TasksService
     from app.modules.task.services.scheduler_service import SchedulerService
-    from app.sockets.realtime import realtime_gateway
 
     auth_serv = AuthService(db)
     tasks_serv = TasksService(db, socket_server=realtime_gateway)
@@ -38,6 +36,49 @@ def get_google_calendar_service(
 
     tasks_serv.google_calendar_service = gc_service
     return gc_service
+
+
+def get_google_calendar_service(
+    db: AsyncSession = Depends(get_db),
+) -> GoogleCalendarService:
+    return build_google_calendar_service(db)
+
+
+# A sync from loading the calendar runs at most this often per user; Google's
+# webhook syncs right away whenever something actually changes.
+SYNC_THROTTLE_SECONDS = 60
+_background_syncs: set[asyncio.Task] = set()
+
+
+async def _sync_in_background(user_id: str, notify: bool) -> None:
+    from app.database import async_session_local
+
+    async with async_session_local() as local_db:
+        try:
+            await build_google_calendar_service(local_db).sync_calendar(user_id)
+            if notify:
+                # The frontend re-fetches the Google events in real time.
+                await realtime_gateway.emitScheduleUpdate(
+                    user_id, {"source": "google_calendar_webhook"}
+                )
+        except Exception as e:
+            logger.warning("Calendar sync failed for user %s: %s", user_id, e)
+
+
+async def start_background_sync(
+    user_id: str, *, notify: bool = False, throttle: bool = True
+) -> bool:
+    """Sync without making anyone wait for it. With `throttle`, skipped if
+    one started for this user in the last SYNC_THROTTLE_SECONDS (several
+    tabs or views loading at once used to run several full syncs)."""
+    if throttle:
+        taken = await cache.acquire_lock(f"gcal:sync:{user_id}", SYNC_THROTTLE_SECONDS)
+        if taken is False:
+            return False
+    task = asyncio.create_task(_sync_in_background(user_id, notify))
+    _background_syncs.add(task)
+    task.add_done_callback(_background_syncs.discard)
+    return True
 
 
 def event_attendees(item: dict[str, Any]) -> list[dict[str, Any]]:
@@ -66,13 +107,10 @@ async def get_events(
         if not user or not safe_attr(user, "googleRefreshToken"):
             return []
 
-        # 1. Run calendar sync (performs cleanup and updates watches/synced tasks, but does NOT persist new events)
-        try:
-            await gc_service.sync_calendar(user_id)
-        except Exception as sync_err:
-            logger.warning(
-                "Calendar sync skipped or failed for user %s: %s", user_id, sync_err
-            )
+        # 1. Sync behind the response (cleanup, synced tasks, the push watch):
+        # it pages through the whole calendar, and waiting for it is what made
+        # this request take minutes after connecting Google.
+        await start_background_sync(user_id)
 
         user_email = safe_attr(user, "email")
 
@@ -213,42 +251,8 @@ async def handle_google_webhook(
     if x_goog_resource_state == "exists":
         userId = x_goog_channel_token
 
-        # Async background sync to prevent Google timeout
-        async def run_sync_bg():
-            # Since get_db gives session in dependency, we create a new session or run with request db session
-            # However, running with request db session might get closed if request ends.
-            # To be safe, we can instantiate a new session from async_session_local
-            from app.database import async_session_local
-
-            async with async_session_local() as local_db:
-                from app.modules.auth.services.auth_service import AuthService
-                from app.modules.task.services.tasks_service import TasksService
-                from app.modules.task.services.scheduler_service import SchedulerService
-                from app.sockets.realtime import realtime_gateway
-
-                auth_serv = AuthService(local_db)
-                tasks_serv = TasksService(local_db, socket_server=realtime_gateway)
-                sched_serv = SchedulerService()
-
-                gc_service_bg = GoogleCalendarService(
-                    db=local_db,
-                    auth_service=auth_serv,
-                    tasks_service=tasks_serv,
-                    scheduler_service=sched_serv,
-                )
-                tasks_serv.google_calendar_service = gc_service_bg
-
-                try:
-                    await gc_service_bg.sync_calendar(userId)
-                    # Notify frontend via WebSocket so it re-fetches Google events in real-time
-                    await realtime_gateway.emitScheduleUpdate(
-                        userId, {"source": "google_calendar_webhook"}
-                    )
-                except Exception:
-                    pass
-
-        # Start background task
-        asyncio.create_task(run_sync_bg())
+        # In the background, so Google gets its answer right away.
+        await start_background_sync(userId, notify=True, throttle=False)
         return {"status": "sync_triggered"}
 
     return {"status": "processed"}
