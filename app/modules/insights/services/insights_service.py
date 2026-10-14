@@ -35,9 +35,8 @@ class InsightsService:
                 tasks_res.get("items", []) if isinstance(tasks_res, dict) else tasks_res
             )
         else:
-            tasks_list = await TasksRepository(self.db).get_active_non_google_tasks(
-                user_id
-            )
+            # This user's tasks only (get_active_non_google_tasks is everyone's).
+            tasks_list = await TasksRepository(self.db).get_all_active_by_user(user_id)
             all_tasks = [self._map_task_to_dict(t) for t in tasks_list]
 
         if self.focus_sessions_service:
