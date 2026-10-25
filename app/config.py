@@ -62,6 +62,10 @@ class Settings:
     # The Pro monthly price. The server decides what is charged, never the
     # client.
     STRIPE_PRICE_ID_PRO: str = os.getenv("STRIPE_PRICE_ID_PRO", "").strip()
+    # Optional: the yearly Pro price (the plan cards offer it when set).
+    STRIPE_PRICE_ID_PRO_YEARLY: str = os.getenv("STRIPE_PRICE_ID_PRO_YEARLY", "").strip()
+    # Days of Pro free (card required) for whoever never subscribed; 0: none.
+    PRO_TRIAL_DAYS: int = int(os.getenv("PRO_TRIAL_DAYS", "7") or 0)
 
 
 settings = Settings()

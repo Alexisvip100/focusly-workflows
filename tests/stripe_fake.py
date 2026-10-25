@@ -13,8 +13,49 @@ from typing import Any
 import stripe
 
 PRICE_PRO = "price_pro"
+PRICE_YEARLY = "price_pro_yearly"
 PRICE_OLD = "price_old"
 AMOUNT = 999
+YEARLY_AMOUNT = 9990
+DAY = 24 * 60 * 60
+
+# Promotion codes the fake knows: code → coupon.
+COUPONS = {
+    "BIENVENIDA20": {
+        "id": "co_20",
+        "percent_off": 20,
+        "amount_off": None,
+        "currency": None,
+        "duration": "repeating",
+        "duration_in_months": 3,
+    },
+    "LANZAMIENTO50": {
+        "id": "co_50",
+        "percent_off": 50,
+        "amount_off": None,
+        "currency": None,
+        "duration": "once",
+        "duration_in_months": None,
+    },
+}
+
+
+class MemoryCache:
+    """app.redis.cache, in memory."""
+
+    def __init__(self):
+        self.store: dict[str, Any] = {}
+
+    async def get(self, key):
+        return self.store.get(key)
+
+    async def set(self, key, value, expire_seconds=3600):
+        self.store[key] = value
+        return True
+
+    async def delete(self, key):
+        self.store.pop(key, None)
+        return True
 
 
 def obj(data: dict[str, Any]) -> stripe.StripeObject:
@@ -37,6 +78,7 @@ class FakeStripe:
         self.subscriptions: dict[str, dict] = {}
         self.intents: dict[str, dict] = {}
         self.charges: list[dict] = []
+        self.setups: dict[str, dict] = {}
         self.refunds: list[dict] = []
         self._idempotent: dict[str, Any] = {}
         self.calls: defaultdict[str, int] = defaultdict(int)
@@ -59,11 +101,16 @@ class FakeStripe:
     # ── Objects as the SDK returns them ──
 
     def _subscription_obj(self, sub: dict) -> stripe.StripeObject:
-        intent = self.intents[sub["intent"]]
-        payable = sub["status"] == "incomplete" and intent["status"] in (
+        intent = self.intents.get(sub["intent"]) or {}
+        payable = sub["status"] == "incomplete" and intent.get("status") in (
             "requires_payment_method",
             "requires_action",
         )
+        setup = self.setups.get(sub.get("setup") or "")
+        price_id = sub["price"]
+        yearly = price_id == PRICE_YEARLY
+        promo = sub.get("promotion_code")
+        amount = self._first_payment(sub)
         return obj(
             {
                 "id": sub["id"],
@@ -73,29 +120,59 @@ class FakeStripe:
                 "created": sub["created"],
                 "metadata": sub["metadata"],
                 "cancel_at_period_end": False,
+                "trial_end": sub.get("trial_end"),
+                "default_payment_method": sub.get("default_payment_method"),
                 "latest_invoice": {
                     "id": sub["invoice"],
+                    "amount_due": 0 if sub.get("trial_end") else amount,
                     "confirmation_secret": {"client_secret": intent["secret"]}
                     if payable
                     else None,
                 },
-                "pending_setup_intent": None,
+                "pending_setup_intent": {
+                    "id": setup["id"],
+                    "client_secret": setup["secret"],
+                    "status": setup["status"],
+                    "payment_method": setup.get("payment_method"),
+                }
+                if setup
+                else None,
+                "discounts": [
+                    {
+                        "promotion_code": f"promo_{promo}",
+                        "source": {"coupon": COUPONS[promo]["id"]},
+                        "end": None,
+                    }
+                ]
+                if promo
+                else [],
                 "items": {
                     "object": "list",
                     "data": [
                         {
                             "current_period_end": 1_900_000_000,
                             "price": {
-                                "id": sub["price"],
-                                "unit_amount": AMOUNT,
+                                "id": price_id,
+                                "unit_amount": YEARLY_AMOUNT if yearly else AMOUNT,
                                 "currency": "usd",
-                                "recurring": {"interval": "month"},
+                                "recurring": {
+                                    "interval": "year" if yearly else "month"
+                                },
                             },
                         }
                     ],
                 },
             }
         )
+
+    @staticmethod
+    def _first_payment(sub: dict) -> int:
+        """The price of the subscription's plan, less its promotion code."""
+        amount = YEARLY_AMOUNT if sub["price"] == PRICE_YEARLY else AMOUNT
+        promo = sub.get("promotion_code")
+        if promo:
+            amount = amount * (100 - COUPONS[promo]["percent_off"]) // 100
+        return amount
 
     # ── stripe.Customer / CustomerSession ──
 
@@ -117,18 +194,40 @@ class FakeStripe:
 
     def subscription_create(self, **kwargs):
         self._wait("Subscription.create")
+        trial_days = kwargs.get("trial_period_days")
+        discounts = kwargs.get("discounts") or []
+        promo = (
+            discounts[0]["promotion_code"].removeprefix("promo_") if discounts else None
+        )
         with self._lock:
             sub_id = self._id("sub")
             intent_id = self._id("pi")
-            self.intents[intent_id] = {
-                "id": intent_id,
-                "secret": f"{intent_id}_secret_x",
-                "status": "requires_payment_method",
-                "subscription": sub_id,
-            }
+            setup_id = None
+            if trial_days:
+                # A trial charges nothing now: the card is set up instead.
+                setup_id = self._id("seti")
+                self.setups[setup_id] = {
+                    "id": setup_id,
+                    "secret": f"{setup_id}_secret_x",
+                    "status": "requires_payment_method",
+                    "subscription": sub_id,
+                }
+            else:
+                self.intents[intent_id] = {
+                    "id": intent_id,
+                    "secret": f"{intent_id}_secret_x",
+                    "status": "requires_payment_method",
+                    "subscription": sub_id,
+                }
             self.subscriptions[sub_id] = {
                 "id": sub_id,
-                "status": "incomplete",
+                "status": "trialing" if trial_days else "incomplete",
+                "trial_end": int(time.time()) + trial_days * DAY
+                if trial_days
+                else None,
+                "setup": setup_id,
+                "promotion_code": promo,
+                "default_payment_method": None,
                 "customer": kwargs["customer"],
                 "price": kwargs["items"][0]["price"],
                 "created": next(self._ids),
@@ -147,6 +246,43 @@ class FakeStripe:
             )
         return self._subscription_obj(self.subscriptions[sub_id])
 
+    def subscription_modify(self, sub_id, default_payment_method=None, **_):
+        self._wait("Subscription.modify")
+        sub = self.subscriptions[sub_id]
+        if default_payment_method:
+            sub["default_payment_method"] = default_payment_method
+        return self._subscription_obj(sub)
+
+    def setup_intent_retrieve(self, setup_id, **_):
+        self._wait("SetupIntent.retrieve")
+        setup = self.setups[setup_id]
+        return obj({**setup, "client_secret": setup["secret"]})
+
+    def promotion_code_list(self, code, **_):
+        self._wait("PromotionCode.list")
+        coupon = COUPONS.get(code.upper())
+        if not coupon:
+            return obj({"data": []})
+        return obj(
+            {
+                "data": [
+                    {
+                        "id": f"promo_{code.upper()}",
+                        "code": code.upper(),
+                        "promotion": {"type": "coupon", "coupon": coupon},
+                    }
+                ]
+            }
+        )
+
+    def promotion_code_retrieve(self, promo_id, **_):
+        self._wait("PromotionCode.retrieve")
+        return obj({"id": promo_id, "code": promo_id.removeprefix("promo_")})
+
+    def coupon_retrieve(self, coupon_id, **_):
+        self._wait("Coupon.retrieve")
+        return obj(next(c for c in COUPONS.values() if c["id"] == coupon_id))
+
     def subscription_cancel(self, sub_id, **_):
         self._wait("Subscription.cancel")
         sub = self.subscriptions[sub_id]
@@ -155,10 +291,12 @@ class FakeStripe:
                 "already canceled", None, code="resource_missing"
             )
         sub["status"] = "canceled"
-        if sub["invoice_status"] == "open":
+        if sub["invoice_status"] == "open" and sub["intent"] in self.intents:
             # Cancelling voids the unpaid invoice: its intent can't be paid.
             sub["invoice_status"] = "void"
             self.intents[sub["intent"]]["status"] = "canceled"
+        if sub.get("setup") and self.setups[sub["setup"]]["status"] != "succeeded":
+            self.setups[sub["setup"]]["status"] = "canceled"
         return self._subscription_obj(sub)
 
     def subscription_list(self, customer, **_):
@@ -185,8 +323,8 @@ class FakeStripe:
     def invoice_payment_list(self, invoice, **_):
         self._wait("InvoicePayment.list")
         sub = next(s for s in self.subscriptions.values() if s["invoice"] == invoice)
-        intent = self.intents[sub["intent"]]
-        if intent["status"] != "succeeded":
+        intent = self.intents.get(sub["intent"])
+        if not intent or intent["status"] != "succeeded":
             return obj({"data": []})
         return obj(
             {
@@ -220,6 +358,23 @@ class FakeStripe:
     # ── What the browser does: confirm the payment with a card ──
 
     def pay(self, client_secret: str, decline: str | None = None) -> None:
+        setup = next(
+            (x for x in self.setups.values() if x["secret"] == client_secret), None
+        )
+        if setup is not None:
+            # A trial's card: saved, nothing charged.
+            with self._lock:
+                if setup["status"] != "requires_payment_method":
+                    raise stripe.InvalidRequestError(
+                        "This SetupIntent can't be confirmed.",
+                        None,
+                        code="setup_intent_unexpected_state",
+                    )
+                if decline:
+                    raise card_error(decline)
+                setup["status"] = "succeeded"
+                setup["payment_method"] = f"pm_{setup['id']}"
+            return
         intent = next(i for i in self.intents.values() if i["secret"] == client_secret)
         with self._lock:
             if intent["status"] == "succeeded":
@@ -242,7 +397,11 @@ class FakeStripe:
             sub["status"] = "active"
             sub["invoice_status"] = "paid"
             self.charges.append(
-                {"intent": intent["id"], "amount": AMOUNT, "refunded": False}
+                {
+                    "intent": intent["id"],
+                    "amount": self._first_payment(sub),
+                    "refunded": False,
+                }
             )
 
     # ── Totals the tests check ──
@@ -275,6 +434,11 @@ class FakeStripe:
             (stripe.Subscription, "retrieve"): self.subscription_retrieve,
             (stripe.Subscription, "cancel"): self.subscription_cancel,
             (stripe.Subscription, "list"): self.subscription_list,
+            (stripe.Subscription, "modify"): self.subscription_modify,
+            (stripe.SetupIntent, "retrieve"): self.setup_intent_retrieve,
+            (stripe.PromotionCode, "list"): self.promotion_code_list,
+            (stripe.PromotionCode, "retrieve"): self.promotion_code_retrieve,
+            (stripe.Coupon, "retrieve"): self.coupon_retrieve,
             (stripe.Invoice, "list"): self.invoice_list,
             (stripe.InvoicePayment, "list"): self.invoice_payment_list,
             (stripe.Refund, "create"): self.refund_create,

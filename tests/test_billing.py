@@ -19,6 +19,7 @@ from app.modules.billing.services.stripe_service import (
     subscription_period_end,
 )
 from app.routes.common import get_current_user_id
+from tests.stripe_fake import MemoryCache
 
 
 def make_user(**kwargs):
@@ -89,6 +90,10 @@ def subscription(sub_id="sub_1", status="active", **extra):
 def configured(monkeypatch):
     monkeypatch.setattr(service_module.settings, "STRIPE_SECRET_KEY", "sk_test")
     monkeypatch.setattr(service_module.settings, "STRIPE_PRICE_ID_PRO", "price_pro")
+    # These checkouts charge at once (the free trial has its own tests).
+    monkeypatch.setattr(service_module.settings, "PRO_TRIAL_DAYS", 0)
+    monkeypatch.setattr(service_module.settings, "STRIPE_PRICE_ID_PRO_YEARLY", "")
+    monkeypatch.setattr(service_module, "cache", MemoryCache())
 
 
 class TestStripeShapes:

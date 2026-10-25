@@ -20,7 +20,14 @@ from app.modules.billing import routes as billing_routes
 from app.modules.billing.services import stripe_service as service_module
 from app.modules.billing.services.stripe_service import StripeService
 from app.routes.common import get_current_user_id
-from tests.stripe_fake import AMOUNT, PRICE_OLD, PRICE_PRO, FakeDatabase, FakeStripe
+from tests.stripe_fake import (
+    AMOUNT,
+    PRICE_OLD,
+    PRICE_PRO,
+    FakeDatabase,
+    FakeStripe,
+    MemoryCache,
+)
 
 pytestmark = pytest.mark.anyio
 
@@ -34,6 +41,10 @@ def anyio_backend():
 def fake(monkeypatch) -> FakeStripe:
     monkeypatch.setattr(service_module.settings, "STRIPE_SECRET_KEY", "sk_test")
     monkeypatch.setattr(service_module.settings, "STRIPE_PRICE_ID_PRO", PRICE_PRO)
+    # These checkouts charge at once (the free trial has its own tests).
+    monkeypatch.setattr(service_module.settings, "PRO_TRIAL_DAYS", 0)
+    monkeypatch.setattr(service_module.settings, "STRIPE_PRICE_ID_PRO_YEARLY", "")
+    monkeypatch.setattr(service_module, "cache", MemoryCache())
     # Fresh per-user locks (they belong to one event loop).
     monkeypatch.setattr(service_module, "_checkout_locks", defaultdict(asyncio.Lock))
     return FakeStripe().install(monkeypatch)

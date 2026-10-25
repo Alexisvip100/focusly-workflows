@@ -1,9 +1,9 @@
 import logging
-from typing import Any
+from typing import Any, Literal
 
 import stripe
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
@@ -15,6 +15,11 @@ from app.routes.common import get_current_user_id
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/billing", tags=["Billing"])
+
+
+class SubscribeRequest(BaseModel):
+    interval: Literal["month", "year"] = "month"
+    promotion_code: str | None = Field(default=None, max_length=64)
 
 
 class CancelSubscriptionRequest(BaseModel):
@@ -42,14 +47,28 @@ async def get_billing_status(
 
 @router.post("/subscribe")
 async def create_subscription(
+    body: SubscribeRequest | None = None,
     current_user_id: str = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
     """Starts the Pro subscription; returns the client_secret the Payment
-    Element confirms. The price is the server's (STRIPE_PRICE_ID_PRO): any
-    price the client sends is ignored."""
+    Element confirms. The client only picks monthly or yearly (and may type a
+    promotion code): the prices are the server's (STRIPE_PRICE_ID_PRO[_YEARLY])."""
     user = await _current_user(current_user_id, db)
-    return await StripeService(db).create_subscription(user)
+    body = body or SubscribeRequest()
+    return await StripeService(db).create_subscription(
+        user, interval=body.interval, promotion_code=body.promotion_code
+    )
+
+
+@router.get("/invoices")
+async def list_invoices(
+    current_user_id: str = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
+) -> list[dict[str, Any]]:
+    """The user's payment history (from Stripe)."""
+    user = await _current_user(current_user_id, db)
+    return await StripeService(db).list_invoices(user)
 
 
 @router.post("/portal")

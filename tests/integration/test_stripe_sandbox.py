@@ -107,6 +107,8 @@ def account(monkeypatch):
     """A new user (in memory) whose Stripe customer is deleted afterwards."""
     stripe.api_key = settings.STRIPE_SECRET_KEY
     monkeypatch.setattr(service_module, "_checkout_locks", defaultdict(asyncio.Lock))
+    # These checkouts charge at once (the trial has its own sandbox tests).
+    monkeypatch.setattr(service_module.settings, "PRO_TRIAL_DAYS", 0)
     database = FakeDatabase()
     database.add_user(
         id=f"sandbox-{uuid.uuid4()}",

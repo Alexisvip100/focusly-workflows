@@ -15,6 +15,27 @@ FREE_AI_MESSAGE_LIMIT = 5
 ACCESS_STATUSES = frozenset({"active", "trialing", "past_due"})
 
 
+def _field(obj: Any, key: str) -> Any:
+    if obj is None:
+        return None
+    if isinstance(obj, dict):
+        return obj.get(key)
+    try:
+        return obj[key]
+    except (KeyError, TypeError):
+        return None
+
+
+def grants_access(subscription: Any) -> bool:
+    """Whether a Stripe subscription makes its user Pro. A free trial only
+    does once the card is on file: the trial starts ("trialing") before the
+    browser has even shown the card form."""
+    status = _field(subscription, "status")
+    if status not in ACCESS_STATUSES:
+        return False
+    return status != "trialing" or bool(_field(subscription, "default_payment_method"))
+
+
 def is_pro(user: Any) -> bool:
     return (getattr(user, "subscriptionStatus", None) or FREE) == PRO
 
