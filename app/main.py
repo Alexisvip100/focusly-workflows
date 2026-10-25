@@ -17,7 +17,10 @@ from app.modules.google_calendar.presentation.rest import (
 )
 from app.modules.task.presentation.rest import time_blocks_router
 from app.modules.ai.presentation.rest import ai_router, planner_router
-from app.modules.storage.presentation.rest import router as storage_router
+from app.modules.storage.presentation.rest import (
+    media_router,
+    router as storage_router,
+)
 from app.modules.billing.routes import router as billing_router
 
 
@@ -182,6 +185,7 @@ fastapi_app.include_router(time_blocks_router)
 fastapi_app.include_router(ai_router)
 fastapi_app.include_router(planner_router)
 fastapi_app.include_router(storage_router)
+fastapi_app.include_router(media_router)
 fastapi_app.include_router(billing_router)
 
 

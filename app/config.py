@@ -57,6 +57,14 @@ class Settings:
     MINIO_ROOT_USER: str = os.getenv("MINIO_ROOT_USER", "")
     MINIO_ROOT_PASSWORD: str = os.getenv("MINIO_ROOT_PASSWORD", "")
     MINIO_BUCKET_AVATARS: str = os.getenv("MINIO_BUCKET_AVATARS", "avatars")
+    # The public site's loop videos, under the media/videos/ prefix. Same
+    # bucket as the avatars unless set (Railway gives a single bucket).
+    MINIO_BUCKET_MEDIA: str = (
+        os.getenv("MINIO_BUCKET_MEDIA", "").strip() or MINIO_BUCKET_AVATARS
+    )
+    # How long a signed video link is handed out unchanged, so browsers can
+    # cache it; each link stays valid for one more window after that.
+    MEDIA_URL_WINDOW_SECONDS: int = int(os.getenv("MEDIA_URL_WINDOW_SECONDS") or 21600)
     STRIPE_SECRET_KEY: str = os.getenv("STRIPE_SECRET_KEY", "").strip()
     STRIPE_WEBHOOK_SECRET: str = os.getenv("STRIPE_WEBHOOK_SECRET", "").strip()
     # The Pro monthly price. The server decides what is charged, never the
