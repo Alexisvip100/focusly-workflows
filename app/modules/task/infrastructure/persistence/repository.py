@@ -137,9 +137,11 @@ class TasksRepository:
 
     async def get_by_id(self, task_id: str) -> Task | None:
         cached = await cache.get(f"task:id:{task_id}")
-        if cached:
+        if cached and not cached.get("deletedAt"):
             return deserialize_task(cached)
-        result = await self.db.execute(select(Task).where(Task.id == task_id))
+        result = await self.db.execute(
+            select(Task).where(Task.id == task_id, Task.deletedAt == None)
+        )
         task = result.scalars().first()
         if task:
             await cache.set(f"task:id:{task.id}", serialize_task(task))
@@ -311,6 +313,19 @@ class TasksRepository:
         )
         return list(result.scalars().all())
 
+    async def get_deleted_done_by_user(self, user_id: str) -> list[Task]:
+        # Completed tasks the user deleted afterwards: they no longer exist
+        # anywhere in the app, but still count as activity in Insights.
+        result = await self.db.execute(
+            select(Task).where(
+                Task.userId == user_id,
+                Task.deletedAt != None,
+                Task.status == "Done",
+                or_(Task.source != "google", Task.source == None),
+            )
+        )
+        return list(result.scalars().all())
+
     async def get_active_non_google_tasks(self) -> list[Task]:
         result = await self.db.execute(
             select(Task).where(
@@ -382,6 +397,18 @@ class TasksRepository:
         if task not in self.db:
             task = await self.db.merge(task)
         await self.db.delete(task)
+        if commit:
+            await self.db.commit()
+        else:
+            await self.db.flush()
+        await cache.delete(f"task:id:{task.id}")
+        await cache.delete(f"tasks:active:user:{task.userId}")
+        await cache.delete(f"signals:user:{task.userId}")
+
+    async def soft_delete(self, task: Task, commit: bool = False) -> None:
+        if task not in self.db:
+            task = await self.db.merge(task)
+        task.deletedAt = datetime.now(timezone.utc).replace(tzinfo=None)
         if commit:
             await self.db.commit()
         else:

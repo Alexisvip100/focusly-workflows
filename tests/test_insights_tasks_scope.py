@@ -32,6 +32,7 @@ async def test_insights_without_a_tasks_service_read_only_this_users_tasks(
 
     tasks_repo = MagicMock()
     tasks_repo.get_all_active_by_user = AsyncMock(return_value=[mine])
+    tasks_repo.get_deleted_done_by_user = AsyncMock(return_value=[])
     tasks_repo.get_active_non_google_tasks = AsyncMock(
         side_effect=AssertionError("must not read every user's tasks")
     )
@@ -56,6 +57,7 @@ async def test_lumina_context_keeps_the_insights_block(monkeypatch):
     monkeypatch.setattr(context_builder.cache, "set", AsyncMock(return_value=True))
     tasks_repo = MagicMock()
     tasks_repo.get_all_active_by_user = AsyncMock(return_value=[])
+    tasks_repo.get_deleted_done_by_user = AsyncMock(return_value=[])
     monkeypatch.setattr(module, "TasksRepository", lambda db: tasks_repo)
     monkeypatch.setattr(
         module,
@@ -71,3 +73,39 @@ async def test_lumina_context_keeps_the_insights_block(monkeypatch):
     text = await context_builder.insights_block(MagicMock(), "u1")
 
     assert "USER PRODUCTIVITY INSIGHTS" in text
+
+
+@pytest.mark.anyio
+async def test_deleted_completed_tasks_stay_on_the_activity_map(monkeypatch):
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    deleted = Task(
+        id="t2",
+        userId="u1",
+        title="Borrada",
+        status="Done",
+        completedAt=now,
+        deletedAt=now,
+    )
+
+    tasks_repo = MagicMock()
+    tasks_repo.get_all_active_by_user = AsyncMock(return_value=[])
+    tasks_repo.get_deleted_done_by_user = AsyncMock(return_value=[deleted])
+    monkeypatch.setattr(module, "TasksRepository", lambda db: tasks_repo)
+    monkeypatch.setattr(
+        module,
+        "FocusSessionsRepository",
+        lambda db: SimpleNamespace(get_all_by_user=AsyncMock(return_value=[])),
+    )
+    monkeypatch.setattr(
+        module,
+        "UsersRepository",
+        lambda db: SimpleNamespace(get_by_id=AsyncMock(return_value=None)),
+    )
+
+    insights = await InsightsService(MagicMock()).getInsights("u1", "Daily")
+
+    tasks_repo.get_deleted_done_by_user.assert_awaited_once_with("u1")
+    on_map = [t["id"] for cell in insights["heatmapCells"] for t in cell["tasks"]]
+    assert on_map == ["t2"]
+    # Only the Activity Map keeps it; the other metrics see it as gone.
+    assert insights["taskCompletion"]["value"] == "0%"

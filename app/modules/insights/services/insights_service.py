@@ -39,6 +39,12 @@ class InsightsService:
             tasks_list = await TasksRepository(self.db).get_all_active_by_user(user_id)
             all_tasks = [self._map_task_to_dict(t) for t in tasks_list]
 
+        # Deleted tasks still count in the Activity Map once completed.
+        deleted_done_tasks = [
+            self._map_task_to_dict(t)
+            for t in await TasksRepository(self.db).get_deleted_done_by_user(user_id)
+        ]
+
         if self.focus_sessions_service:
             all_focus_sessions = await self.focus_sessions_service.findAllByUser(
                 user_id
@@ -170,7 +176,7 @@ class InsightsService:
 
         # 7. Activity Map (completed tasks)
         heatmap_data, heatmap_labels, heatmap_cells = self.calculate_activity_map(
-            all_tasks, filter_type, timezone_offset_minutes, now
+            all_tasks + deleted_done_tasks, filter_type, timezone_offset_minutes, now
         )
 
         return {

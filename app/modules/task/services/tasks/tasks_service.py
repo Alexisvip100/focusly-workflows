@@ -314,8 +314,12 @@ class TasksService:
                 w.updatedAt = datetime.now(timezone.utc).replace(tzinfo=None)
                 await workspaces_repo.save(w)
 
-            # Hard delete (Físico)
-            await self.repository.delete(task)
+            # Completed tasks are soft-deleted so Insights' Activity Map keeps
+            # them; everything else is a hard delete (Físico).
+            if task.status == "Done":
+                await self.repository.soft_delete(task)
+            else:
+                await self.repository.delete(task)
 
             if should_schedule:
                 await self.sync_service.trigger_scheduler_pipeline(
