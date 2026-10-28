@@ -62,6 +62,11 @@ class Settings:
     MINIO_BUCKET_MEDIA: str = (
         os.getenv("MINIO_BUCKET_MEDIA", "").strip() or MINIO_BUCKET_AVATARS
     )
+    # Images pasted into canvases, under canvas/{user}/{canvas}/. Private
+    # (read through signed links): the media bucket unless set.
+    MINIO_BUCKET_CANVAS: str = (
+        os.getenv("MINIO_BUCKET_CANVAS", "").strip() or MINIO_BUCKET_MEDIA
+    )
     # How long a signed video link is handed out unchanged, so browsers can
     # cache it; each link stays valid for one more window after that.
     MEDIA_URL_WINDOW_SECONDS: int = int(os.getenv("MEDIA_URL_WINDOW_SECONDS") or 21600)

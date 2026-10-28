@@ -4,7 +4,7 @@ from sqlalchemy import delete
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 
-from app.models import Canvas
+from app.models import Canvas, Workspace
 
 
 def serialize_canvas(c: Canvas, include_data: bool = True) -> dict[str, Any]:
@@ -75,6 +75,24 @@ class CanvasRepository:
             await self.db.commit()
         else:
             await self.db.flush()
+
+    async def ids_by_workspace_ids(self, workspace_ids: list[str]) -> list[str]:
+        """The canvases of these documents (to clear their stored images)."""
+        if not workspace_ids:
+            return []
+        result = await self.db.execute(
+            select(Canvas.id).where(Canvas.workspaceId.in_(workspace_ids))
+        )
+        return [str(row) for row in result.scalars().all()]
+
+    async def ids_in_group(self, group_id: str) -> list[str]:
+        """The canvases of a folder's documents (to clear their stored images)."""
+        result = await self.db.execute(
+            select(Canvas.id)
+            .join(Workspace, Workspace.id == Canvas.workspaceId)
+            .where(Workspace.groupId == group_id)
+        )
+        return [str(row) for row in result.scalars().all()]
 
     async def delete_by_workspace_ids(self, workspace_ids: list[str]) -> None:
         """Deletes the canvases of these documents. Defers database commit to the caller."""

@@ -1,3 +1,4 @@
+import asyncio
 import uuid
 from datetime import datetime, timezone
 from typing import Any
@@ -8,6 +9,12 @@ from app.database import transaction_scope
 from app.models import Canvas
 from app.modules.canvas.repository import CanvasRepository
 from app.modules.canvas.schemas.canvas import CanvasCreateSchema, CanvasUpdateSchema
+from app.modules.canvas.services.canvas_files import (
+    delete_canvas_files,
+    generate_canvas_file_read_url,
+    generate_canvas_file_upload_url,
+    is_canvas_file_id,
+)
 from app.modules.workspace.repository import WorkspacesRepository
 
 
@@ -67,4 +74,31 @@ class CanvasService:
             if not canvas:
                 raise ValueError(f"Canvas with ID {id} not found")
             await self.repository.delete(canvas)
-            return True
+        # Its images go too (best effort: storage isn't transactional)
+        await asyncio.to_thread(delete_canvas_files, user_id, id)
+        return True
+
+    async def create_file_upload(
+        self, canvas_id: str, user_id: str, file_id: str, mime_type: str, size: int
+    ) -> str:
+        """Where to upload one image pasted into one of the user's canvases."""
+        await self.find_one(canvas_id, user_id)
+        return generate_canvas_file_upload_url(
+            user_id, canvas_id, file_id, mime_type, size
+        )
+
+    async def file_urls(self, canvas_id: str, user_id: str) -> list[dict[str, str]]:
+        """Signed links to read the images a canvas's saved scene uses."""
+        canvas = await self.find_one(canvas_id, user_id)
+        files = (canvas.data or {}).get("files") or {}
+        if not isinstance(files, dict):
+            return []
+        return [
+            {
+                "id": file_id,
+                "mimeType": str((meta or {}).get("mimeType") or ""),
+                "url": generate_canvas_file_read_url(user_id, canvas_id, file_id),
+            }
+            for file_id, meta in files.items()
+            if is_canvas_file_id(file_id)
+        ]

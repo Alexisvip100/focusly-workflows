@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import transaction_scope
 from app.models import Workspace
 from app.modules.canvas.repository import CanvasRepository
+from app.modules.canvas.services.canvas_files import delete_canvas_files
 from app.modules.workspace.schemas.workspaces import WorkspaceCreateSchema
 from app.modules.workspace.repository import WorkspacesRepository
 
@@ -15,6 +16,7 @@ class WorkspacesService:
     def __init__(self, db: AsyncSession):
         self.db = db
         self.repository = WorkspacesRepository(db)
+        self.canvases = CanvasRepository(db)
 
     async def create(self, create_input: dict[str, Any], user_id: str) -> Workspace:
         workspace_id = str(uuid.uuid4())
@@ -142,9 +144,13 @@ class WorkspacesService:
             if not workspace:
                 raise ValueError(f"Workspace with ID {id} not found")
 
-            await CanvasRepository(self.db).delete_by_workspace_ids([id])
+            canvas_ids = await self.canvases.ids_by_workspace_ids([id])
+            await self.canvases.delete_by_workspace_ids([id])
             await self.repository.delete(workspace)
-            return True
+        # Their canvases' images go too (best effort: storage isn't transactional)
+        for canvas_id in canvas_ids:
+            await asyncio.to_thread(delete_canvas_files, user_id, canvas_id)
+        return True
 
     async def find_by_task_id(self, task_id: str) -> Workspace | None:
         return await self.repository.get_by_task_id(task_id)

@@ -351,6 +351,20 @@ class Canvas:
     updated_at: datetime = strawberry.field(name="updatedAt")
 
 
+@strawberry.type
+class CanvasFile:
+    """An image used in a canvas, readable through a short-lived link."""
+
+    id: str
+    mime_type: str = strawberry.field(name="mimeType")
+    url: str
+
+
+@strawberry.type
+class CanvasFileUpload:
+    upload_url: str = strawberry.field(name="uploadUrl")
+
+
 def map_model_to_strawberry_canvas(c: Any, include_data: bool = True) -> Canvas:
     return Canvas(
         id=strawberry.ID(c.id),
@@ -649,6 +663,16 @@ class UpdateProjectGroupInput:
     name: str | None = None
     color: str | None = None
     emoji: str | None = None
+
+
+@strawberry.input
+class CreateCanvasFileUploadInput:
+    canvas_id: strawberry.ID = strawberry.field(name="canvasId")
+    # Excalidraw's id for the file
+    file_id: str = strawberry.field(name="fileId")
+    mime_type: str = strawberry.field(name="mimeType")
+    # Exact byte size: it's part of the signed upload
+    size: int
 
 
 @strawberry.input

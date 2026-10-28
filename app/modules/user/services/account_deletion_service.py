@@ -115,10 +115,16 @@ class AccountDeletionService:
             delete_user_avatar_objects,
         )
 
+        from app.modules.canvas.services.canvas_files import (
+            delete_user_canvas_files,
+        )
+
         try:
             delete_user_avatar_objects(user_id)
         except Exception:
             logger.exception("Could not delete avatar objects for user %s", user_id)
+        # The images pasted into their canvases, too
+        delete_user_canvas_files(user_id)
 
     async def _clear_cache(
         self,

@@ -1,3 +1,4 @@
+import asyncio
 import uuid
 from datetime import datetime, timezone
 from typing import Any
@@ -8,12 +9,15 @@ from app.database import transaction_scope
 from app.models import ProjectGroup
 from app.modules.workspace.schemas.project_groups import ProjectGroupCreateSchema
 from app.modules.workspace.repository import ProjectGroupsRepository
+from app.modules.canvas.repository import CanvasRepository
+from app.modules.canvas.services.canvas_files import delete_canvas_files
 
 
 class ProjectGroupsService:
     def __init__(self, db: AsyncSession):
         self.db = db
         self.repository = ProjectGroupsRepository(db)
+        self.canvases = CanvasRepository(db)
 
     async def create(self, create_input: dict[str, Any], user_id: str) -> ProjectGroup:
         group_id = str(uuid.uuid4())
@@ -67,10 +71,14 @@ class ProjectGroupsService:
             if not group:
                 raise ValueError(f"ProjectGroup with ID {id} not found")
 
+            canvas_ids = await self.canvases.ids_in_group(id)
             # Delete workspaces belonging to this group atomically
             await self.repository.delete_workspaces_by_group_id(id)
             await self.repository.delete(group)
-            return True
+        # Their canvases' images go too (best effort: storage isn't transactional)
+        for canvas_id in canvas_ids:
+            await asyncio.to_thread(delete_canvas_files, user_id, canvas_id)
+        return True
 
     async def get_total(self, user_id: str) -> int:
         return await self.repository.get_total(user_id)

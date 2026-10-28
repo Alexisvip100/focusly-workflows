@@ -38,6 +38,7 @@ async def test_project_groups_remove_rolls_back_if_group_delete_fails():
 
     dummy_group = ProjectGroup(id="group-1", userId="user-1", name="Test Group")
     service.repository.get_by_id_and_user = AsyncMock(return_value=dummy_group)
+    service.canvases.ids_in_group = AsyncMock(return_value=[])
     service.repository.delete_workspaces_by_group_id = AsyncMock()
     service.repository.delete = AsyncMock(side_effect=RuntimeError("DB disk full"))
 
@@ -59,6 +60,7 @@ async def test_project_groups_remove_commits_atomically():
 
     dummy_group = ProjectGroup(id="group-1", userId="user-1", name="Test Group")
     service.repository.get_by_id_and_user = AsyncMock(return_value=dummy_group)
+    service.canvases.ids_in_group = AsyncMock(return_value=[])
     service.repository.delete_workspaces_by_group_id = AsyncMock()
     service.repository.delete = AsyncMock()
 

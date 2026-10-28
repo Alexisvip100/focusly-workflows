@@ -243,3 +243,154 @@ async def test_graphql_rejects_an_icon_that_is_not_one_emoji(session):
         input={"id": created.data["createCanvas"]["id"], "icon": "x" * 100},
     )
     assert result.data is None
+
+
+# ── Images pasted into a canvas ──────────────────────────────────────────────
+
+import boto3
+from botocore.client import Config
+from urllib.parse import parse_qs, urlparse
+from unittest.mock import patch
+
+from app.modules.canvas.services import canvas_files
+
+UPLOAD = """
+mutation U($input: CreateCanvasFileUploadInput!) {
+  createCanvasFileUpload(input: $input) { uploadUrl }
+}
+"""
+FILES = "query F($id: ID!) { canvasFiles(canvasId: $id) { id mimeType url } }"
+
+
+@pytest.fixture
+def signer(monkeypatch):
+    """A real S3 signer with test credentials: links are signed offline."""
+    client = boto3.client(
+        "s3",
+        endpoint_url="http://storage.test:9000",
+        aws_access_key_id="test",
+        aws_secret_access_key="test",  # noqa: S106 (fake: signs offline)
+        config=Config(signature_version="s3v4"),
+        region_name="us-east-1",
+    )
+    monkeypatch.setattr(canvas_files, "s3_public_client", client)
+    return client
+
+
+async def new_canvas(session, user_id="user-1"):
+    created = await run(
+        session, CREATE, user_id=user_id, input={"name": "Ideas", "workspaceId": "ws-1"}
+    )
+    return created.data["createCanvas"]["id"]
+
+
+@pytest.mark.anyio
+async def test_upload_link_is_signed_for_the_exact_type_and_size(session, signer):
+    canvas_id = await new_canvas(session)
+    result = await run(
+        session,
+        UPLOAD,
+        input={"canvasId": canvas_id, "fileId": "abc123", "mimeType": "image/png", "size": 2048},
+    )
+    assert result.errors is None
+    url = urlparse(result.data["createCanvasFileUpload"]["uploadUrl"])
+    assert url.path == f"/media/canvas/user-1/{canvas_id}/abc123" or url.path.endswith(
+        f"/canvas/user-1/{canvas_id}/abc123"
+    )
+    signed = parse_qs(url.query)["X-Amz-SignedHeaders"][0].split(";")
+    assert "content-length" in signed and "content-type" in signed
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    "file_id, mime_type, size, message",
+    [
+        ("abc", "image/svg+xml", 100, "can't be saved"),
+        ("abc", "application/pdf", 100, "can't be saved"),
+        ("abc", "image/png", 11 * 1024 * 1024, "up to 10 MB"),
+        ("abc", "image/png", 0, "up to 10 MB"),
+        ("../other/key", "image/png", 100, "Invalid canvas file id"),
+    ],
+)
+async def test_upload_link_refuses_what_a_canvas_cant_store(
+    session, signer, file_id, mime_type, size, message
+):
+    canvas_id = await new_canvas(session)
+    result = await run(
+        session,
+        UPLOAD,
+        input={"canvasId": canvas_id, "fileId": file_id, "mimeType": mime_type, "size": size},
+    )
+    assert result.data is None
+    assert message in str(result.errors[0])
+
+
+@pytest.mark.anyio
+async def test_only_the_owner_can_upload_or_read_a_canvas_images(session, signer):
+    canvas_id = await new_canvas(session)
+    upload = await run(
+        session,
+        UPLOAD,
+        user_id="user-2",
+        input={"canvasId": canvas_id, "fileId": "abc", "mimeType": "image/png", "size": 10},
+    )
+    read = await run(session, FILES, user_id="user-2", id=canvas_id)
+    for result in (upload, read):
+        assert result.data is None
+        assert "not found" in str(result.errors[0])
+
+
+@pytest.mark.anyio
+async def test_reads_back_the_images_the_saved_scene_uses(session, signer):
+    canvas_id = await new_canvas(session)
+    scene = {
+        "elements": [],
+        "appState": {},
+        "files": {
+            "img1": {"mimeType": "image/png", "created": 1},
+            "img2": {"mimeType": "image/jpeg", "created": 2},
+            "../bad": {"mimeType": "image/png"},
+        },
+    }
+    await run(session, UPDATE, input={"id": canvas_id, "data": scene})
+
+    result = await run(session, FILES, id=canvas_id)
+    assert result.errors is None
+    files = {f["id"]: f for f in result.data["canvasFiles"]}
+    assert set(files) == {"img1", "img2"}  # a malformed id is skipped
+    assert files["img2"]["mimeType"] == "image/jpeg"
+    assert f"canvas/user-1/{canvas_id}/img1" in files["img1"]["url"]
+    assert "X-Amz-Signature" in files["img1"]["url"]
+
+
+@pytest.mark.anyio
+async def test_deleting_a_canvas_deletes_its_images(session):
+    canvas_id = await new_canvas(session)
+    with patch.object(
+        __import__("app.modules.canvas.services.canvas_service", fromlist=["x"]),
+        "delete_canvas_files",
+    ) as delete_files:
+        await run(session, REMOVE, id=canvas_id)
+    delete_files.assert_called_once_with("user-1", canvas_id)
+
+
+@pytest.mark.anyio
+async def test_deleting_a_document_or_folder_deletes_its_canvases_images(session):
+    first = await new_canvas(session)
+    with patch(
+        "app.modules.workspace.services.workspaces_service.delete_canvas_files"
+    ) as delete_files:
+        await WorkspacesService(session).remove("ws-1", "user-1")
+    delete_files.assert_called_once_with("user-1", first)
+
+    # A folder: its documents' canvases
+    session.add(Workspace(id="ws-3", userId="user-1", groupId="group-1", title="D", content=""))
+    await session.commit()
+    second = (
+        await CanvasService(session).create({"name": "B", "workspaceId": "ws-3"}, "user-1")
+    ).id
+    with patch(
+        "app.modules.workspace.services.project_groups_service.delete_canvas_files"
+    ) as delete_files:
+        await ProjectGroupsService(session).remove("group-1", "user-1")
+    delete_files.assert_called_once_with("user-1", second)

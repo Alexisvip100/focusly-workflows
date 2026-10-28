@@ -50,6 +50,19 @@ class CanvasMutation:
         res = await canvas_serv.update(str(input.id), update_data, user_id)
         return types.map_model_to_strawberry_canvas(res, include_data=False)
 
+    # Where the browser uploads an image pasted into the canvas
+    @strawberry.mutation
+    async def create_canvas_file_upload(
+        self, info, input: types.CreateCanvasFileUploadInput
+    ) -> types.CanvasFileUpload:
+        user_id = get_user_id(info)
+        db = info.context["db"]
+        canvas_serv = CanvasService(db)
+        upload_url = await canvas_serv.create_file_upload(
+            str(input.canvas_id), user_id, input.file_id, input.mime_type, input.size
+        )
+        return types.CanvasFileUpload(upload_url=upload_url)
+
     @strawberry.mutation
     async def remove_canvas(self, info, id: strawberry.ID) -> bool:
         user_id = get_user_id(info)
