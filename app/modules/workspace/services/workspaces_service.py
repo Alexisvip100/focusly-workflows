@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import transaction_scope
 from app.models import Workspace
+from app.modules.canvas.repository import CanvasRepository
 from app.modules.workspace.schemas.workspaces import WorkspaceCreateSchema
 from app.modules.workspace.repository import WorkspacesRepository
 
@@ -141,6 +142,7 @@ class WorkspacesService:
             if not workspace:
                 raise ValueError(f"Workspace with ID {id} not found")
 
+            await CanvasRepository(self.db).delete_by_workspace_ids([id])
             await self.repository.delete(workspace)
             return True
 

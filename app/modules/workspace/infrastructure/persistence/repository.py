@@ -3,7 +3,7 @@ from typing import Any
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy import delete, update, func
-from app.models import Workspace, ProjectGroup
+from app.models import Canvas, Workspace, ProjectGroup
 from app.redis import cache
 
 
@@ -315,7 +315,14 @@ class ProjectGroupsRepository:
         return {"items": list(result.scalars().all()), "total": total}
 
     async def delete_workspaces_by_group_id(self, group_id: str) -> None:
-        """Deletes all workspaces belonging to a group. Defers database commit to the caller."""
+        """Deletes all workspaces belonging to a group, and their canvases. Defers database commit to the caller."""
+        await self.db.execute(
+            delete(Canvas).where(
+                Canvas.workspaceId.in_(
+                    select(Workspace.id).where(Workspace.groupId == group_id)
+                )
+            )
+        )
         await self.db.execute(delete(Workspace).where(Workspace.groupId == group_id))
         await self.db.flush()
         await cache.delete_pattern("workspaces:user:*")

@@ -88,6 +88,7 @@ async def lifespan(app: FastAPI):
             'ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "stripeCustomerId" VARCHAR',
             'ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "stripeSubscriptionId" VARCHAR',
             'ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "aiMessagesUsed" INTEGER NOT NULL DEFAULT 0',
+            'ALTER TABLE "Canvas" ADD COLUMN IF NOT EXISTS "icon" VARCHAR',
         ]
         for stmt in migration_statements:
             try:

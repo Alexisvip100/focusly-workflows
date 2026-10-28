@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import safe_attr, transaction_scope
 from app.models import (
     AutomationLog,
+    Canvas,
     Conversation,
     FocusSession,
     Message,
@@ -35,6 +36,7 @@ USER_OWNED_MODELS = (
     TimeBlock,
     Tag,
     Task,
+    Canvas,
     Workspace,
     ProjectGroup,
 )

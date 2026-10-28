@@ -13,6 +13,7 @@ from app.modules.notification.presentation.graphql import (
     NotificationQuery,
     NotificationMutation,
 )
+from app.modules.canvas.presentation.graphql import CanvasQuery, CanvasMutation
 
 
 @strawberry.type
@@ -23,6 +24,7 @@ class Query(
     InsightsQuery,
     ProjectGroupQuery,
     NotificationQuery,
+    CanvasQuery,
 ):
     """Combined Query class with all entity queries"""
 
@@ -36,6 +38,7 @@ class Mutation(
     AuthMutation,
     ProjectGroupMutation,
     NotificationMutation,
+    CanvasMutation,
 ):
     """Combined Mutation class with all entity mutations"""
 

@@ -1,7 +1,14 @@
 from datetime import datetime, timezone
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Any, Optional
 import strawberry
 from sqlalchemy import func, select
+
+# Strawberry's JSON scalar is a runtime object mypy can't use as a type; to the
+# type checker it's the dict it always carries here (a canvas scene).
+if TYPE_CHECKING:
+    JSON = dict[str, Any]
+else:
+    from strawberry.scalars import JSON
 
 from app.models import Workspace as WorkspaceModel
 from app.modules.workspace.services.workspaces_service import WorkspacesService
@@ -330,6 +337,33 @@ class Task:
         return map_model_to_strawberry_project_group(res) if res else None
 
 
+@strawberry.type
+class Canvas:
+    id: strawberry.ID
+    name: str
+    icon: str | None = None
+    user_id: str = strawberry.field(name="userId")
+    workspace_id: str | None = strawberry.field(name="workspaceId", default=None)
+    # The Excalidraw scene, {"elements": [...], "appState": {...}}. Only
+    # resolved when reading one canvas; lists and saves leave it null.
+    data: JSON | None = None
+    created_at: datetime = strawberry.field(name="createdAt")
+    updated_at: datetime = strawberry.field(name="updatedAt")
+
+
+def map_model_to_strawberry_canvas(c: Any, include_data: bool = True) -> Canvas:
+    return Canvas(
+        id=strawberry.ID(c.id),
+        name=c.name,
+        icon=c.icon,
+        user_id=c.userId,
+        workspace_id=c.workspaceId,
+        data=c.data if include_data else None,
+        created_at=c.createdAt,
+        updated_at=c.updatedAt,
+    )
+
+
 # ==============================================================================
 # Paginación
 # ==============================================================================
@@ -615,6 +649,22 @@ class UpdateProjectGroupInput:
     name: str | None = None
     color: str | None = None
     emoji: str | None = None
+
+
+@strawberry.input
+class CreateCanvasInput:
+    name: str
+    icon: str | None = None
+    workspace_id: str | None = strawberry.field(name="workspaceId", default=None)
+    data: JSON | None = None
+
+
+@strawberry.input
+class UpdateCanvasInput:
+    id: strawberry.ID
+    name: str | None = None
+    icon: str | None = None
+    data: JSON | None = None
 
 
 # ==============================================================================

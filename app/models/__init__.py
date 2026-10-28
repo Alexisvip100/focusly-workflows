@@ -5,6 +5,7 @@ Paquete centralizado de modelos de dominio para Focusly Workflows (DDD).
 from app.modules.user.domain.entities.user import User
 from app.modules.workspace.domain.entities.workspace import Workspace
 from app.modules.workspace.domain.entities.project_group import ProjectGroup
+from app.modules.canvas.domain.entities.canvas import Canvas
 from app.modules.ai.domain.entities.conversation import Conversation
 from app.modules.ai.domain.entities.message import Message
 from app.modules.ai.domain.entities.user_memory import UserMemory
@@ -22,6 +23,8 @@ __all__ = [
     "UserMemory",
     # Automation Entities
     "AutomationLog",
+    # Canvas Entities
+    "Canvas",
     # Focus Session Entities
     "FocusSession",
     # Notification Entities
