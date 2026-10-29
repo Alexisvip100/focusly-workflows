@@ -15,6 +15,7 @@ from app.modules.billing.plans import (
     FREE,
     FREE_AI_MESSAGE_LIMIT,
     PRO,
+    canvas_limits,
     grants_access,
     is_pro,
 )
@@ -533,6 +534,8 @@ class StripeService:
             else None,
             "ai_messages_used": used,
             "ai_messages_limit": FREE_AI_MESSAGE_LIMIT,
+            # What the user's canvases may hold on their plan
+            "canvas_limits": canvas_limits(user).as_dict(),
             "billing_enabled": bool(
                 settings.STRIPE_SECRET_KEY and settings.STRIPE_PRICE_ID_PRO
             ),

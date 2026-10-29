@@ -1,6 +1,7 @@
 import re
 
 from app.config import settings
+from app.modules.billing.plans import PRO_CANVAS_LIMITS
 from app.modules.storage.services.storage_service import (
     s3_client,
     s3_public_client,
@@ -12,7 +13,8 @@ from app.modules.storage.services.storage_service import (
 # between the browser and the bucket, through short-lived signed links.
 
 ALLOWED_CANVAS_FILE_TYPES = {"image/png", "image/jpeg", "image/gif", "image/webp"}
-MAX_CANVAS_FILE_BYTES = 10 * 1024 * 1024
+# The largest plan's limit; the service holds each user to their own plan's
+MAX_CANVAS_FILE_BYTES = PRO_CANVAS_LIMITS.max_image_bytes
 UPLOAD_URL_EXPIRY_SECONDS = 300
 READ_URL_EXPIRY_SECONDS = 3600
 
@@ -71,6 +73,65 @@ def generate_canvas_file_read_url(
         },
         ExpiresIn=READ_URL_EXPIRY_SECONDS,
     )
+
+
+# The preview: a small picture of the drawing, shown on its card in the
+# document and in the header's list. One per canvas, replaced as it changes.
+# Under its canvas's folder (so deleting the canvas takes it too), in a
+# subfolder no image id can name, since ids hold no "/".
+ALLOWED_CANVAS_PREVIEW_TYPES = {"image/png", "image/webp"}
+MAX_CANVAS_PREVIEW_BYTES = 1024 * 1024
+
+
+def canvas_preview_key(user_id: str, canvas_id: str) -> str:
+    return _prefix(user_id, canvas_id) + "preview/thumbnail"
+
+
+def generate_canvas_preview_upload_url(
+    user_id: str, canvas_id: str, mime_type: str, size: int
+) -> str:
+    """A signed PUT for a canvas's preview, for that type and exact size."""
+    if mime_type not in ALLOWED_CANVAS_PREVIEW_TYPES:
+        raise ValueError(
+            f"A canvas preview can't be '{mime_type}' "
+            f"(allowed: {', '.join(sorted(ALLOWED_CANVAS_PREVIEW_TYPES))})"
+        )
+    if size <= 0 or size > MAX_CANVAS_PREVIEW_BYTES:
+        raise ValueError(
+            f"A canvas preview can be up to {MAX_CANVAS_PREVIEW_BYTES // 1024} KB"
+        )
+    return s3_public_client.generate_presigned_url(
+        "put_object",
+        Params={
+            "Bucket": settings.MINIO_BUCKET_CANVAS,
+            "Key": canvas_preview_key(user_id, canvas_id),
+            "ContentType": mime_type,
+            "ContentLength": size,
+        },
+        ExpiresIn=UPLOAD_URL_EXPIRY_SECONDS,
+    )
+
+
+def generate_canvas_preview_read_url(user_id: str, canvas_id: str) -> str:
+    return s3_public_client.generate_presigned_url(
+        "get_object",
+        Params={
+            "Bucket": settings.MINIO_BUCKET_CANVAS,
+            "Key": canvas_preview_key(user_id, canvas_id),
+        },
+        ExpiresIn=READ_URL_EXPIRY_SECONDS,
+    )
+
+
+def delete_canvas_preview(user_id: str, canvas_id: str) -> None:
+    """Best-effort, like the images: a stale preview is only hidden."""
+    try:
+        s3_client.delete_object(
+            Bucket=settings.MINIO_BUCKET_CANVAS,
+            Key=canvas_preview_key(user_id, canvas_id),
+        )
+    except Exception:
+        pass
 
 
 def _delete_prefix(prefix: str) -> None:

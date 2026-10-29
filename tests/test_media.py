@@ -26,6 +26,9 @@ def test_is_media_filename():
     assert is_media_filename("tasks-hero-light.webm")
     assert is_media_filename("weekly-planner-dark-poster.webp")
     assert is_media_filename("insights-golden-dark.mp4")
+    # Each site language has its own set
+    assert is_media_filename("tasks-hero-light-en.webm")
+    assert is_media_filename("weekly-planner-dark-ja-poster.webp")
     for bad in [
         "../secret.webm",
         "a/b.webm",

@@ -1,6 +1,6 @@
 from typing import Any
 
-from sqlalchemy import delete
+from sqlalchemy import delete, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 
@@ -56,6 +56,12 @@ class CanvasRepository:
             .order_by(Canvas.updatedAt.desc(), Canvas.id.desc())
         )
         return list(result.scalars().all())
+
+    async def count_by_user(self, user_id: str) -> int:
+        result = await self.db.execute(
+            select(func.count()).select_from(Canvas).where(Canvas.userId == user_id)
+        )
+        return int(result.scalar_one())
 
     async def save(self, canvas: Canvas, commit: bool = False) -> Canvas:
         if canvas not in self.db:

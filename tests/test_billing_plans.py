@@ -373,3 +373,10 @@ class TestPaymentHistory:
     async def test_no_customer_no_history(self, fake):
         user = MagicMock(stripeCustomerId=None)
         assert await StripeService(MagicMock()).list_invoices(user) == []
+
+
+async def test_the_status_tells_the_plans_canvas_limits(fake, database):
+    from app.modules.billing.plans import FREE_CANVAS_LIMITS
+
+    status = await refresh(database)
+    assert status["canvas_limits"] == FREE_CANVAS_LIMITS.as_dict()

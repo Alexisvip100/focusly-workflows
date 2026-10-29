@@ -347,6 +347,11 @@ class Canvas:
     # The Excalidraw scene, {"elements": [...], "appState": {...}}. Only
     # resolved when reading one canvas; lists and saves leave it null.
     data: JSON | None = None
+    # A short-lived link to a small picture of the drawing, and when that
+    # picture last changed (the link itself changes on every read). Null
+    # while the canvas has no preview.
+    preview_url: str | None = strawberry.field(name="previewUrl", default=None)
+    preview_at: datetime | None = strawberry.field(name="previewAt", default=None)
     created_at: datetime = strawberry.field(name="createdAt")
     updated_at: datetime = strawberry.field(name="updatedAt")
 
@@ -366,6 +371,11 @@ class CanvasFileUpload:
 
 
 def map_model_to_strawberry_canvas(c: Any, include_data: bool = True) -> Canvas:
+    from app.modules.canvas.services.canvas_files import (
+        generate_canvas_preview_read_url,
+    )
+
+    preview_at = getattr(c, "previewAt", None)
     return Canvas(
         id=strawberry.ID(c.id),
         name=c.name,
@@ -373,6 +383,10 @@ def map_model_to_strawberry_canvas(c: Any, include_data: bool = True) -> Canvas:
         user_id=c.userId,
         workspace_id=c.workspaceId,
         data=c.data if include_data else None,
+        preview_url=(
+            generate_canvas_preview_read_url(c.userId, c.id) if preview_at else None
+        ),
+        preview_at=preview_at,
         created_at=c.createdAt,
         updated_at=c.updatedAt,
     )
@@ -670,6 +684,14 @@ class CreateCanvasFileUploadInput:
     canvas_id: strawberry.ID = strawberry.field(name="canvasId")
     # Excalidraw's id for the file
     file_id: str = strawberry.field(name="fileId")
+    mime_type: str = strawberry.field(name="mimeType")
+    # Exact byte size: it's part of the signed upload
+    size: int
+
+
+@strawberry.input
+class CreateCanvasPreviewUploadInput:
+    canvas_id: strawberry.ID = strawberry.field(name="canvasId")
     mime_type: str = strawberry.field(name="mimeType")
     # Exact byte size: it's part of the signed upload
     size: int

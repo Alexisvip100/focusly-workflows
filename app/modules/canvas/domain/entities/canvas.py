@@ -23,6 +23,9 @@ class Canvas(Base):
     data: Mapped[dict[str, Any]] = mapped_column(
         JSON().with_variant(JSONB(), "postgresql"), nullable=False, default=dict
     )
+    # When its preview (a small picture of the drawing) was last replaced;
+    # unset while it has none. Also tells clients when to reload it.
+    previewAt: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     createdAt: Mapped[datetime] = mapped_column(
         DateTime, default=func.now(), nullable=False
     )

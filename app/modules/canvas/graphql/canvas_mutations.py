@@ -63,6 +63,26 @@ class CanvasMutation:
         )
         return types.CanvasFileUpload(upload_url=upload_url)
 
+    # Where the browser uploads a new preview of the drawing
+    @strawberry.mutation
+    async def create_canvas_preview_upload(
+        self, info, input: types.CreateCanvasPreviewUploadInput
+    ) -> types.CanvasFileUpload:
+        user_id = get_user_id(info)
+        db = info.context["db"]
+        canvas_serv = CanvasService(db)
+        upload_url = await canvas_serv.create_preview_upload(
+            str(input.canvas_id), user_id, input.mime_type, input.size
+        )
+        return types.CanvasFileUpload(upload_url=upload_url)
+
+    @strawberry.mutation
+    async def remove_canvas_preview(self, info, canvas_id: strawberry.ID) -> bool:
+        user_id = get_user_id(info)
+        db = info.context["db"]
+        canvas_serv = CanvasService(db)
+        return await canvas_serv.remove_preview(str(canvas_id), user_id)
+
     @strawberry.mutation
     async def remove_canvas(self, info, id: strawberry.ID) -> bool:
         user_id = get_user_id(info)

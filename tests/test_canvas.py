@@ -394,3 +394,256 @@ async def test_deleting_a_document_or_folder_deletes_its_canvases_images(session
     ) as delete_files:
         await ProjectGroupsService(session).remove("group-1", "user-1")
     delete_files.assert_called_once_with("user-1", second)
+
+
+# ── The preview: a small picture of the drawing ─────────────────────────────
+
+PREVIEW_UPLOAD = """
+mutation P($input: CreateCanvasPreviewUploadInput!) {
+  createCanvasPreviewUpload(input: $input) { uploadUrl }
+}
+"""
+REMOVE_PREVIEW = "mutation R($id: ID!) { removeCanvasPreview(canvasId: $id) }"
+LIST_PREVIEWS = (
+    "query L($ws: ID!) { canvasesByWorkspace(workspaceId: $ws) { id previewUrl previewAt } }"
+)
+
+
+@pytest.mark.anyio
+async def test_a_canvas_has_no_preview_until_one_is_uploaded(session, signer):
+    canvas_id = await new_canvas(session)
+    listed = await run(session, LIST_PREVIEWS, ws="ws-1")
+    assert listed.data["canvasesByWorkspace"] == [
+        {"id": canvas_id, "previewUrl": None, "previewAt": None}
+    ]
+
+    result = await run(
+        session,
+        PREVIEW_UPLOAD,
+        input={"canvasId": canvas_id, "mimeType": "image/png", "size": 4096},
+    )
+    assert result.errors is None
+    url = urlparse(result.data["createCanvasPreviewUpload"]["uploadUrl"])
+    assert url.path.endswith(f"/canvas/user-1/{canvas_id}/preview/thumbnail")
+    signed = parse_qs(url.query)["X-Amz-SignedHeaders"][0].split(";")
+    assert "content-length" in signed and "content-type" in signed
+
+    [listed] = (await run(session, LIST_PREVIEWS, ws="ws-1")).data["canvasesByWorkspace"]
+    assert f"canvas/user-1/{canvas_id}/preview/thumbnail" in listed["previewUrl"]
+    assert "X-Amz-Signature" in listed["previewUrl"]
+    assert listed["previewAt"] is not None
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    "mime_type, size, message",
+    [
+        ("image/jpeg", 100, "can't be"),
+        ("image/svg+xml", 100, "can't be"),
+        ("image/png", 2 * 1024 * 1024, "up to 1024 KB"),
+        ("image/png", 0, "up to 1024 KB"),
+    ],
+)
+async def test_preview_upload_refuses_other_types_and_sizes(
+    session, signer, mime_type, size, message
+):
+    canvas_id = await new_canvas(session)
+    result = await run(
+        session,
+        PREVIEW_UPLOAD,
+        input={"canvasId": canvas_id, "mimeType": mime_type, "size": size},
+    )
+    assert result.data is None
+    assert message in str(result.errors[0])
+    # A refused upload leaves the canvas without a preview
+    [listed] = (await run(session, LIST_PREVIEWS, ws="ws-1")).data["canvasesByWorkspace"]
+    assert listed["previewAt"] is None
+
+
+@pytest.mark.anyio
+async def test_only_the_owner_can_set_or_remove_a_preview(session, signer):
+    canvas_id = await new_canvas(session)
+    upload = await run(
+        session,
+        PREVIEW_UPLOAD,
+        user_id="user-2",
+        input={"canvasId": canvas_id, "mimeType": "image/png", "size": 10},
+    )
+    remove = await run(session, REMOVE_PREVIEW, user_id="user-2", id=canvas_id)
+    for result in (upload, remove):
+        assert result.data is None
+        assert "not found" in str(result.errors[0])
+
+
+@pytest.mark.anyio
+async def test_removing_the_preview_deletes_its_picture(session, signer):
+    canvas_id = await new_canvas(session)
+    await run(
+        session,
+        PREVIEW_UPLOAD,
+        input={"canvasId": canvas_id, "mimeType": "image/webp", "size": 10},
+    )
+    with patch(
+        "app.modules.canvas.services.canvas_service.delete_canvas_preview"
+    ) as delete_preview:
+        result = await run(session, REMOVE_PREVIEW, id=canvas_id)
+    assert result.data == {"removeCanvasPreview": True}
+    delete_preview.assert_called_once_with("user-1", canvas_id)
+    [listed] = (await run(session, LIST_PREVIEWS, ws="ws-1")).data["canvasesByWorkspace"]
+    assert listed["previewUrl"] is None
+
+
+def test_the_preview_is_kept_where_deleting_the_canvas_reaches_it():
+    preview = canvas_files.canvas_preview_key("user-1", "cv-1")
+    assert preview.startswith(canvas_files._prefix("user-1", "cv-1"))
+    # No pasted image's id can take its place
+    assert not canvas_files.is_canvas_file_id(preview.rsplit("/", 2)[-2] + "/thumbnail")
+
+
+# ── Plan limits ──────────────────────────────────────────────────────────────
+
+from app.models import User
+from app.modules.billing.plans import (
+    FREE_CANVAS_LIMITS,
+    PRO_CANVAS_LIMITS,
+    PlanLimitError,
+)
+
+
+async def make_pro(session, user_id="user-1"):
+    session.add(
+        User(id=user_id, email=f"{user_id}@test.dev", subscriptionStatus="pro")
+    )
+    await session.commit()
+
+
+def scene_of(size: int) -> dict:
+    """A scene whose saved JSON is about `size` characters."""
+    return {"elements": [{"id": "t", "type": "text", "text": "x" * size}], "appState": {}}
+
+
+@pytest.mark.anyio
+async def test_free_accounts_hold_a_few_canvases(session):
+    service = CanvasService(session)
+    for n in range(FREE_CANVAS_LIMITS.max_canvases):
+        await service.create({"name": f"C{n}", "workspaceId": "ws-1"}, "user-1")
+
+    with pytest.raises(PlanLimitError) as refused:
+        await service.create({"name": "One more", "workspaceId": "ws-1"}, "user-1")
+    assert refused.value.extensions == {
+        "code": "canvas_limit_reached",
+        "limit": FREE_CANVAS_LIMITS.max_canvases,
+    }
+
+
+@pytest.mark.anyio
+async def test_deleting_a_canvas_frees_its_place(session):
+    service = CanvasService(session)
+    created = [
+        await service.create({"name": f"C{n}", "workspaceId": "ws-1"}, "user-1")
+        for n in range(FREE_CANVAS_LIMITS.max_canvases)
+    ]
+    await service.remove(created[0].id, "user-1")
+    await service.create({"name": "Again", "workspaceId": "ws-1"}, "user-1")
+
+
+@pytest.mark.anyio
+async def test_pro_accounts_have_no_canvas_count_limit(session):
+    await make_pro(session)
+    service = CanvasService(session)
+    for n in range(FREE_CANVAS_LIMITS.max_canvases + 2):
+        await service.create({"name": f"C{n}", "workspaceId": "ws-1"}, "user-1")
+
+
+@pytest.mark.anyio
+async def test_the_canvas_limit_reaches_graphql_with_its_code(session):
+    for _ in range(FREE_CANVAS_LIMITS.max_canvases):
+        await new_canvas(session)
+    result = await run(
+        session, CREATE, input={"name": "One more", "workspaceId": "ws-1"}
+    )
+    assert result.data is None
+    assert result.errors[0].extensions == {
+        "code": "canvas_limit_reached",
+        "limit": FREE_CANVAS_LIMITS.max_canvases,
+    }
+
+
+@pytest.mark.anyio
+async def test_free_scenes_stop_growing_past_their_size(session):
+    service = CanvasService(session)
+    created = await service.create({"name": "Big", "workspaceId": "ws-1"}, "user-1")
+    too_big = scene_of(FREE_CANVAS_LIMITS.max_scene_bytes + 100)
+
+    with pytest.raises(PlanLimitError) as refused:
+        await service.update(created.id, {"data": too_big}, "user-1")
+    assert refused.value.extensions["code"] == "canvas_too_large"
+    assert refused.value.extensions["limit"] == FREE_CANVAS_LIMITS.max_scene_bytes
+
+    # Pro has room for it
+    await make_pro(session)
+    await service.update(created.id, {"data": too_big}, "user-1")
+
+
+@pytest.mark.anyio
+async def test_a_scene_saved_under_pro_can_still_be_edited_after_a_downgrade(session):
+    await make_pro(session)
+    service = CanvasService(session)
+    created = await service.create({"name": "Big", "workspaceId": "ws-1"}, "user-1")
+    big = FREE_CANVAS_LIMITS.max_scene_bytes + 1000
+    await service.update(created.id, {"data": scene_of(big)}, "user-1")
+
+    user = await session.get(User, "user-1")
+    user.subscriptionStatus = "free"
+    await session.commit()
+
+    # Edits that don't make it bigger still save; growing it doesn't
+    await service.update(created.id, {"data": scene_of(big - 500)}, "user-1")
+    with pytest.raises(PlanLimitError):
+        await service.update(created.id, {"data": scene_of(big)}, "user-1")
+
+
+@pytest.mark.anyio
+async def test_free_images_are_smaller_and_fewer(session, signer):
+    canvas_id = await new_canvas(session)
+    upload = {"canvasId": canvas_id, "mimeType": "image/png"}
+
+    too_large = await run(
+        session,
+        UPLOAD,
+        input={**upload, "fileId": "big", "size": FREE_CANVAS_LIMITS.max_image_bytes + 1},
+    )
+    assert too_large.errors[0].extensions == {
+        "code": "canvas_image_too_large",
+        "limit": FREE_CANVAS_LIMITS.max_image_bytes,
+    }
+
+    full = {f"img{n}": {"mimeType": "image/png"} for n in range(FREE_CANVAS_LIMITS.max_images_per_canvas)}
+    await run(
+        session,
+        UPDATE,
+        input={"id": canvas_id, "data": {"elements": [], "appState": {}, "files": full}},
+    )
+    one_more = await run(session, UPLOAD, input={**upload, "fileId": "new", "size": 100})
+    assert one_more.errors[0].extensions["code"] == "canvas_image_limit"
+
+    # An image the scene already has (a retried upload) still goes through
+    retried = await run(session, UPLOAD, input={**upload, "fileId": "img0", "size": 100})
+    assert retried.errors is None
+
+
+@pytest.mark.anyio
+async def test_pro_images_can_be_larger(session, signer):
+    await make_pro(session)
+    canvas_id = await new_canvas(session)
+    result = await run(
+        session,
+        UPLOAD,
+        input={
+            "canvasId": canvas_id,
+            "fileId": "big",
+            "mimeType": "image/png",
+            "size": PRO_CANVAS_LIMITS.max_image_bytes,
+        },
+    )
+    assert result.errors is None

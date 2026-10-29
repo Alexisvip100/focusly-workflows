@@ -3,9 +3,12 @@ from typing import Any
 
 from pydantic import BaseModel, Field, field_validator
 
+from app.modules.billing.plans import PRO_CANVAS_LIMITS
+
 # A scene is saved whole on every autosave; this caps one at a size no hand-drawn
 # canvas reaches, so an embedded image or a runaway client can't bloat the table.
-MAX_CANVAS_DATA_BYTES = 5 * 1024 * 1024
+# The largest plan's limit; the service holds each user to their own plan's.
+MAX_CANVAS_DATA_BYTES = PRO_CANVAS_LIMITS.max_scene_bytes
 # One emoji; joined ones (families, flags with modifiers) run to ~10 code points.
 MAX_ICON_LENGTH = 32
 
