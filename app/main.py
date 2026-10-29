@@ -7,6 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from strawberry.fastapi import GraphQLRouter
 import socketio
 
+from app.modules.auth.tokens import ACCESS, session_user_id
 from app.config import settings
 from app.database import async_session_local
 from app.sockets.realtime import sio
@@ -226,10 +227,9 @@ async def get_context(request: Request):
     user_id = None
     if token:
         try:
-            payload = jwt.decode(token, settings.JWT_SECRET, algorithms=["HS256"])
-            user_id = payload.get("sub")
-        except Exception:
-            pass  # Invalid token, keep user_id = None
+            user_id = session_user_id(token, ACCESS)
+        except jwt.InvalidTokenError:
+            pass  # Not a valid access token: no user
 
     from app.graphql.dataloaders import get_loaders
 
