@@ -8,6 +8,7 @@ from app.database import get_db
 from app.config import settings
 from app.routes.common import get_current_user_id
 from app.modules.auth.services.auth_service import AuthService
+from app.modules.auth.tokens import REFRESH, session_user_id
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -91,15 +92,12 @@ async def refresh(
     # request body — trusting a client-supplied userId here let anyone with
     # any non-empty refresh_token cookie mint fresh session cookies for an
     # arbitrary account just by naming its id.
+    # Only a refresh token: a leaked access token mustn't buy a new week
     try:
-        payload = jwt.decode(refresh_token, settings.JWT_SECRET, algorithms=["HS256"])
+        user_id = session_user_id(refresh_token, REFRESH)
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="Refresh token expired")
     except jwt.InvalidTokenError:
-        raise HTTPException(status_code=401, detail="Invalid refresh token")
-
-    user_id = payload.get("sub")
-    if not user_id:
         raise HTTPException(status_code=401, detail="Invalid refresh token")
 
     try:

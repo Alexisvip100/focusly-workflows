@@ -5,6 +5,7 @@ import socketio
 from socketio.exceptions import ConnectionRefusedError
 
 from app.config import settings
+from app.modules.auth.tokens import ACCESS, session_user_id
 
 # Redis-backed manager: without this, connected clients and rooms only
 # exist in this process's memory, so emit() calls from another process
@@ -62,10 +63,7 @@ async def connect(sid, environ, auth=None):
         raise ConnectionRefusedError("Authentication required: no token provided")
 
     try:
-        payload = jwt.decode(token, settings.JWT_SECRET, algorithms=["HS256"])
-        user_id = payload.get("sub")
-        if not user_id:
-            raise ConnectionRefusedError("Invalid token: sub missing")
+        user_id = session_user_id(token, ACCESS)
     except jwt.ExpiredSignatureError:
         raise ConnectionRefusedError("Token expired")
     except jwt.InvalidTokenError:

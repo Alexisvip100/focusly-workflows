@@ -6,6 +6,7 @@ import jwt
 import httpx
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.modules.auth.tokens import ACCESS, REFRESH, session_claims
 from app.config import settings
 from app.database import transaction_scope
 from app.models import User
@@ -151,18 +152,12 @@ class AuthService:
             "iat": int(now),
         }
 
-        # Access token: 15 minutes
-        access_payload = payload.copy()
-        access_payload["exp"] = int(now + 15 * 60)
+        # Access token: 15 minutes. Refresh token: 7 days.
         access_token = jwt.encode(
-            access_payload, settings.JWT_SECRET, algorithm="HS256"
+            session_claims(ACCESS, payload, now), settings.JWT_SECRET, algorithm="HS256"
         )
-
-        # Refresh token: 7 days
-        refresh_payload = payload.copy()
-        refresh_payload["exp"] = int(now + 7 * 24 * 60 * 60)
         refresh_token = jwt.encode(
-            refresh_payload, settings.JWT_SECRET, algorithm="HS256"
+            session_claims(REFRESH, payload, now), settings.JWT_SECRET, algorithm="HS256"
         )
 
         created_at = _safe_attr(user, "createdAt")
