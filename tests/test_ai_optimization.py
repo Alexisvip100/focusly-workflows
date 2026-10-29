@@ -32,6 +32,7 @@ from app.modules.ai.services.memory import EXTRACT_EVERY_N_MESSAGES, worth_extra
 from app.modules.ai.services.prompts import ONE_SHOT_PROMPT
 from app.modules.ai.services.router import LIGHT_MODEL, STRONG_MODEL, pick_model
 from app.modules.billing.plans import FREE_AI_MESSAGE_LIMIT
+from app.modules.billing.services import usage_service
 from app.routes.common import get_current_user_id
 
 NOW = datetime(2026, 10, 6, 12, 0)
@@ -324,6 +325,9 @@ def chat(monkeypatch):
     monkeypatch.setattr(ai_routes, "MessageRepository", lambda db: msg_repo)
     monkeypatch.setattr(ai_routes, "build_context", build)
     monkeypatch.setattr(ai_routes, "stream_gemini_and_save", fake_stream)
+    # A Pro account well within its daily fair use
+    monkeypatch.setattr(usage_service, "consume_daily_ai_use", AsyncMock(return_value=1))
+    monkeypatch.setattr(usage_service, "refund_daily_ai_use", AsyncMock())
 
     app = FastAPI()
     app.include_router(ai_routes.router)
@@ -432,6 +436,7 @@ def planner(monkeypatch):
         user=SimpleNamespace(subscriptionStatus="free"),
         consume=AsyncMock(return_value=2),
         refund=AsyncMock(),
+        daily=AsyncMock(return_value=1),
         status=200,
         calls=[],
     )
@@ -448,8 +453,10 @@ def planner(monkeypatch):
             return SimpleNamespace(status_code=state.status, json=lambda: {"plan": []})
 
     monkeypatch.setattr(planner_routes.httpx, "AsyncClient", FakeClient)
-    monkeypatch.setattr(planner_routes, "consume_ai_message", state.consume)
-    monkeypatch.setattr(planner_routes, "refund_ai_message", state.refund)
+    monkeypatch.setattr(usage_service, "consume_ai_message", state.consume)
+    monkeypatch.setattr(usage_service, "refund_ai_message", state.refund)
+    monkeypatch.setattr(usage_service, "consume_daily_ai_use", state.daily)
+    monkeypatch.setattr(usage_service, "refund_daily_ai_use", AsyncMock())
     monkeypatch.setattr(
         "app.modules.ai.services.focusly_ai.settings.FOCUSLY_AI_INTERNAL_TOKEN", "tok"
     )
@@ -491,7 +498,7 @@ class TestPlannerLimits:
         assert response.status_code == 502
         state.refund.assert_awaited_once()
 
-    def test_pro_users_are_not_counted(self, planner):
+    def test_pro_users_count_toward_the_daily_fair_use(self, planner):
         client, state = planner
         state.user.subscriptionStatus = "pro"
         response = client.post(
@@ -499,6 +506,7 @@ class TestPlannerLimits:
         )
         assert response.status_code == 200
         state.consume.assert_not_called()
+        state.daily.assert_awaited_once()
         assert "X-AI-Messages-Remaining" not in response.headers
 
 

@@ -43,5 +43,13 @@ class User(Base):
     termsAcceptedAt: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     stripeCustomerId: Mapped[str | None] = mapped_column(String, nullable=True)
     stripeSubscriptionId: Mapped[str | None] = mapped_column(String, nullable=True)
-    # AI chat messages used on the free plan (see billing/plans.py).
+    # AI use (see billing/plans.py). Monthly counters, for the month in
+    # aiPeriod ("2026-10", UTC); a new month starts them over.
+    aiPeriod: Mapped[str | None] = mapped_column(String, nullable=True)
+    # Free plan: AI messages used this month
     aiMessagesUsed: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    # What the user's AI replies cost this month, in millionths of a dollar
+    aiCostMicros: Mapped[int] = mapped_column(BigInteger, default=0, nullable=False)
+    # Pro fair use: AI uses on the day in aiDailyDate ("2026-10-29", UTC)
+    aiDailyDate: Mapped[str | None] = mapped_column(String, nullable=True)
+    aiDailyUsed: Mapped[int] = mapped_column(Integer, default=0, nullable=False)

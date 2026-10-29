@@ -88,6 +88,10 @@ async def lifespan(app: FastAPI):
             'ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "stripeCustomerId" VARCHAR',
             'ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "stripeSubscriptionId" VARCHAR',
             'ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "aiMessagesUsed" INTEGER NOT NULL DEFAULT 0',
+            'ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "aiPeriod" VARCHAR',
+            'ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "aiCostMicros" BIGINT NOT NULL DEFAULT 0',
+            'ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "aiDailyDate" VARCHAR',
+            'ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "aiDailyUsed" INTEGER NOT NULL DEFAULT 0',
             'ALTER TABLE "Canvas" ADD COLUMN IF NOT EXISTS "icon" VARCHAR',
             'ALTER TABLE "Canvas" ADD COLUMN IF NOT EXISTS "previewAt" TIMESTAMP',
         ]

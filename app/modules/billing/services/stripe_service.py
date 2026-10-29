@@ -15,9 +15,16 @@ from app.modules.billing.plans import (
     FREE,
     FREE_AI_MESSAGE_LIMIT,
     PRO,
+    PRO_DAILY_AI_LIMIT,
     canvas_limits,
     grants_access,
     is_pro,
+)
+from app.modules.billing.services.usage_service import (
+    daily_uses_today,
+    day_resets_at,
+    messages_used_this_month,
+    month_resets_at,
 )
 from app.redis import cache
 from app.modules.user.domain.entities.user import User
@@ -513,7 +520,7 @@ class StripeService:
                 # Stripe unreachable: answer with what we know.
                 logger.exception("Could not refresh subscription for %s", user.id)
 
-        used = user.aiMessagesUsed or 0
+        used = messages_used_this_month(user)
         items = _get(_get(subscription, "items"), "data") or []
         price = _get(items[0], "price") if items else None
         discount = None
@@ -533,7 +540,13 @@ class StripeService:
             if subscription
             else None,
             "ai_messages_used": used,
+            # Free: messages this month (they renew on the 1st)
             "ai_messages_limit": FREE_AI_MESSAGE_LIMIT,
+            "ai_messages_resets_at": month_resets_at(),
+            # Pro: fair use, a day
+            "ai_daily_used": daily_uses_today(user),
+            "ai_daily_limit": PRO_DAILY_AI_LIMIT,
+            "ai_daily_resets_at": day_resets_at(),
             # What the user's canvases may hold on their plan
             "canvas_limits": canvas_limits(user).as_dict(),
             "billing_enabled": bool(

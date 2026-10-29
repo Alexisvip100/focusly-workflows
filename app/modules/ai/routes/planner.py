@@ -7,11 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.database import get_db
 from app.modules.ai.services.focusly_ai import focusly_ai_headers
-from app.modules.billing.plans import FREE_AI_MESSAGE_LIMIT, is_pro
-from app.modules.billing.services.usage_service import (
-    consume_ai_message,
-    refund_ai_message,
-)
+from app.modules.billing.services.usage_service import give_back_ai_use, take_ai_use
 from app.modules.user.domain.entities.user import User
 from app.routes.common import get_current_user_id
 
@@ -56,17 +52,9 @@ async def _delegate(
     db: AsyncSession,
     response: Response,
 ) -> Any:
-    """Checks the plan, then asks focusly-ai. A failed call gives the free
-    message back."""
-    remaining: int | None = None
-    if not is_pro(await db.get(User, user_id)):
-        used = await consume_ai_message(db, user_id)
-        if used is None:
-            raise HTTPException(
-                status_code=402,
-                detail={"code": "free_limit_reached", "limit": FREE_AI_MESSAGE_LIMIT},
-            )
-        remaining = FREE_AI_MESSAGE_LIMIT - used
+    """Counts the use against the plan, then asks focusly-ai. A failed call
+    gives the use back."""
+    ai_use = await take_ai_use(db, user_id, await db.get(User, user_id))
 
     try:
         async with httpx.AsyncClient() as client:
@@ -83,8 +71,7 @@ async def _delegate(
             )
         result = r.json()
     except Exception as e:
-        if remaining is not None:
-            await refund_ai_message(db, user_id)
+        await give_back_ai_use(db, user_id, ai_use)
         if isinstance(e, HTTPException):
             raise
         raise HTTPException(
@@ -92,8 +79,7 @@ async def _delegate(
             detail=f"Failed to delegate {what} to focusly-ai: {str(e)}",
         )
 
-    if remaining is not None:
-        response.headers["X-AI-Messages-Remaining"] = str(remaining)
+    response.headers.update(ai_use.headers())
     return result
 
 

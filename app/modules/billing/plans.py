@@ -9,9 +9,45 @@ from graphql import GraphQLError
 FREE = "free"
 PRO = "pro"
 
-# Free plan: this many AI chat messages in total, to try Lumina. The editor
-# assistant is Pro only.
-FREE_AI_MESSAGE_LIMIT = 5
+# AI (Lumina's chat, the planners, Insights' analysis; the editor assistant
+# is Pro only). Every use costs Gemini tokens, so both plans have a limit:
+# - Free: this many messages a calendar month (UTC), to try Lumina and come
+#   back to it. They renew on the 1st.
+FREE_AI_MESSAGE_LIMIT = 10
+# - Pro, fair use: this many a day (UTC), far above what anyone uses by
+#   hand (10–30), to stop scripts and runaway use.
+PRO_DAILY_AI_LIMIT = 150
+# - Pro, cost: past this much Gemini spend in a month (about 45% of the $18
+#   Pro price) Lumina keeps answering, with the cheaper model.
+PRO_MONTHLY_AI_COST_CAP_USD = 8.0
+
+# Gemini prices, USD per million tokens: input, cached input, output (thinking
+# included). https://ai.google.dev/gemini-api/docs/pricing. A model not listed
+# is costed as the dearest one, so the caps never under-count.
+AI_PRICES_PER_MILLION: dict[str, tuple[float, float, float]] = {
+    "gemini-3.5-flash-lite": (0.30, 0.03, 2.50),
+    "gemini-2.5-flash": (0.30, 0.03, 2.50),
+    "gemini-2.5-flash-lite": (0.10, 0.01, 0.40),
+}
+_DEAREST_PRICE = max(AI_PRICES_PER_MILLION.values(), key=lambda p: p[2])
+
+
+def ai_cost_micros(usage: dict[str, Any] | None) -> int:
+    """What one reply cost, in millionths of a dollar, from the token
+    counts focusly-ai reports (input, cached, output, thoughts)."""
+    if not usage:
+        return 0
+    price_in, price_cached, price_out = AI_PRICES_PER_MILLION.get(
+        str(usage.get("model") or ""), _DEAREST_PRICE
+    )
+    tokens = lambda key: max(0, int(usage.get(key) or 0))  # noqa: E731
+    cached = min(tokens("cached"), tokens("input"))
+    # A dollar per million tokens is a millionth of a dollar per token
+    return round(
+        (tokens("input") - cached) * price_in
+        + cached * price_cached
+        + (tokens("output") + tokens("thoughts")) * price_out
+    )
 
 # Canvases (drawings in documents). Free is enough to try them; Pro lifts the
 # count and makes room for bigger drawings and photos. Sizes are what one
