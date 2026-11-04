@@ -22,6 +22,10 @@ from app.database import async_session_local
 from app.models import Task, User, FocusSession, Notification
 import logging
 
+from app.modules.notification.services.morning_push_service import (
+    send_morning_pushes,
+)
+
 logger = logging.getLogger(__name__)
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -631,6 +635,8 @@ async def _run_smart_checks_once() -> None:
         ("break_reminder", _check_break_reminder),
         ("focus_shield", _check_focus_shield),
         ("achievements", _check_achievements),
+        # Push only (not saved): the morning summary at 7 AM local time
+        ("morning_push", send_morning_pushes),
     ]
 
     async with async_session_local() as db:

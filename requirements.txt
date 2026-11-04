@@ -8,6 +8,7 @@ graphql-core>=3.2.0,<3.3.0
 python-socketio[asgi]==5.11.4
 pyjwt[crypto]==2.10.1
 cryptography==43.0.3
+pywebpush==2.3.0
 httpx==0.28.1
 python-dotenv==1.0.1
 numpy

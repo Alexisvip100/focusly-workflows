@@ -12,6 +12,9 @@ Two notification windows:
 
 Socket event emitted: "task_upcoming"
 Payload: { taskId, title, deadline, minutesLeft, type: "5min" | "1min" }
+
+Each reminder also goes out as a web push (push_service), so it reaches the
+user's devices while Focusly is closed.
 """
 
 import asyncio
@@ -24,6 +27,7 @@ from app.models import Task, Notification
 from app.sockets.realtime import sio
 from app.modules.task.repository import TasksRepository
 from app.modules.notification.repository import NotificationsRepository
+from app.modules.notification.services import push_service
 from app.modules.notification.services.sweep_lock import run_exclusively
 
 logger = logging.getLogger(__name__)
@@ -40,6 +44,8 @@ async def _check_and_notify_once() -> None:
     async with async_session_local() as db:
         tasks_repo = TasksRepository(db)
         notif_repo = NotificationsRepository(db)
+        # (user_id, task_id, title, minutes_left), pushed once committed
+        pushes: list[tuple[str, str, str, int]] = []
 
         # ── 5-minute warning ──────────────────────────────────────────────
         # Tasks whose start time falls in [now+4min, now+6min] and haven't
@@ -75,6 +81,7 @@ async def _check_and_notify_once() -> None:
 
             task.notified = True
             await tasks_repo.save(task, commit=False)
+            pushes.append((task.userId, task.id, task.title, minutes_left))
 
         # ── 1-minute warning ──────────────────────────────────────────────
         tasks_1min = await tasks_repo.get_tasks_for_warning(
@@ -108,6 +115,7 @@ async def _check_and_notify_once() -> None:
 
             task.lastMinuteNotified = True
             await tasks_repo.save(task, commit=False)
+            pushes.append((task.userId, task.id, task.title, minutes_left))
 
         # Commit all notifications and task status changes atomically
         if tasks_5min or tasks_1min:
@@ -117,6 +125,29 @@ async def _check_and_notify_once() -> None:
                 len(tasks_5min),
                 len(tasks_1min),
             )
+
+        # After the commit: a push failing never undoes a sent reminder
+        for user_id, task_id, title, minutes_left in pushes:
+            await push_service.send_to_user(
+                db,
+                user_id,
+                title,
+                reminder_body(minutes_left),
+                url="/dashboard",
+                # The same tag as the in-app reminder (taskReminder.ts): never
+                # shown twice, and the 1-minute one replaces the 5-minute one.
+                tag=task_id,
+                renotify=True,
+                in_app=True,
+            )
+
+
+def reminder_body(minutes_left: int) -> str:
+    if minutes_left <= 0:
+        return "Empieza ahora"
+    if minutes_left == 1:
+        return "Empieza en 1 minuto"
+    return f"Empieza en {minutes_left} minutos"
 
 
 async def _emit_notification(
