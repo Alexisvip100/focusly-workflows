@@ -17,9 +17,10 @@ FREE_AI_MESSAGE_LIMIT = 10
 # - Pro, fair use: this many a day (UTC), far above what anyone uses by
 #   hand (10–30), to stop scripts and runaway use.
 PRO_DAILY_AI_LIMIT = 150
-# - Pro, cost: past this much Gemini spend in a month (about 45% of the $18
-#   Pro price) Lumina keeps answering, with the cheaper model.
-PRO_MONTHLY_AI_COST_CAP_USD = 8.0
+# - Pro, cost: past this much Gemini spend in a month (about 40% of the $12
+#   a month of the yearly Pro price, 36% of the $14 monthly one) Lumina keeps
+#   answering, with the cheaper model.
+PRO_MONTHLY_AI_COST_CAP_USD = 5.0
 
 # Gemini prices, USD per million tokens: input, cached input, output (thinking
 # included). https://ai.google.dev/gemini-api/docs/pricing. A model not listed
