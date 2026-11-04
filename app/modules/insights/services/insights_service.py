@@ -159,7 +159,7 @@ class InsightsService:
         )
 
         golden_window = self.calculate_golden_window(
-            filtered_sessions, work_hours_config
+            filtered_sessions, work_hours_config, timezone_offset_minutes
         )
         break_stats = self.calculate_break_hours(filtered_sessions)
 
@@ -516,8 +516,13 @@ class InsightsService:
         return {"value": f"{score}/100", "change": "+2 pts", "trend": "up"}
 
     def calculate_golden_window(
-        self, sessions: list[FocusSession], work_hours: dict[str, Any] | None = None
+        self,
+        sessions: list[FocusSession],
+        work_hours: dict[str, Any] | None = None,
+        timezone_offset_minutes: int = 0,
     ) -> dict[str, Any]:
+        """The two hours with the most focus time, in the user's local time
+        (sessions are stored in UTC; the offset is JS getTimezoneOffset())."""
         if not sessions:
             start = work_hours.get("startTime") if work_hours else "09:00"
             end = work_hours.get("endTime") if work_hours else "11:00"
@@ -532,7 +537,7 @@ class InsightsService:
             started_at = s.startedAt
             if isinstance(started_at, str):
                 started_at = datetime.fromisoformat(started_at.replace("Z", "+00:00"))
-            hour = started_at.hour
+            hour = (started_at - timedelta(minutes=timezone_offset_minutes)).hour
             hour_stats[hour] += s.durationMinutes or 0
 
         max_minutes = 0
