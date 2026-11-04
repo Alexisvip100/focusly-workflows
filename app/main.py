@@ -23,6 +23,7 @@ from app.modules.storage.presentation.rest import (
     router as storage_router,
 )
 from app.modules.billing.routes import router as billing_router
+from app.modules.notification.push_routes import router as push_router
 
 
 from app.database import engine, Base
@@ -194,6 +195,7 @@ fastapi_app.include_router(planner_router)
 fastapi_app.include_router(storage_router)
 fastapi_app.include_router(media_router)
 fastapi_app.include_router(billing_router)
+fastapi_app.include_router(push_router)
 
 
 # 4. GraphQL Setup with session management and auth context

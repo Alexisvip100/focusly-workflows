@@ -79,6 +79,12 @@ class Settings:
     STRIPE_PRICE_ID_PRO_YEARLY: str = os.getenv("STRIPE_PRICE_ID_PRO_YEARLY", "").strip()
     # Days of Pro free (card required) for whoever never subscribed; 0: none.
     PRO_TRIAL_DAYS: int = int(os.getenv("PRO_TRIAL_DAYS", "7") or 0)
+    # Web push (reminders with Focusly closed). A VAPID key pair: generate it
+    # once with `python generate_vapid_keys.py`. Unset, push is simply off.
+    VAPID_PUBLIC_KEY: str = os.getenv("VAPID_PUBLIC_KEY", "").strip()
+    VAPID_PRIVATE_KEY: str = os.getenv("VAPID_PRIVATE_KEY", "").strip()
+    # Who push services contact about this sender: a mailto: or https URL.
+    VAPID_SUBJECT: str = os.getenv("VAPID_SUBJECT", "").strip()
 
 
 settings = Settings()

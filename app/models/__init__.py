@@ -14,6 +14,7 @@ from app.modules.task.domain.entities.focus_session import FocusSession
 from app.modules.task.domain.entities.tag import Tag
 from app.modules.task.domain.entities.task import Task
 from app.modules.notification.domain.entities.notification import Notification
+from app.modules.notification.domain.entities.push_subscription import PushSubscription
 from app.modules.automation.domain.entities.automation_log import AutomationLog
 
 __all__ = [
@@ -29,6 +30,7 @@ __all__ = [
     "FocusSession",
     # Notification Entities
     "Notification",
+    "PushSubscription",
     # ProjectGroup Entities
     "ProjectGroup",
     # Tag Entities
