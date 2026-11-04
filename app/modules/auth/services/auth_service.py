@@ -207,7 +207,10 @@ class AuthService:
         }
         return jwt.encode(payload, settings.JWT_SECRET, algorithm="HS256")
 
-    async def send_magic_link(self, email: str, token: str) -> None:
+    async def send_magic_link(self, email: str, token: str) -> bool:
+        """Emails the sign-in link. Returns whether the email went out (in
+        local development without RESEND_API_KEY, the link is logged and
+        that counts as sent)."""
         magic_link = f"{settings.FRONTEND_URL}/login?token={token}"
 
         if settings.RESEND_API_KEY:
@@ -220,7 +223,7 @@ class AuthService:
                             "Content-Type": "application/json",
                         },
                         json={
-                            "from": "Focusly <onboarding@resend.dev>",
+                            "from": settings.EMAIL_FROM,
                             "to": email,
                             "subject": "Your Focusly Magic Link",
                             "html": f"""
@@ -238,7 +241,7 @@ class AuthService:
                         },
                     )
                     if response.status_code in (200, 201):
-                        return
+                        return True
                     logger.error(
                         "Failed to send magic link to %s. Resend responded with status %s: %s",
                         email,
@@ -247,16 +250,19 @@ class AuthService:
                     )
                 except Exception as e:
                     logger.exception("Error sending magic link to %s: %s", email, e)
+            return False
         else:
             if not settings.IS_PRODUCTION:
                 logger.warning(
                     "RESEND_API_KEY is not set. Magic link for %s: %s", email, magic_link
                 )
+                return True
             else:
                 logger.error(
                     "RESEND_API_KEY is not configured in production. Cannot deliver magic link to %s.",
                     email,
                 )
+                return False
 
     async def verify_magic_link_token(self, token: str) -> dict[str, Any]:
         try:

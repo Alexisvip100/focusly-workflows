@@ -1,4 +1,8 @@
 import strawberry
+from graphql.validation import NoSchemaIntrospectionCustomRule
+from strawberry.extensions import AddValidationRules
+
+from app.config import settings
 from app.graphql.extensions import TransactionalMutationExtension
 from app.modules.task.presentation.graphql import TaskQuery, TaskMutation, TagQuery
 from app.modules.workspace.presentation.graphql import (
@@ -45,8 +49,16 @@ class Mutation(
     pass
 
 
+# In production the schema isn't handed to whoever asks (introspection is
+# a map of the whole API); the app never needs it. __typename still works.
+_production_rules = (
+    [AddValidationRules([NoSchemaIntrospectionCustomRule])]
+    if settings.IS_PRODUCTION
+    else []
+)
+
 schema = strawberry.Schema(
     query=Query,
     mutation=Mutation,
-    extensions=[TransactionalMutationExtension],
+    extensions=[TransactionalMutationExtension, *_production_rules],
 )

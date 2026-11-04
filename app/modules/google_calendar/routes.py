@@ -236,6 +236,21 @@ async def remove_event(
         )
 
 
+async def is_registered_channel(
+    db: AsyncSession, user_id: str | None, channel_id: str | None
+) -> bool:
+    """Whether `channel_id` is the Calendar push channel registered for
+    `user_id` (watch_calendar saves it on the user)."""
+    if not user_id or not channel_id:
+        return False
+    try:
+        user = await UsersRepository(db).get_by_id(user_id)
+    except Exception:
+        logger.exception("Could not check a calendar notification's channel")
+        return False
+    return bool(user) and safe_attr(user, "googleChannelId") == channel_id
+
+
 @router.post("/webhook")
 async def handle_google_webhook(
     request: Request,
@@ -250,6 +265,13 @@ async def handle_google_webhook(
 
     if x_goog_resource_state == "exists":
         userId = x_goog_channel_token
+        # Anyone can call this URL, and the token is just the user's id, which
+        # isn't secret. Only a notification for the channel this server opened
+        # for that user (its id is a random UUID only Google and we know)
+        # starts a sync; anything else is dropped.
+        if not await is_registered_channel(db, userId, x_goog_channel_id):
+            logger.warning("Ignored a calendar notification for an unknown channel")
+            return {"status": "ignored"}
 
         # In the background, so Google gets its answer right away.
         await start_background_sync(userId, notify=True, throttle=False)

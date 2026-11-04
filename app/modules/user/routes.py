@@ -1,3 +1,4 @@
+import logging
 from datetime import datetime, timezone
 from typing import Any
 import uuid
@@ -19,6 +20,8 @@ from app.modules.storage.services.storage_service import (
     delete_avatar_object,
     is_avatar_key_owned_by,
 )
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/users", tags=["users"])
 
@@ -102,8 +105,9 @@ async def create_user(
         user_data["id"] = str(uuid.uuid4())
         user = await users_service.create(user_data)
         return map_user_to_dict(user)
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+    except Exception:
+        logger.exception("Admin could not create a user")
+        raise HTTPException(status_code=400, detail="No se pudo crear el usuario.")
 
 
 @router.get("", response_model=list[dict[str, Any]])

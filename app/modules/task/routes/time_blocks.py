@@ -1,3 +1,4 @@
+import logging
 from fastapi import APIRouter, HTTPException, Depends
 from typing import Any
 from pydantic import BaseModel
@@ -8,6 +9,8 @@ from app.routes.common import get_current_user_id
 from app.modules.user.services.users_service import UsersService
 from app.modules.task.repository import TasksRepository
 from app.modules.task.services.time_blocks_service import TimeBlocksService
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/time-blocks", tags=["time-blocks"])
 
@@ -61,8 +64,9 @@ async def create_time_block(
         block_data["userId"] = current_user_id
         block_id = await tb_service.create(block_data)
         return block_id
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+    except Exception:
+        logger.exception("Could not create a time block")
+        raise HTTPException(status_code=400, detail="No pudimos crear el bloque de tiempo.")
 
 
 @router.get("", response_model=list[dict[str, Any]])

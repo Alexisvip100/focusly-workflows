@@ -1,3 +1,4 @@
+import logging
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Response
 from typing import Any
@@ -10,6 +11,8 @@ from app.modules.ai.services.focusly_ai import focusly_ai_headers
 from app.modules.billing.services.usage_service import give_back_ai_use, take_ai_use
 from app.modules.user.domain.entities.user import User
 from app.routes.common import get_current_user_id
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/ai/planner", tags=["ai-planner"])
 
@@ -74,9 +77,10 @@ async def _delegate(
         await give_back_ai_use(db, user_id, ai_use)
         if isinstance(e, HTTPException):
             raise
+        logger.exception("Could not delegate %s to focusly-ai", what)
         raise HTTPException(
             status_code=500,
-            detail=f"Failed to delegate {what} to focusly-ai: {str(e)}",
+            detail="Lumina no está disponible en este momento. Inténtalo de nuevo.",
         )
 
     response.headers.update(ai_use.headers())
