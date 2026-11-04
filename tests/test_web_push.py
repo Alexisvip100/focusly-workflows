@@ -139,7 +139,7 @@ async def test_send_reaches_every_device_and_forgets_the_gone_ones(vapid, monkey
     db = _db_returning([alive, gone, failing])
 
     delivered = await push_service.send_to_user(
-        db, "u1", "Bocetos", "Empieza ahora", tag="task-1", renotify=True
+        db, "u1", "Bocetos", "Empieza ahora", tag="task-1", renotify=True, in_app=True
     )
 
     assert delivered == 1
@@ -149,6 +149,7 @@ async def test_send_reaches_every_device_and_forgets_the_gone_ones(vapid, monkey
         "url": "/dashboard",
         "tag": "task-1",
         "renotify": True,
+        "inApp": True,
     }
     # One delete, for the 410 only (a 500 may be temporary)
     delete_stmt = db.execute.await_args_list[1].args[0]
@@ -303,7 +304,7 @@ async def test_each_reminder_is_pushed_after_the_commit(monkeypatch):
             return False
 
     async def fake_push(_db, user_id, title, body, **kwargs):
-        events.append(("push", user_id, title, body, kwargs["tag"]))
+        events.append(("push", user_id, title, body, kwargs["tag"], kwargs["in_app"]))
         return 1
 
     monkeypatch.setattr(task_notifier_service, "async_session_local", Session)
@@ -315,7 +316,7 @@ async def test_each_reminder_is_pushed_after_the_commit(monkeypatch):
     await task_notifier_service._check_and_notify_once()
 
     assert events[0] == "commit"
-    assert events[1] == ("push", "u1", "Bocetos", "Empieza ahora", "t1")
+    assert events[1] == ("push", "u1", "Bocetos", "Empieza ahora", "t1", True)
 
 
 # ─── Morning summary ────────────────────────────────────────────────────────
@@ -362,6 +363,8 @@ async def test_morning_summary_goes_out_at_7_local_time_once(vapid, monkeypatch)
     args, kwargs = sent.await_args
     assert args[1:] == ("u1", "☀️ Buenos días", "Hoy tienes 3 tareas (1 de prioridad alta). ¡Vamos!")
     assert kwargs["tag"] == "morning-summary"
+    # No in-app version: shown even with Focusly on screen
+    assert not kwargs.get("in_app")
 
 
 @pytest.mark.anyio

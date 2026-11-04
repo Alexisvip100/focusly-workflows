@@ -138,6 +138,7 @@ async def _check_and_notify_once() -> None:
                 # shown twice, and the 1-minute one replaces the 5-minute one.
                 tag=task_id,
                 renotify=True,
+                in_app=True,
             )
 
 

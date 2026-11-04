@@ -130,14 +130,16 @@ async def send_to_user(
     url: str = "/dashboard",
     tag: str | None = None,
     renotify: bool = False,
+    in_app: bool = False,
     ttl: int = DEFAULT_TTL_SECONDS,
 ) -> int:
     """Notifies every device the user enabled. Returns how many accepted it.
 
     `tag` groups notifications: one with the same tag replaces the previous
     one instead of stacking (the in-app reminder uses the task id too, so
-    the two never show twice). Never raises: a push failing must not break
-    the sweep that sent it.
+    the two never show twice). `in_app`: Focusly shows this one itself when
+    it's on screen, so the service worker skips it then. Never raises: a
+    push failing must not break the sweep that sent it.
     """
     if not is_configured():
         return 0
@@ -155,6 +157,8 @@ async def send_to_user(
     if tag:
         payload["tag"] = tag
         payload["renotify"] = renotify
+    if in_app:
+        payload["inApp"] = True
     data = json.dumps(payload, ensure_ascii=False)
 
     # pywebpush is blocking (requests): one thread per device, in parallel
