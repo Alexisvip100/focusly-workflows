@@ -41,6 +41,9 @@ class Settings:
     GOOGLE_GENERATIVE_AI_API_KEY: str = os.getenv("GOOGLE_GENERATIVE_AI_API_KEY", "")
     WEBHOOK_URL: str = os.getenv("WEBHOOK_URL", "http://localhost:3000")
     RESEND_API_KEY: str = os.getenv("RESEND_API_KEY", "")
+    # Sender of the sign-in emails. Resend's test sender only delivers to
+    # the Resend account's owner: set your verified domain's address.
+    EMAIL_FROM: str = os.getenv("EMAIL_FROM", "").strip() or "Focusly <onboarding@resend.dev>"
     IS_PRODUCTION: bool = os.getenv("ENV", "development") == "production"
     # The web service runs the notification loops itself (one sweep at a
     # time across replicas, through a Redis lock). Set to 0 when they run in

@@ -147,7 +147,12 @@ def start_notifier_loops() -> list[asyncio.Task]:
 from fastapi.responses import JSONResponse
 
 # 1. Initialize FastAPI
-fastapi_app = FastAPI(title="Focusly Backend", version="1.0.0", lifespan=lifespan)
+# The interactive API docs are for development: in production they'd hand
+# anyone a map of every endpoint.
+_docs = {} if not settings.IS_PRODUCTION else {"docs_url": None, "redoc_url": None, "openapi_url": None}
+fastapi_app = FastAPI(
+    title="Focusly Backend", version="1.0.0", lifespan=lifespan, **_docs
+)
 
 
 @fastapi_app.exception_handler(Exception)
@@ -252,7 +257,10 @@ from typing import Any
 from app.graphql import schema
 
 graphql_router: GraphQLRouter[Any, Any] = GraphQLRouter(
-    schema, context_getter=get_context
+    schema,
+    context_getter=get_context,
+    # No GraphiQL playground in production
+    graphql_ide=None if settings.IS_PRODUCTION else "graphiql",
 )
 fastapi_app.include_router(graphql_router, prefix="/graphql")
 

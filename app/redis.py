@@ -73,6 +73,24 @@ class ResilientRedisCache:
             logger.warning(f"Redis lock failed for key {key}: {e}.")
         return None
 
+    async def count_in_window(self, key: str, window_seconds: int) -> int | None:
+        """Adds one hit to `key` and returns the hits in its current window
+        (which starts with the first hit and lasts `window_seconds`). None:
+        Redis is down — the caller decides what to do."""
+        if not await self._ensure_connected() or self.client is None:
+            return None
+        try:
+            # One transaction: the first hit creates the key with its expiry
+            # (SET NX EX, any Redis version), every hit increments it.
+            pipe = self.client.pipeline(transaction=True)
+            pipe.set(key, 0, ex=window_seconds, nx=True)
+            pipe.incr(key)
+            _, count = await pipe.execute()
+            return int(count)
+        except Exception as e:
+            logger.warning(f"Redis counter failed for key {key}: {e}.")
+        return None
+
     async def get(self, key: str) -> Any | None:
         if not await self._ensure_connected() or self.client is None:
             return None

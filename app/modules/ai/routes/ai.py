@@ -293,11 +293,12 @@ async def analyze_patterns_endpoint(
                     detail=f"focusly-ai service returned code {r.status_code}",
                 )
             result = r.json()
-        except Exception as e:
+        except Exception:
             await give_back_ai_use(db, current_user_id, ai_use)
+            logger.exception("Patterns analysis via focusly-ai failed")
             raise HTTPException(
                 status_code=500,
-                detail=f"Error proxying patterns analysis to focusly-ai: {str(e)}",
+                detail="Lumina no está disponible en este momento. Inténtalo de nuevo.",
             )
     response.headers.update(ai_use.headers())
     return result
@@ -706,9 +707,10 @@ async def delete_conversation(
         await msg_repo.delete_by_conversation_id(conversation_id)
         await conv_repo.delete(conversation)
         await db.commit()
-    except Exception as e:
+    except Exception:
         await db.rollback()
+        logger.exception("Could not delete conversation %s", conversation_id)
         raise HTTPException(
-            status_code=500, detail=f"Failed to delete conversation: {e}"
+            status_code=500, detail="No pudimos borrar la conversación."
         )
     return {"status": "success", "message": "Conversation deleted"}
