@@ -8,6 +8,7 @@ from fastapi.testclient import TestClient
 
 from app.database import get_db
 from app.modules.ai.routes import ai as ai_routes
+from app.modules.billing.services import usage_service
 from app.modules.ai.services.context_builder import AIContext
 from app.modules.ai.services.editor_blocks import (
     editor_message_preview,
@@ -86,6 +87,9 @@ def chat_app(monkeypatch):
         ai_routes, "build_context", AsyncMock(return_value=AIContext("ctx"))
     )
     monkeypatch.setattr(ai_routes, "stream_gemini_and_save", fake_stream)
+    # A Pro account well within its daily fair use
+    monkeypatch.setattr(usage_service, "consume_daily_ai_use", AsyncMock(return_value=1))
+    monkeypatch.setattr(usage_service, "refund_daily_ai_use", AsyncMock())
 
     app = FastAPI()
     app.include_router(ai_routes.router)

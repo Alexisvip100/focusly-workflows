@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks
+from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks, Response
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from typing import Any
@@ -19,6 +19,7 @@ from app.models import Conversation, Message
 from app.modules.user.repository import UsersRepository
 from app.modules.task.repository import TasksRepository
 from app.modules.workspace.repository import WorkspacesRepository
+from app.modules.canvas.services.canvas_text import document_canvases_text
 from app.modules.ai.repository import ConversationRepository, MessageRepository
 
 from app.modules.ai.services.chat_payload import build_history, has_attachments
@@ -33,7 +34,7 @@ from app.modules.ai.services.focusly_ai import (
     focusly_ai_headers,
     total_tokens,
 )
-from app.modules.ai.services.router import pick_model
+from app.modules.ai.services.router import LIGHT_MODEL, pick_model
 from app.modules.ai.services.memory import extract_and_save_memory, worth_extracting
 from app.modules.ai.services.summarizer import check_and_summarize
 from app.modules.ai.services.action_parser import extract_actions, strip_action_tag
@@ -41,14 +42,12 @@ from app.modules.ai.services.editor_blocks import (
     editor_message_preview,
     strip_editor_blocks,
 )
-from app.modules.billing.plans import (
-    FREE_AI_MESSAGE_LIMIT,
-    is_editor_request,
-    is_pro,
-)
+from app.modules.billing.plans import ai_cost_micros, is_editor_request, is_pro
 from app.modules.billing.services.usage_service import (
-    consume_ai_message,
-    refund_ai_message,
+    AIUse,
+    add_ai_cost,
+    give_back_ai_use,
+    take_ai_use,
 )
 from app.modules.user.domain.entities.user import User
 
@@ -173,6 +172,13 @@ async def fetch_ai_stream_and_persist(
                 usage.get("output"),
                 usage.get("thoughts"),
             )
+            # Toward the user's monthly cost cap
+            try:
+                async for cost_db in db_factory():
+                    await add_ai_cost(cost_db, user_id, ai_cost_micros(usage))
+                    break
+            except Exception as e:
+                logger.error(f"Could not record the AI cost: {e}")
 
         # Persist assistant reply to DB even if client disconnected mid-stream
         if conversation_id and full_assistant_response:
@@ -252,9 +258,12 @@ from app.modules.insights.services.behavioral_analyzer import BehavioralAnalyzer
 
 @router.post("/analyze-patterns")
 async def analyze_patterns_endpoint(
+    response: Response,
     current_user_id: str = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db),
 ):
+    # One AI use, like a message (the Insights button asks for it)
+    ai_use = await take_ai_use(db, current_user_id, await db.get(User, current_user_id))
     analyzer = BehavioralAnalyzer(db)
     signals = await analyzer.collect_signals(current_user_id)
 
@@ -283,12 +292,15 @@ async def analyze_patterns_endpoint(
                     status_code=502,
                     detail=f"focusly-ai service returned code {r.status_code}",
                 )
-            return r.json()
+            result = r.json()
         except Exception as e:
+            await give_back_ai_use(db, current_user_id, ai_use)
             raise HTTPException(
                 status_code=500,
                 detail=f"Error proxying patterns analysis to focusly-ai: {str(e)}",
             )
+    response.headers.update(ai_use.headers())
+    return result
 
 
 @router.post("/chat")
@@ -302,30 +314,20 @@ async def chat_endpoint(
         raise HTTPException(status_code=400, detail="Messages array cannot be empty")
 
     # Plan limits, enforced here (the browser's own counter is only a hint):
-    # free users get FREE_AI_MESSAGE_LIMIT chat messages and no editor
-    # assistant. 402 + a code tells the app to show the Pro plans.
+    # the editor assistant is Pro only, and every message counts against the
+    # plan's limit (see take_ai_use). 402 + a code tells the app to show the
+    # Pro plans.
     user = await db.get(User, current_user_id)
-    remaining: int | None = None
-    if not is_pro(user):
-        if is_editor_request(
-            document_context=body.document_context,
-            persist=body.persist,
-            workspace_id=body.workspaceId,
-        ):
-            raise HTTPException(
-                status_code=402,
-                detail={"code": "pro_required", "feature": "editor_ai"},
-            )
-        used = await consume_ai_message(db, current_user_id)
-        if used is None:
-            raise HTTPException(
-                status_code=402,
-                detail={
-                    "code": "free_limit_reached",
-                    "limit": FREE_AI_MESSAGE_LIMIT,
-                },
-            )
-        remaining = FREE_AI_MESSAGE_LIMIT - used
+    if not is_pro(user) and is_editor_request(
+        document_context=body.document_context,
+        persist=body.persist,
+        workspace_id=body.workspaceId,
+    ):
+        raise HTTPException(
+            status_code=402,
+            detail={"code": "pro_required", "feature": "editor_ai"},
+        )
+    ai_use: AIUse = await take_ai_use(db, current_user_id, user)
 
     # We only care about the latest user message since we have state in DB
     latest_user_message = body.messages[-1].content
@@ -339,8 +341,7 @@ async def chat_endpoint(
     elif conversation_id:
         conversation = await conv_repo.get_by_id(conversation_id)
         if not conversation or conversation.userId != current_user_id:
-            if remaining is not None:
-                await refund_ai_message(db, current_user_id)
+            await give_back_ai_use(db, current_user_id, ai_use)
             raise HTTPException(status_code=404, detail="Conversation not found")
     else:
         if body.workspaceId:
@@ -348,6 +349,7 @@ async def chat_endpoint(
                 body.workspaceId, current_user_id
             )
             if not workspace:
+                await give_back_ai_use(db, current_user_id, ai_use)
                 raise HTTPException(status_code=404, detail="Workspace not found")
 
         title = (body.conversationTitle or "").strip()[:80]
@@ -425,10 +427,15 @@ async def chat_endpoint(
         {"role": "user", "content": latest_user_message}
     ]
 
-    selected_model = pick_model(
-        body.model,
-        latest_user_message,
-        has_attachments=has_attachments(latest_user_message),
+    # Pro past its monthly cost cap keeps going on the cheaper model
+    selected_model = (
+        LIGHT_MODEL
+        if ai_use.economy
+        else pick_model(
+            body.model,
+            latest_user_message,
+            has_attachments=has_attachments(latest_user_message),
+        )
     )
     user_turns = sum(1 for role, _ in history_source if role == "user")
     extract_memory = (
@@ -450,6 +457,9 @@ async def chat_endpoint(
             time_zone=body.timeZone,
             mode="editor" if editor else "full",
         )
+
+    # Documents whose canvases' text Lumina also reads
+    canvas_docs: list[str] = []
 
     # Apply selected context instructions
     if body.contextType in ("tasks", "calendar"):
@@ -526,6 +536,7 @@ async def chat_endpoint(
                 f"- Task linked directly to this document: {linked_task_info}\n"
                 f"Please focus your response primarily on discussing, explaining, or formatting the information in this specific workspace document."
             )
+            canvas_docs.append(ws_obj.id)
 
     if body.document_context:
         system_context.add(
@@ -534,6 +545,16 @@ async def chat_endpoint(
             "unsaved edits — trust it over anything above with the same title):\n"
             f"{body.document_context}"
         )
+        # The editor's document: named on the request when the conversation
+        # starts, and kept on the conversation after that
+        open_doc = body.workspaceId or getattr(conversation, "workspaceId", None)
+        if open_doc:
+            canvas_docs.append(open_doc)
+
+    for doc_id in dict.fromkeys(canvas_docs):
+        canvases = await document_canvases_text(db, doc_id, current_user_id)
+        if canvases:
+            system_context.add(canvases)
 
     task = body.task
     if task:
@@ -566,11 +587,7 @@ async def chat_endpoint(
         media_type="text/plain",
         headers={
             **({"X-Conversation-Id": conversation.id} if conversation else {}),
-            **(
-                {"X-AI-Messages-Remaining": str(remaining)}
-                if remaining is not None
-                else {}
-            ),
+            **ai_use.headers(),
         }
         or None,
     )

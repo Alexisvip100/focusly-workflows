@@ -10,7 +10,12 @@ from app.database import get_db
 from app.modules.ai.routes import ai as ai_routes
 from app.modules.ai.services.context_builder import AIContext
 from app.modules.billing import routes as billing_routes
-from app.modules.billing.plans import FREE_AI_MESSAGE_LIMIT, is_editor_request
+from app.modules.billing.plans import (
+    FREE_AI_MESSAGE_LIMIT,
+    PRO_DAILY_AI_LIMIT,
+    is_editor_request,
+)
+from app.modules.billing.services import usage_service
 from app.modules.billing.services import stripe_service as service_module
 from app.modules.billing.services.stripe_service import (
     StripeService,
@@ -282,7 +287,9 @@ class TestStatus:
             "retrieve",
             MagicMock(return_value=subscription(cancel_at_period_end=True)),
         )
-        user = make_user(stripeSubscriptionId="sub_1", aiMessagesUsed=2)
+        user = make_user(
+            stripeSubscriptionId="sub_1", aiMessagesUsed=2, aiPeriod=usage_service.month_key()
+        )
 
         status = await StripeService(make_db()).get_status(user, refresh=True)
 
@@ -291,6 +298,9 @@ class TestStatus:
         assert status["current_period_end"] == 1_800_000_000
         assert status["ai_messages_used"] == 2
         assert status["ai_messages_limit"] == FREE_AI_MESSAGE_LIMIT
+        assert status["ai_daily_limit"] == PRO_DAILY_AI_LIMIT
+        assert status["ai_messages_resets_at"] == usage_service.month_resets_at()
+        assert status["ai_daily_resets_at"] == usage_service.day_resets_at()
         assert status["pro_price"] == {
             "amount": 999,
             "currency": "usd",
@@ -438,9 +448,13 @@ class TestChatLimits:
             user=make_user(),
             consume=AsyncMock(return_value=3),
             refund=AsyncMock(),
+            daily=AsyncMock(return_value=7),
+            daily_refund=AsyncMock(),
         )
-        monkeypatch.setattr(ai_routes, "consume_ai_message", state.consume)
-        monkeypatch.setattr(ai_routes, "refund_ai_message", state.refund)
+        monkeypatch.setattr(usage_service, "consume_ai_message", state.consume)
+        monkeypatch.setattr(usage_service, "refund_ai_message", state.refund)
+        monkeypatch.setattr(usage_service, "consume_daily_ai_use", state.daily)
+        monkeypatch.setattr(usage_service, "refund_daily_ai_use", state.daily_refund)
 
         app = FastAPI()
         app.include_router(ai_routes.router)
@@ -469,6 +483,7 @@ class TestChatLimits:
         assert response.json()["detail"] == {
             "code": "free_limit_reached",
             "limit": FREE_AI_MESSAGE_LIMIT,
+            "resets_at": usage_service.month_resets_at(),
         }
 
     def test_editor_assistant_is_pro_only(self, chat):
@@ -481,13 +496,27 @@ class TestChatLimits:
         assert response.json()["detail"]["code"] == "pro_required"
         state.consume.assert_not_called()
 
-    def test_pro_users_are_not_counted(self, chat):
+    def test_pro_users_count_toward_the_daily_fair_use(self, chat):
         client, state = chat
         state.user.subscriptionStatus = "pro"
         response = client.post("/ai/chat", json={"messages": self.MESSAGES})
         assert response.status_code == 200
         state.consume.assert_not_called()
+        state.daily.assert_awaited_once()
         assert "X-AI-Messages-Remaining" not in response.headers
+        assert response.headers["X-AI-Daily-Remaining"] == str(PRO_DAILY_AI_LIMIT - 7)
+
+    def test_pro_past_the_daily_limit_is_told_to_come_back_tomorrow(self, chat):
+        client, state = chat
+        state.user.subscriptionStatus = "pro"
+        state.daily.return_value = None
+        response = client.post("/ai/chat", json={"messages": self.MESSAGES})
+        assert response.status_code == 429
+        assert response.json()["detail"] == {
+            "code": "daily_limit_reached",
+            "limit": PRO_DAILY_AI_LIMIT,
+            "resets_at": usage_service.day_resets_at(),
+        }
 
     def test_a_rejected_request_gives_the_message_back(self, chat):
         client, state = chat
