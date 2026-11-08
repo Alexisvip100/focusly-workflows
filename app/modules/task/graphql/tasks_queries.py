@@ -28,9 +28,8 @@ class TaskQuery:
         tasks_serv = TasksService(db)
 
         # Convert filters input to dict
-        filters_dict: dict[str, Any] | None = None
+        filters_dict: dict[str, Any] = {}
         if filters:
-            filters_dict = {}
             if filters.status is not None:
                 filters_dict["status"] = filters.status
             if filters.priorityLevel is not None:
@@ -54,6 +53,13 @@ class TaskQuery:
             has_prj = filters.has_project if filters.has_project is not None else filters.hasProject
             if has_prj is not None:
                 filters_dict["has_project"] = has_prj
+
+        if (
+            "project_id" not in filters_dict
+            and "has_project" not in filters_dict
+            and "workspace_id" not in filters_dict
+        ):
+            filters_dict["has_project"] = False
 
         sort_dict = None
         if sort:
@@ -81,9 +87,8 @@ class TaskQuery:
         db = info.context["db"]
         tasks_serv = TasksService(db)
 
-        filters_dict: dict[str, Any] | None = None
+        filters_dict: dict[str, Any] = {}
         if filters:
-            filters_dict = {}
             if filters.status is not None:
                 filters_dict["status"] = filters.status
             if filters.priorityLevel is not None:
@@ -107,6 +112,13 @@ class TaskQuery:
             has_prj = filters.has_project if filters.has_project is not None else filters.hasProject
             if has_prj is not None:
                 filters_dict["has_project"] = has_prj
+
+        if (
+            "project_id" not in filters_dict
+            and "has_project" not in filters_dict
+            and "workspace_id" not in filters_dict
+        ):
+            filters_dict["has_project"] = False
 
         sort_dict = None
         if sort:

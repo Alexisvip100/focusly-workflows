@@ -476,6 +476,11 @@ def test_sql_pushdown_direct_filters_real_db_execution():
             assert total == 3
             assert set(t.id for t in items) == {"t1", "t2", "t3"}
 
+            # 4b. Has project = False filter (excludes project tasks)
+            items, total = await repo.query_tasks_by_user("u1", filters={"has_project": False})
+            assert total == 2
+            assert set(t.id for t in items) == {"t4", "t5"}
+
             # 5. Combined filters + sorting with tiebreaker
             items, total = await repo.query_tasks_by_user(
                 "u1",

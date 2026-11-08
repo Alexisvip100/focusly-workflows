@@ -246,6 +246,8 @@ class SchedulerService:
         tasks = await tasks_repo.get_all_active_by_user(user_id)
         tasks_list = []
         for t in tasks:
+            if getattr(t, "projectId", None) and str(t.projectId).strip():
+                continue
             tasks_list.append(
                 {
                     "id": t.id,
@@ -346,7 +348,13 @@ class SchedulerService:
                             t_obj.lastMinuteNotified = False
                         t_obj.estimated_start_date = new_start
                         t_obj.estimated_end_date = last_wb["end"]
-                        t_obj.status = "Scheduled"
+                        # Project tasks and tasks with an explicit workflow status
+                        # (e.g. Pending, Planning, Review, On Hold) keep the status
+                        # chosen by the user instead of jumping to Scheduled.
+                        if not getattr(t_obj, "projectId", None) and getattr(
+                            t_obj, "status", None
+                        ) in (None, "", "Todo", "Scheduled"):
+                            t_obj.status = "Scheduled"
                         # The columns are TIMESTAMP WITHOUT TIME ZONE (naive
                         # UTC): asyncpg rejects an aware value, which rolled
                         # back the whole task creation.

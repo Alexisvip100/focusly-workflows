@@ -51,6 +51,15 @@ class TasksFilterService:
                     if (t.get("projectId") and str(t.get("projectId")).strip() != "")
                     or (t.get("project_id") and str(t.get("project_id")).strip() != "")
                 ]
+            elif filters.get("has_project") is False or filters.get("hasProject") is False:
+                mapped = [
+                    t
+                    for t in mapped
+                    if not (
+                        (t.get("projectId") and str(t.get("projectId")).strip() != "")
+                        or (t.get("project_id") and str(t.get("project_id")).strip() != "")
+                    )
+                ]
 
         return mapped
 

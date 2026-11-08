@@ -211,6 +211,14 @@ class TasksRepository:
                         func.trim(Task.projectId) != "",
                     )
                 )
+            elif filters.get("has_project") is False or filters.get("hasProject") is False:
+                conditions.append(
+                    or_(
+                        Task.projectId.is_(None),
+                        Task.projectId == "",
+                        func.trim(Task.projectId) == "",
+                    )
+                )
 
             if filters.get("category") and len(filters["category"]) > 0:
                 conditions.append(Task.category.in_(filters["category"]))
