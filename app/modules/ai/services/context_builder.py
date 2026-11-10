@@ -5,6 +5,7 @@ import re
 import unicodedata
 from dataclasses import dataclass
 from typing import Any
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from sqlalchemy.future import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -96,9 +97,35 @@ def format_subtasks(subtasks: Any) -> str | None:
     return "; ".join(parts) if parts else None
 
 
-def format_task(task: Any) -> str:
+def user_zone(time_zone: str | None) -> ZoneInfo | None:
+    """The zone the browser reported; None when it's missing or unknown."""
+    try:
+        return ZoneInfo(time_zone) if time_zone else None
+    except (ZoneInfoNotFoundError, ValueError, OSError):
+        return None
+
+
+def to_user_time(value: Any, zone: ZoneInfo | None) -> Any:
+    """Tasks are stored in UTC without a zone, but Lumina reads and writes the
+    user's local time: "11:05" stored is "05:05" for someone in UTC-6."""
+    if not value or zone is None:
+        return value
+    aware = value if value.tzinfo else value.replace(tzinfo=dt.timezone.utc)
+    return aware.astimezone(zone).replace(tzinfo=None)
+
+
+def upcoming_dates(today: dt.date, days: int = 7) -> str:
+    """The next days with their weekday: left to work these out, the model
+    answered "el viernes" with a Saturday."""
+    return ", ".join(
+        (today + dt.timedelta(days=offset)).strftime("%A %Y-%m-%d")
+        for offset in range(1, days + 1)
+    )
+
+
+def format_task(task: Any, zone: ZoneInfo | None = None) -> str:
     def iso(value: Any) -> str:
-        return value.isoformat() if value else "None"
+        return to_user_time(value, zone).isoformat() if value else "None"
 
     source_info = f"Source: {task.source or 'focusly'}"
     if task.google_event_id:
@@ -182,7 +209,7 @@ def _short_dt(value: Any) -> str:
     return value.isoformat(timespec="minutes") if value else ""
 
 
-def format_task_index(task: Any) -> str:
+def format_task_index(task: Any, zone: ZoneInfo | None = None) -> str:
     """One line per task: enough to refer to it, schedule around it or update
     it. The notes and subtasks go in format_task, for the relevant ones."""
     parts = [
@@ -191,11 +218,12 @@ def format_task_index(task: Any) -> str:
         str(task.status),
         f"P{task.priorityLevel}",
     ]
-    start, end = task.estimated_start_date, task.estimated_end_date
+    start = to_user_time(task.estimated_start_date, zone)
+    end = to_user_time(task.estimated_end_date, zone)
     if start or end:
         parts.append(f"{_short_dt(start) or '?'} → {_short_dt(end) or '?'}")
     if task.deadline:
-        parts.append(f"due {_short_dt(task.deadline)}")
+        parts.append(f"due {_short_dt(to_user_time(task.deadline, zone))}")
     if getattr(task, "projectId", None):
         parts.append(f"project {task.projectId}")
     if getattr(task, "workspaceId", None):
@@ -390,8 +418,15 @@ async def build_context(
     full = mode != "editor"
     now_utc = dt.datetime.now(dt.timezone.utc)
     now_naive = now_utc.replace(tzinfo=None)
-    display_time = client_time or now_utc.strftime("%Y-%m-%d %H:%M")
-    tz_info = f" ({time_zone})" if time_zone else " (UTC)"
+    zone = user_zone(time_zone)
+    # The clock comes from the zone: the editor sends clientTime in UTC
+    local_now = now_utc.astimezone(zone) if zone else None
+    display_time = (
+        local_now.strftime("%A %Y-%m-%d %H:%M")
+        if local_now
+        else client_time or now_utc.strftime("%Y-%m-%d %H:%M")
+    )
+    tz_info = f" ({time_zone})" if zone else " (UTC)"
 
     # Fetch user profile to get their name
     user_res = await db.execute(select(User).filter(User.id == user_id))
@@ -450,11 +485,12 @@ async def build_context(
                 "--- USER TASKS (INDEX) ---\n"
                 "One line per task: ID | title | status | priority | "
                 "scheduled start → end | deadline | project | linked document | "
-                "subtasks done. Notes and subtasks of the tasks this message is "
-                "about are under RELEVANT TASK DETAILS.\n"
+                "subtasks done. Times are the user's local time. Notes and "
+                "subtasks of the tasks this message is about are under "
+                "RELEVANT TASK DETAILS.\n"
             )
             for t in tasks:
-                stable += format_task_index(t)
+                stable += format_task_index(t, zone)
             if omitted:
                 stable += f"({omitted} more open tasks not listed)\n"
             stable += "\n"
@@ -467,7 +503,7 @@ async def build_context(
         if detailed:
             context.add("--- RELEVANT TASK DETAILS ---\n")
             for t in detailed:
-                context.add(format_task(t))
+                context.add(format_task(t, zone))
 
     if full and is_calendar_connected:
         try:
@@ -501,9 +537,16 @@ async def build_context(
             f"--- PREVIOUS CONVERSATION SUMMARY ---\n{conversation.summary}\n\n"
         )
 
+    upcoming_line = (
+        '- Upcoming dates (use these for "mañana", "el viernes"; never work out '
+        f"weekdays yourself): {upcoming_dates(local_now.date())}\n"
+        if local_now
+        else ""
+    )
     context.add(
         f"--- ENVIRONMENT INFO ---\n"
         f"- Current Local Date/Time: {display_time}{tz_info}\n"
+        f"{upcoming_line}"
         f"- CRITICAL SCHEDULING CONSTRAINT: Every task scheduled for TODAY must have its start and deadline strictly AFTER the current time ({display_time}). You must NEVER schedule tasks in the past.\n"
     )
     return context
