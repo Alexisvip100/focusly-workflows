@@ -26,6 +26,8 @@ from app.modules.ai.services.chat_payload import build_history, has_attachments
 from app.modules.ai.services.context_builder import (
     AIContext,
     build_context,
+    to_user_time,
+    user_zone,
     get_calendar_items,
     one_shot_context,
 )
@@ -528,7 +530,7 @@ async def chat_endpoint(
                     linked_task_info = (
                         f'"{linked_task.title}" (status: {linked_task.status}, '
                         f"priority: {linked_task.priorityLevel}, "
-                        f"deadline: {linked_task.deadline.isoformat() if linked_task.deadline else 'none'})"
+                        f"deadline: {to_user_time(linked_task.deadline, user_zone(body.timeZone)).isoformat() if linked_task.deadline else 'none'})"
                     )
             system_context.add(
                 f"\n\nCRITICAL CONTEXT MODE: The user has selected this specific Workspace/Document as context:\n"

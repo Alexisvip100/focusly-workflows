@@ -35,6 +35,8 @@ class CalendarPlannerRequest(BaseModel):
 class WeeklyPlannerRequest(BaseModel):
     tasks: list[dict[str, Any]]
     availability: dict[str, Any] | None = None
+    available_days: list[str] | None = None
+    language: str | None = None
 
 
 class TaskImproveRequest(BaseModel):
@@ -136,6 +138,8 @@ async def weekly_planner(
         {
             "tasks": body.tasks,
             "availability": body.availability or {"working_hours": "09:00 - 18:00"},
+            "available_days": body.available_days,
+            "language": body.language,
         },
         what="weekly planning",
         user_id=current_user_id,

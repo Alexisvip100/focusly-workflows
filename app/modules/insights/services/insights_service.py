@@ -129,8 +129,8 @@ class InsightsService:
         mins = total_minutes % 60
         total_focus_hours = {
             "value": f"{hours}h {mins}m",
-            "change": "+12% vs last period",
-            "trend": "up",
+            "change": "",
+            "trend": "neutral",
         }
 
         # Task Completion
@@ -145,8 +145,8 @@ class InsightsService:
         )
         task_completion = {
             "value": f"{completion_rate}%",
-            "change": "+5% vs last period",
-            "trend": "up",
+            "change": "",
+            "trend": "neutral",
         }
 
         energy_score = self.calculate_energy_score(filtered_tasks)
@@ -493,10 +493,11 @@ class InsightsService:
         return 0
 
     def calculate_energy_score(self, tasks: list[dict[str, Any]]) -> dict[str, Any]:
-        if not tasks:
-            return {"value": "N/A", "change": "0 pts", "trend": "neutral"}
-
         completed = [t for t in tasks if t.get("status") == "Done"]
+        # Nothing finished yet: there's nothing to score
+        if not completed:
+            return {"value": "N/A", "change": "", "trend": "neutral"}
+
         completion_rate = len(completed) / len(tasks)
 
         efficiency_sum = 0.0
@@ -509,11 +510,16 @@ class InsightsService:
                 efficiency_sum += eff
                 tasks_with_time += 1
 
-        efficiency = efficiency_sum / tasks_with_time if tasks_with_time > 0 else 0.8
-        raw_score = completion_rate * 60 + efficiency * 40
+        # Without tracked time the efficiency is unknown: only what was finished
+        # counts
+        raw_score = (
+            completion_rate * 60 + (efficiency_sum / tasks_with_time) * 40
+            if tasks_with_time > 0
+            else completion_rate * 100
+        )
         score = min(max(round(raw_score), 0), 100)
 
-        return {"value": f"{score}/100", "change": "+2 pts", "trend": "up"}
+        return {"value": f"{score}/100", "change": "", "trend": "neutral"}
 
     def calculate_golden_window(
         self,
