@@ -67,3 +67,7 @@ def test_upcoming_dates_name_each_weekday():
     assert text.startswith("Wednesday 2026-11-11")
     assert "Friday 2026-11-13" in text
     assert text.endswith("Tuesday 2026-11-17")
+
+
+def test_prompt_keeps_ids_out_of_the_visible_message():
+    assert "never write an ID" in SYSTEM_PROMPT
